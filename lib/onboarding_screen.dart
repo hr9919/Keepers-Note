@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
+// ★ 이 부분이 반드시 있어야 합니다! (파일명이 다르다면 실제 파일명으로 수정해 주세요)
+import 'main_wrapper.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -35,9 +36,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 });
               },
               children: [
-                _buildPage(context: context,image: "assets/images/onboarding_1.png", title: "인터랙티브 맵", desc: "원하는 자원의 위치를 확인하고\n마음대로 메모하세요."),
-                _buildPage(context: context,image: "assets/images/onboarding_2.png", title: "효율적인 가이드", desc: "타운 생활에 필요한 모든 정보를\n한눈에 확인하세요."),
-                _buildPage(context: context,image: "assets/images/onboarding_3.png", title: "나만의 기록", desc: "오늘 있었던 일을 기록하고\n성장하는 키퍼가 되어보세요."),
+                _buildPage(context: context, image: "assets/images/onboarding_1.png", title: "인터랙티브 맵", desc: "원하는 자원의 위치를 확인하고\n마음대로 메모하세요."),
+                _buildPage(context: context, image: "assets/images/onboarding_2.png", title: "효율적인 가이드", desc: "타운 생활에 필요한 모든 정보를\n한눈에 확인하세요."),
+                _buildPage(context: context, image: "assets/images/onboarding_3.png", title: "나만의 기록", desc: "오늘 있었던 일을 기록하고\n성장하는 키퍼가 되어보세요."),
                 _buildPage(
                   context: context,
                   image: "assets/images/onboarding_4.png",
@@ -48,7 +49,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ],
             ),
 
-            // 인디케이터 위치 (모든 페이지 120으로 고정)
+            // 인디케이터 위치
             Positioned(
               bottom: 120,
               left: 0,
@@ -65,10 +66,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onTap: () {
                     print("키퍼노트 시작!");
 
-                    // 현재 스택의 모든 화면(온보딩)을 지우고 HomeScreen을 새로운 Root로 설정
+                    // ★ HomeScreen 대신 MainWrapper를 새로운 Root로 설정
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (context) => const HomeScreen()),
+                      MaterialPageRoute(builder: (context) => const MainWrapper()),
                           (route) => false,
                     );
                   },
@@ -108,23 +109,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ★ 이미지 배치 로직이 개선된 헬퍼 함수
+  // 이미지 배치 로직이 개선된 헬퍼 함수
   Widget _buildPage({
-    required BuildContext context, // ★ context를 인자로 받아야 MediaQuery 사용 가능
+    required BuildContext context,
     required String image,
     required String title,
     required String desc,
     bool isLast = false,
   }) {
-    // 기기 전체 높이 계산
     final double screenHeight = MediaQuery.of(context).size.height;
 
     return Column(
       children: [
-        // 1. 상단 여백: 화면 높이의 8% 정도로 설정 (노치 기기에서 적당함)
         SizedBox(height: screenHeight * 0.20),
-
-        // 2. 이미지 영역: 화면 높이의 약 40% 차지하게 설정
         SizedBox(
           height: screenHeight * 0.4,
           child: Container(
@@ -135,11 +132,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         ),
-
-        // 3. 이미지와 텍스트 사이 간격: 화면 높이의 5% 정도
         SizedBox(height: screenHeight * 0.005),
-
-        // 4. 텍스트 영역
         SizedBox(
           width: 301,
           child: Column(
@@ -168,35 +161,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ],
           ),
         ),
-
-        // 5. 하단 유동적 여백: 남는 공간을 Spacer가 채움
         const Spacer(),
-
-        // 인디케이터와 버튼을 위한 최소한의 하단 가드 (약 15%)
         SizedBox(height: screenHeight * 0.15),
       ],
     );
   }
 
   Widget _buildIndicator() {
-    return SizedBox(
-      width: 50,
-      height: 5,
-      child: Stack(
-        children: List.generate(4, (index) {
-          return Positioned(
-            left: index * 15.0,
-            child: Container(
-              width: 5,
-              height: 5,
-              decoration: ShapeDecoration(
-                color: _currentPage == index ? const Color(0xFF616161) : const Color(0xFFCACACA),
-                shape: const OvalBorder(),
-              ),
-            ),
-          );
-        }),
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(4, (index) {
+        return Container(
+          width: 5,
+          height: 5,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: ShapeDecoration(
+            color: _currentPage == index ? const Color(0xFF616161) : const Color(0xFFCACACA),
+            shape: const OvalBorder(),
+          ),
+        );
+      }),
     );
   }
 }

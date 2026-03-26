@@ -1,28 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
-
-  // ★ 공통 카드 스타일 정의 (유지보수를 위해 변수로 관리)
+  // ★ 공통 카드 스타일 정의
   static const List<BoxShadow> _kCommonShadow = [
     BoxShadow(
-      color: Color(0x0D000000), // 약 5% 투명도의 검은색
-      blurRadius: 20,           // 부드럽게 퍼지는 정도
-      offset: Offset(0, 0),     // 위치를 중앙으로 고정 (사방 그림자)
-      spreadRadius: 1,          // 그림자 영역을 1px 확장하여 테두리 강조
+      color: Color(0x0D000000),
+      blurRadius: 20,
+      offset: Offset(0, 0),
+      spreadRadius: 1,
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
+    // Scaffold에서 bottomNavigationBar 부분을 삭제했습니다.
     return Scaffold(
       extendBodyBehindAppBar: true,
       extendBody: true,
@@ -49,23 +43,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 20),
-
                       _buildSectionTitle('날씨 정보'),
                       const SizedBox(height: 8),
                       _buildWeatherCard(),
-
                       const SizedBox(height: 32),
-
                       _buildTodoSection(),
-
                       const SizedBox(height: 32),
-
                       _buildMapSection(),
-
                       const SizedBox(height: 32),
-
                       _buildEventSection(),
-
+                      // 하단 바 공간 확보를 위한 여백
                       const SizedBox(height: 120),
                     ],
                   ),
@@ -75,10 +62,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
+  // --- 섹션 타이틀 ---
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -104,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: ShapeDecoration(
         color: Colors.white.withOpacity(0.9),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        shadows: _kCommonShadow, // ★ 사방 그림자 적용
+        shadows: _kCommonShadow,
       ),
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -138,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
           decoration: ShapeDecoration(
             color: Colors.white.withOpacity(0.85),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            shadows: _kCommonShadow, // ★ 사방 그림자 적용
+            shadows: _kCommonShadow,
           ),
           child: Row(
             children: [
@@ -174,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: ShapeDecoration(
               color: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              shadows: _kCommonShadow, // ★ 사방 그림자 적용
+              shadows: _kCommonShadow,
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(18),
@@ -223,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- 기존 도우미 위젯들 ---
+  // --- 앱바 ---
   Widget _buildCustomAppBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -239,9 +226,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- 검색창 위젯 (원래 색상 복구 버전) ---
+  // --- 검색창 ---
   Widget _buildSearchBar() {
-    const Color mainColor = Color(0xFFFF7A65); // 해림 님이 정하신 메인 컬러
+    const Color mainColor = Color(0xFFFF7A65);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Container(
@@ -264,7 +251,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Stack(
           children: [
-            // ★ 원래 쓰시던 다홍색 계열의 은은한 그라데이션 복구
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -272,10 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      mainColor.withOpacity(0.05), // 원래 그 색!
-                      Colors.transparent,
-                    ],
+                    colors: [mainColor.withOpacity(0.05), Colors.transparent],
                     stops: const [0.0, 0.2],
                   ),
                 ),
@@ -294,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       colorFilter: const ColorFilter.mode(Color(0xFF898989), BlendMode.srcIn),
                     ),
                   ),
-                  hintText: '옷을 검색해보세요.',
+                  hintText: '아이템을 검색해보세요.',
                   hintStyle: const TextStyle(color: Color(0xFF898989), fontSize: 14),
                   contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 ),
@@ -306,6 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- 공통 컴포넌트들 ---
   Widget _buildTodoItem(String task, bool isDone) {
     return Row(
       children: [
@@ -351,21 +335,4 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildWeatherTimeline() { return SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [_buildTimeItem('현재 (아침)', true), _buildTimeItem('낮', false), _buildTimeItem('밤', false), _buildTimeItem('내일 새벽', false), _buildTimeItem('내일 아침', false)])); }
   Widget _buildTimeItem(String label, bool isCurrent) { return Container(width: 50, margin: const EdgeInsets.only(right: 6), child: Column(children: [Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400)), const SizedBox(height: 6), Container(width: 26, height: 26, decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.wb_sunny_rounded, size: 16, color: Colors.orange))])); }
   Widget _buildWeeklyColumn() { final days = [{'day': '수 (내일)', 'icon': true}, {'day': '목', 'icon': true}, {'day': '금', 'icon': true}, {'day': '토', 'icon': true}, {'day': '일', 'icon': false}]; return Column(crossAxisAlignment: CrossAxisAlignment.end, children: days.map((data) => Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(mainAxisSize: MainAxisSize.min, children: [Text(data['day'] as String, style: const TextStyle(fontSize: 9)), const SizedBox(width: 6), Icon(Icons.circle, size: 8, color: (data['icon'] as bool) ? Colors.black26 : Colors.transparent)]))).toList()); }
-
-  Widget _buildBottomNavigationBar() {
-    return Container(
-      width: double.infinity, height: 90,
-      decoration: const ShapeDecoration(color: Color(0xEAFFFDF9), shape: RoundedRectangleBorder(borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))), shadows: [BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, -5))]),
-      child: SafeArea(child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [_buildNavItem(0, 'home', '홈'), _buildNavItem(1, 'book', '도감'), _buildNavItem(2, 'cook', '요리'), _buildNavItem(3, 'fish', '채집'), _buildNavItem(4, 'pet', '동물')])),
-    );
-  }
-
-  Widget _buildNavItem(int index, String fileName, String label) {
-    bool isSelected = _selectedIndex == index;
-    String assetPath = isSelected ? 'assets/icons/ic_${fileName}_active.svg' : 'assets/icons/ic_$fileName.svg';
-    return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
-      child: AnimatedContainer(duration: const Duration(milliseconds: 250), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), decoration: BoxDecoration(color: isSelected ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(40), border: isSelected ? Border.all(color: Colors.black.withOpacity(0.1), width: 0.8) : null, boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))] : null), child: Column(mainAxisSize: MainAxisSize.min, children: [SvgPicture.asset(assetPath, width: 24, height: 24, colorFilter: isSelected ? null : const ColorFilter.mode(Colors.black38, BlendMode.srcIn)), const SizedBox(height: 4), Text(label, style: TextStyle(fontSize: 10, color: isSelected ? Colors.black : Colors.black38, fontWeight: isSelected ? FontWeight.bold : FontWeight.w500))])),
-    );
-  }
 }
