@@ -6,7 +6,8 @@ plugins {
 }
 
 android {
-    namespace = "com.example.keepers_note"
+    // ★ namespace를 Town Helpers에 맞춰 변경했습니다.
+    namespace = "com.townhelpers.keepers_note"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,10 +21,11 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.keepers_note"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // ★ 카카오 개발자 센터 '패키지 명' 칸에도 똑같이 "com.townhelpers.keepers_note"를 넣으셔야 합니다!
+        applicationId = "com.townhelpers.keepers_note"
+
+        // 카카오 SDK는 보통 minSdk 21 이상을 권장합니다.
+        // flutter.minSdkVersion이 21보다 낮다면 직접 21로 적어주셔도 좋습니다.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -33,7 +35,6 @@ android {
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

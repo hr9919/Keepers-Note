@@ -1,29 +1,52 @@
 import 'package:flutter/material.dart';
-import 'dart:async'; // 타이머 사용을 위해 필요
+import 'dart:async';
 import 'onboarding_screen.dart';
+import 'home_screen.dart';
+import 'main_wrapper.dart'; // ★ 하단 바를 위해 반드시 필요합니다!
+import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
-void main() {
-  runApp(const KeepersNoteApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. 카카오 SDK 초기화 (최신 앱 키 유지)
+  KakaoSdk.init(nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0');
+
+  // 자동 로그인 체크 로직
+  bool isLoggedIn = false;
+  try {
+    if (await AuthApi.instance.hasToken()) {
+      try {
+        await UserApi.instance.me();
+        isLoggedIn = true;
+      } catch (e) {
+        await TokenManagerProvider.instance.manager.clear();
+      }
+    }
+  } catch (e) {
+    print("로그인 상태 체크 에러: $e");
+  }
+
+  runApp(KeepersNoteApp(isLoggedIn: isLoggedIn));
 }
 
 class KeepersNoteApp extends StatelessWidget {
-  const KeepersNoteApp({super.key});
+  final bool isLoggedIn;
+  const KeepersNoteApp({super.key, required this.isLoggedIn});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: "Keeper's Note",
-      // 테마에 기본 폰트 설정 등을 추가하면 더 좋습니다.
       theme: ThemeData(useMaterial3: true),
-      home: const SplashScreen(),
+      home: SplashScreen(isLoggedIn: isLoggedIn),
     );
   }
 }
 
-// 화면 전환 로직을 위해 StatefulWidget으로 변경
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  final bool isLoggedIn;
+  const SplashScreen({super.key, required this.isLoggedIn});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -34,24 +57,21 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    // 1초(또는 2초) 뒤에 실행
     Timer(const Duration(seconds: 3), () {
-      // Navigator.pushReplacement 대신 PageRouteBuilder를 사용해 커스텀 애니메이션 적용
+      if (!mounted) return;
+
+      // ★ 수정 포인트: 로그인 성공 시 HomeScreen이 아닌 MainWrapper로 보냅니다!
+      Widget nextScreen = widget.isLoggedIn
+          ? const MainWrapper()       // <- 내비게이션 바가 살아납니다.
+          : const OnboardingScreen();
+
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          // 전환 애니메이션 지속 시간 (1000ms = 1초 동안 부드럽게)
           transitionDuration: const Duration(milliseconds: 1000),
-
-          // 이동할 화면 지정
-          pageBuilder: (context, animation, secondaryAnimation) => const OnboardingScreen(),
-
-          // 애니메이션 효과 설정 (FadeTransition)
+          pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation, // 0.0에서 1.0으로 서서히 밝아짐
-              child: child,
-            );
+            return FadeTransition(opacity: animation, child: child);
           },
         ),
       );
@@ -60,8 +80,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ★ 스플래시 UI 복구: 배경 그라데이션 + 중앙 캐릭터 + 텍스트
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -74,16 +94,15 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 1. 메인 타이틀
             IntrinsicWidth(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text.rich(
+                  const Text.rich(
                     TextSpan(
                       children: [
-                        const TextSpan(
+                        TextSpan(
                           text: 'Town\n',
                           style: TextStyle(
                             color: Color(0xFF868686),
@@ -92,7 +111,7 @@ class _SplashScreenState extends State<SplashScreen> {
                             height: 2.5,
                           ),
                         ),
-                        const TextSpan(
+                        TextSpan(
                           text: 'Keeper’s Note\n',
                           style: TextStyle(
                             color: Colors.black,
@@ -101,7 +120,7 @@ class _SplashScreenState extends State<SplashScreen> {
                             height: 1.02,
                           ),
                         ),
-                        const TextSpan(
+                        TextSpan(
                           text: '키퍼노트',
                           style: TextStyle(
                             color: Colors.black,
@@ -116,10 +135,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ],
               ),
             ),
-
-            const SizedBox(height: 40), // 피그마 비율에 맞춰 살짝 조정
-
-            // 2. 가이드북 로고 이미지
+            const SizedBox(height: 40),
             Container(
               width: 252,
               height: 268,
@@ -130,15 +146,12 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
               ),
             ),
-
-            const SizedBox(height: 20), // 0보다는 약간의 여백 권장
-
-            // 3. 하단 슬로건
+            const SizedBox(height: 20),
             const Text(
               '타운 키퍼를 위한 가이드북',
               style: TextStyle(
                 color: Color(0xFF616161),
-                fontSize: 18, // 조금 더 세련되게 크기 조정
+                fontSize: 18,
                 fontWeight: FontWeight.w400,
                 letterSpacing: -0.5,
               ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-// ★ main_wrapper.dart 임포트 확인 (파일명 다르면 수정)
+import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart'; // ★ 카카오 SDK 임포트
 import 'main_wrapper.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -13,9 +13,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentPage = 0;
   final PageController _pageController = PageController();
 
+  // ★ 카카오 로그인 로직 함수
+  Future<void> _handleKakaoLogin() async {
+    try {
+      bool isInstalled = await isKakaoTalkInstalled();
+
+      // 카카오톡 설치 여부에 따라 로그인 방식 결정
+      OAuthToken token = isInstalled
+          ? await UserApi.instance.loginWithKakaoTalk()
+          : await UserApi.instance.loginWithKakaoAccount();
+
+      print('카카오 로그인 성공! 토큰: ${token.accessToken}');
+
+      // 로그인 성공 시 메인 화면으로 이동 (뒤로가기 방지)
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const MainWrapper()),
+              (route) => false,
+        );
+      }
+    } catch (error) {
+      print('카카오 로그인 실패: $error');
+      // 사용자가 취소했을 때 등 예외 처리
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // ★ 핵심: 기기 하단 시스템 내비게이션 바 높이를 가져옵니다.
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -47,43 +72,33 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   image: "assets/images/onboarding_4.png",
                   title: "애완동물 관리",
                   desc: "애완동물의 종류를 검색하고,\n내 애완동물의 최애 간식을 관리하세요.",
-                  isLast: true,
                 ),
               ],
             ),
 
-            // ★ 인디케이터 위치 (시스템 바 높이 반영하되, 균형 있게 조정)
             Positioned(
-              // 시스템 바가 있으면 그만큼 더 위로 (기본 90 + 패딩), 없으면 100
-              bottom: bottomPadding > 0 ? bottomPadding + 90 : 100,
+              bottom: bottomPadding > 0 ? bottomPadding + 110 : 120, // 버튼 위치 고려해 살짝 위로 조정
               left: 0,
               right: 0,
               child: Center(child: _buildIndicator()),
             ),
 
+            // onboarding_screen.dart의 버튼 부분 수정본
+
             if (_currentPage == 3)
-            // ★ 시작하기 버튼 위치 (시스템 바 높이 반영하되, 균형 있게 조정)
               Positioned(
-                // 시스템 바가 있으면 그 높이에 15px 여백, 없으면 기본 40px
-                bottom: bottomPadding > 0 ? bottomPadding + 15 : 40,
-                left: 40,
-                right: 40,
+                bottom: bottomPadding > 0 ? bottomPadding + 20 : 40,
+                left: 30,
+                right: 30,
                 child: GestureDetector(
-                  onTap: () {
-                    print("키퍼노트 시작!");
-                    //HomeScreen 대신 MainWrapper를 새로운 Root로 설정
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (context) => const MainWrapper()),
-                          (route) => false,
-                    );
-                  },
+                  onTap: _handleKakaoLogin, // 카카오 로그인 함수 연결
                   child: Container(
-                    height: 48,
+                    height: 54, // 높이 고정
                     decoration: ShapeDecoration(
-                      color: const Color(0xFFFF7A65),
+                      color: const Color(0xFFFEE500), // 카카오 노란색
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(44),
+                        // ★ [수정] 모서리를 완전히 둥글게 만듭니다. (높이의 절반 이상)
+                        borderRadius: BorderRadius.circular(27),
                       ),
                       shadows: const [
                         BoxShadow(
@@ -93,17 +108,33 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         )
                       ],
                     ),
-                    child: const Center(
-                      child: Text(
-                        "바로 시작하기",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.5,
-                          fontFamily: 'SF Pro',
+                    child: Stack(
+                      children: [
+                        // ★ [추가] 카카오 로고 이미지를 왼쪽에 배치합니다.
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 24), // 왼쪽 여백
+                            child: Image.asset(
+                              'assets/images/kakao_logo.png', // ★ 로고 이미지 파일명
+                              height: 24, // 로고 크기 조절
+                            ),
+                          ),
                         ),
-                      ),
+                        // 중앙 텍스트
+                        const Center(
+                          child: Text(
+                            "카카오로 시작하기",
+                            style: TextStyle(
+                              color: Colors.black, // 글자는 검정색
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'SF Pro',
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -114,37 +145,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ★ 배치 균형과 이미지 크기가 최종 개선된 헬퍼 함수
   Widget _buildPage({
     required BuildContext context,
     required String image,
     required String title,
     required String desc,
-    bool isLast = false,
   }) {
     final double screenHeight = MediaQuery.of(context).size.height;
 
     return Column(
       children: [
-        // ★ 상단 여백 조절
         SizedBox(height: screenHeight * 0.12),
-
-        // ★ 이미지 영역 고정 비율
         SizedBox(
           height: screenHeight * 0.42,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Image.asset(
               image,
-              fit: BoxFit.contain, // 비율 유지
+              fit: BoxFit.contain,
             ),
           ),
         ),
-
-        // ★ 이미지와 타이틀 사이 고정 간격
         const SizedBox(height: 30),
-
-        // 텍스트 영역
         SizedBox(
           width: 301,
           child: Column(
@@ -175,12 +197,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ],
           ),
         ),
-
-        // ★★★ [여기서부터 수정합니다] 고정 여백(160) 대신 Spacer를 사용합니다!
-        const Spacer(flex: 3), // 이미지와 텍스트 위쪽 간격에 비례해 아래쪽에도 여백 확보
-
-        // ★ 인디케이터와 버튼이 들어갈 공간을 '유동적'으로 확보합니다.
-        // const SizedBox(height: 160), // ★ 이 부분을 주석 처리하거나 삭제하세요!
+        const Spacer(flex: 3),
       ],
     );
   }
@@ -190,7 +207,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       mainAxisSize: MainAxisSize.min,
       children: List.generate(4, (index) {
         return Container(
-          width: 6, // 크기 살짝 키움 (가독성)
+          width: 6,
           height: 6,
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: ShapeDecoration(
