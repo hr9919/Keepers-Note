@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart'; // ★ 카카오 SDK 임포트
+import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:http/http.dart' as http; // ★ 추가
+import 'dart:convert'; // ★ 추가
 import 'main_wrapper.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -13,29 +15,48 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentPage = 0;
   final PageController _pageController = PageController();
 
-  // ★ 카카오 로그인 로직 함수
+  // ★ 카카오 로그인 및 백엔드 동기화 로직
   Future<void> _handleKakaoLogin() async {
     try {
       bool isInstalled = await isKakaoTalkInstalled();
 
-      // 카카오톡 설치 여부에 따라 로그인 방식 결정
+      // 1. 카카오 인증 진행
       OAuthToken token = isInstalled
           ? await UserApi.instance.loginWithKakaoTalk()
           : await UserApi.instance.loginWithKakaoAccount();
 
       print('카카오 로그인 성공! 토큰: ${token.accessToken}');
 
-      // 로그인 성공 시 메인 화면으로 이동 (뒤로가기 방지)
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const MainWrapper()),
-              (route) => false,
-        );
+      // 2. 카카오 사용자 정보 가져오기
+      User kakaoUser = await UserApi.instance.me();
+
+      // 3. ★ 우리 백엔드 서버에 유저 정보 전송 (회원가입/로그인 처리)
+      final response = await http.post(
+        Uri.parse('http://161.33.30.40:8080/api/user/login'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "kakaoId": kakaoUser.id,
+          "nickname": kakaoUser.kakaoAccount?.profile?.nickname ?? "사용자",
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        print('서버와 유저 정보 동기화 완료!');
+
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const MainWrapper()),
+                (route) => false,
+          );
+        }
+      } else {
+        print('서버 동기화 실패: ${response.statusCode}');
+        // 알림창 등을 띄워 유저에게 알릴 수 있습니다.
       }
+
     } catch (error) {
-      print('카카오 로그인 실패: $error');
-      // 사용자가 취소했을 때 등 예외 처리
+      print('로그인 과정 중 에러 발생: $error');
     }
   }
 

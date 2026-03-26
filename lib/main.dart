@@ -1,24 +1,47 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'onboarding_screen.dart';
 import 'home_screen.dart';
-import 'main_wrapper.dart'; // ★ 하단 바를 위해 반드시 필요합니다!
+import 'main_wrapper.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. 카카오 SDK 초기화 (최신 앱 키 유지)
+  // 1. 카카오 SDK 초기화
   KakaoSdk.init(nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0');
 
-  // 자동 로그인 체크 로직
+  // 자동 로그인 및 서버 동기화 체크
   bool isLoggedIn = false;
+
   try {
+    // 카카오 토큰이 있는지 확인
     if (await AuthApi.instance.hasToken()) {
       try {
-        await UserApi.instance.me();
-        isLoggedIn = true;
+        // 2. 카카오에서 내 정보 가져오기
+        User kakaoUser = await UserApi.instance.me();
+
+        // 3. ★ 우리 백엔드 서버에 로그인/회원가입 요청 보내기
+        final response = await http.post(
+          Uri.parse('http://161.33.30.40:8080/api/user/login'),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "kakaoId": kakaoUser.id,
+            "nickname": kakaoUser.kakaoAccount?.profile?.nickname ?? "사용자",
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          print("서버 동기화 성공!");
+          isLoggedIn = true; // 서버까지 확인 완료되어야 진짜 로그인 성공
+        } else {
+          print("서버 응답 에러: ${response.statusCode}");
+        }
       } catch (e) {
+        // 토큰이 만료되었거나 서버 통신 실패 시 로그아웃 처리
+        print("상세 체크 실패: $e");
         await TokenManagerProvider.instance.manager.clear();
       }
     }
