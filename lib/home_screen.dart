@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'setting_screen.dart';
-import 'map_screen.dart'; // ★ 지도 화면 임포트 확인
+import 'map_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback? openDrawer;
@@ -48,10 +49,10 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 32),
                     _buildTodoSection(),
                     const SizedBox(height: 32),
-                    // ★ context를 전달하도록 수정됨
                     _buildMapSection(context),
                     const SizedBox(height: 32),
-                    _buildEventSection(),
+                    // ★ 여기 context를 빠뜨리면 에러가 납니다!
+                    _buildEventSection(context),
                     const SizedBox(height: 120),
                   ],
                 ),
@@ -61,98 +62,6 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  // --- 3. 지도 섹션 (이동 기능 다시 추가) ---
-  Widget _buildMapSection(BuildContext context) { // context 파라미터 추가
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('지도'),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GestureDetector(
-            // ★ 클릭 시 지도 화면으로 이동
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const MapScreen()),
-              );
-            },
-            child: Container(
-              width: double.infinity,
-              height: 227,
-              decoration: ShapeDecoration(
-                color: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                shadows: _kCommonShadow,
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                        child: Image.asset(
-                            'assets/images/map_preview.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (c, e, s) => Container(color: Colors.grey[200], child: const Icon(Icons.map_outlined, color: Colors.grey))
-                        )
-                    ),
-                    Positioned(
-                      bottom: 4,
-                      right: 4,
-                      child: Image.asset('assets/icons/ic_maximize.png', width: 54, height: 54),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // --- 앱바 ---
-  Widget _buildCustomAppBar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      height: 60,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(onPressed: openDrawer, icon: SvgPicture.asset('assets/icons/ic_menu.svg', width: 24, height: 24)),
-          const Text("Keeper's Note", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, fontFamily: 'SF Pro')),
-          IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())), icon: SvgPicture.asset('assets/icons/ic_settings.svg', width: 24, height: 24)),
-        ],
-      ),
-    );
-  }
-
-  // --- 검색창 ---
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Container(
-        height: 40,
-        decoration: ShapeDecoration(color: const Color(0xFFFFFDFD), shape: RoundedRectangleBorder(side: const BorderSide(width: 1, color: Color(0x30FF7A65)), borderRadius: BorderRadius.circular(36)), shadows: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]),
-        child: TextField(
-          textAlignVertical: TextAlignVertical.center,
-          decoration: InputDecoration(
-            isDense: true, border: InputBorder.none,
-            prefixIcon: Padding(padding: const EdgeInsets.all(10.0), child: SvgPicture.asset('assets/icons/ic_search.svg', colorFilter: const ColorFilter.mode(Color(0xFF898989), BlendMode.srcIn))),
-            hintText: '아이템을 검색해보세요.', hintStyle: const TextStyle(color: Color(0xFF898989), fontSize: 14, fontFamily: 'SF Pro'),
-            contentPadding: const EdgeInsets.symmetric(vertical: 10),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- 섹션 타이틀 ---
-  Widget _buildSectionTitle(String title) {
-    return Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(title, style: const TextStyle(color: Colors.black, fontSize: 16, fontFamily: 'SF Pro', fontWeight: FontWeight.w600, height: 1.0)));
   }
 
   // --- 1. 날씨 카드 ---
@@ -270,27 +179,46 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // --- 4. 이벤트 섹션 ---
-  Widget _buildEventSection() {
+  // --- 3. 지도 섹션 ---
+  Widget _buildMapSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('진행중인 이벤트'),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 185,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildEventCard('assets/images/event_1.png', 143, 144),
-                const SizedBox(width: 12),
-                _buildEventCard('assets/images/event_2.png', 143, 179),
-                const SizedBox(width: 16),
-              ],
+        _buildSectionTitle('지도'),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const MapScreen()));
+            },
+            child: Container(
+              width: double.infinity,
+              height: 227,
+              decoration: ShapeDecoration(
+                color: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                shadows: _kCommonShadow,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                        child: Image.asset(
+                            'assets/images/map_preview.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => Container(color: Colors.grey[200], child: const Icon(Icons.map_outlined, color: Colors.grey))
+                        )
+                    ),
+                    Positioned(
+                      bottom: 4,
+                      right: 4,
+                      child: Image.asset('assets/icons/ic_maximize.png', width: 54, height: 54),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -298,14 +226,143 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEventCard(String assetPath, double width, double height) {
-    return Container(
-      width: width, height: height,
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 15, offset: Offset(0, 0), spreadRadius: 1)]),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset(assetPath, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[200], child: const Icon(Icons.image, color: Colors.grey))),
+  // --- 4. 이벤트 섹션 ---
+  // --- 4. 이벤트 섹션 (네트워크 이미지 적용) ---
+  Widget _buildEventSection(BuildContext context) {
+    // 화면 전체 너비에서 좌우 패딩(16*2)과 아이템 사이 간격(12*2)을 뺍니다.
+    double screenWidth = MediaQuery.of(context).size.width;
+    double itemWidth = (screenWidth - (16 * 2) - (12 * 2)) / 3;
+
+    // ★ 페이스북에서 가져온 실제 이미지 주소 (유효기간 주의)
+    const String facebookImageUrl =
+        'https://scontent-icn2-1.xx.fbcdn.net/v/t39.30808-6/653560105_122127351237021391_2534542623193999458_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=13d280&_nc_ohc=GJ6gMkapj0EQ7kNvwGe2VZj&_nc_oc=AdoiTg1t670K8-kTotsOj-LbC134Aq6plrE5HNZuqP7TmI07StiCU9mt_MJCAlh2YlE&_nc_zt=23&_nc_ht=scontent-icn2-1.xx&_nc_gid=cd7roSdfW4Yhunct6S5Ghg&_nc_ss=7a32e&oh=00_AfwXPj2QZt7wKp-poD2VpNQkENY9kC40PFj5WJa_DwUSZA&oe=69CE102B';
+
+    // ★ 클릭 시 이동할 페이스북 포스트 원본 링크
+    const String facebookPostUrl =
+        'https://www.facebook.com/HeartopiaKR/photos/122127351225021391/';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('진행중인 이벤트'),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // 첫 번째 카드를 페이스북 이미지와 링크로 변경
+              _buildEventCard(
+                context,
+                facebookImageUrl, // 이제 로컬 에셋 경로가 아닌 URL을 넘깁니다.
+                itemWidth,
+                facebookPostUrl,
+                isNetworkImage: true, // ★ 네트워크 이미지임을 표시하는 플래그 추가
+              ),
+              // 나머지는 일단 기존 유지 (나중에 지우거나 변경)
+              _buildEventCard(context, 'assets/images/event_2.png', itemWidth, 'https://www.leagueoflegends.com'),
+              _buildEventCard(context, 'assets/images/event_3.png', itemWidth, 'https://github.com'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+// ★ 파라미터에 isNetworkImage 추가
+  Widget _buildEventCard(BuildContext context, String imagePathOrUrl, double width, String url, {bool isNetworkImage = false}) {
+    return GestureDetector(
+      onTap: () async {
+        final Uri uri = Uri.parse(url);
+        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+          debugPrint('Could not launch $url');
+        }
+      },
+      child: Container(
+        width: width,
+        height: width, // 1:1 정사각형
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0D000000),
+              blurRadius: 15,
+              offset: Offset(0, 0),
+              spreadRadius: 1,
+            )
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: isNetworkImage
+              ? Image.network( // ★ 네트워크 이미지일 때
+            imagePathOrUrl,
+            fit: BoxFit.cover,
+            // 로딩 중 표시 (선택 사항)
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                      : null,
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: Colors.grey[200],
+              child: const Icon(Icons.broken_image, color: Colors.grey),
+            ),
+          )
+              : Image.asset( // ★ 기존 로컬 에셋 이미지일 때
+            imagePathOrUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: Colors.grey[200],
+              child: const Icon(Icons.image, color: Colors.grey),
+            ),
+          ),
+        ),
       ),
     );
   }
-}
+
+  // --- 앱바 & 기타 공통 위젯 ---
+  Widget _buildCustomAppBar(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 60,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(onPressed: openDrawer, icon: SvgPicture.asset('assets/icons/ic_menu.svg', width: 24, height: 24)),
+          const Text("Keeper's Note", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, fontFamily: 'SF Pro')),
+          IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())), icon: SvgPicture.asset('assets/icons/ic_settings.svg', width: 24, height: 24)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        height: 40,
+        decoration: ShapeDecoration(color: const Color(0xFFFFFDFD), shape: RoundedRectangleBorder(side: const BorderSide(width: 1, color: Color(0x30FF7A65)), borderRadius: BorderRadius.circular(36)), shadows: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]),
+        child: TextField(
+          textAlignVertical: TextAlignVertical.center,
+          decoration: InputDecoration(
+            isDense: true, border: InputBorder.none,
+            prefixIcon: Padding(padding: const EdgeInsets.all(10.0), child: SvgPicture.asset('assets/icons/ic_search.svg', colorFilter: const ColorFilter.mode(Color(0xFF898989), BlendMode.srcIn))),
+            hintText: '아이템을 검색해보세요.', hintStyle: const TextStyle(color: Color(0xFF898989), fontSize: 14, fontFamily: 'SF Pro'),
+            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(title, style: const TextStyle(color: Colors.black, fontSize: 16, fontFamily: 'SF Pro', fontWeight: FontWeight.w600, height: 1.0)));
+  }
+} // ★ 클래스의 마지막 닫는 괄호
