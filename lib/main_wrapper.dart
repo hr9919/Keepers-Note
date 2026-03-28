@@ -21,11 +21,19 @@ class MainWrapper extends StatefulWidget {
 class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final TextEditingController _todoController = TextEditingController();
 
-  // --- ★ 초기값 설정 ---
+  // --- 유저 및 투두 데이터 ---
   String _userName = "로그인 중...";
   String _userUid = "UID를 입력해보세요";
   String? _profileImageUrl;
+
+  List<Map<String, dynamic>> _todoTasks = [
+    {"id": 1, "taskName": "가게 판매 품목 확인", "completed": true, "isSystem": true},
+    {"id": 2, "taskName": "그자리 참나무 파밍", "completed": false, "isSystem": true},
+    {"id": 3, "taskName": "완벽한 형광석 채집", "completed": false, "isSystem": true},
+    {"id": 4, "taskName": "작물에 물 주기", "completed": true, "isSystem": true},
+  ];
 
   @override
   void initState() {
@@ -33,88 +41,239 @@ class _MainWrapperState extends State<MainWrapper> {
     _fetchUserInfo();
   }
 
-  // --- ★ 핵심: 정보 호출 및 초기값 분기 처리 ---
   Future<void> _fetchUserInfo() async {
     try {
-      // 1. 카카오에서 즉시 정보 가져오기 (서버 응답 전 초기값 세팅)
       User user = await UserApi.instance.me();
-      String kakaoNickname = user.kakaoAccount?.profile?.nickname ?? "사용자";
-      String? kakaoProfile = user.kakaoAccount?.profile?.thumbnailImageUrl;
-
       if (mounted) {
         setState(() {
-          _userName = kakaoNickname; // 일단 카카오 이름으로 표시
-          _profileImageUrl = kakaoProfile;
+          _userName = user.kakaoAccount?.profile?.nickname ?? "사용자";
+          _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
         });
-      }
-
-      // 2. 서버에 로그인/조회 요청
-      final response = await http.post(
-        Uri.parse('http://161.33.30.40:8080/api/user/login'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "kakaoId": user.id,
-          "nickname": kakaoNickname,
-        }),
-      ).timeout(const Duration(seconds: 3));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        if (mounted) {
-          setState(() {
-            // ★ 서버에 저장된 닉네임이 있다면 그것을 우선 사용
-            _userName = data['nickname']?.toString() ?? kakaoNickname;
-
-            // ★ 서버에 저장된 UID가 있다면 반영
-            if (data['gameUid'] != null && data['gameUid'].toString().trim().isNotEmpty) {
-              _userUid = data['gameUid'].toString();
-            } else {
-              _userUid = "UID를 입력해보세요";
-            }
-          });
-        }
       }
     } catch (e) {
       print("유저 정보 로드 에러: $e");
-      // 네트워크 에러 등이 나도 초기값인 카카오 닉네임은 유지되도록 함
     }
   }
 
-  void _onMenuSelect(int index) {
-    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
-      Navigator.pop(context);
-    }
+  void _toggleTodo(int index) {
     setState(() {
-      _selectedIndex = index;
+      _todoTasks[index]['completed'] = !_todoTasks[index]['completed'];
     });
+  }
+
+  void _addTodo() {
+    if (_todoController.text.trim().isEmpty) return;
+    setState(() {
+      _todoTasks.add({
+        "id": DateTime.now().millisecondsSinceEpoch,
+        "taskName": _todoController.text.trim(),
+        "completed": false,
+        "isSystem": false
+      });
+      _todoController.clear();
+    });
+  }
+
+  void _deleteTodo(int index) {
+    setState(() {
+      _todoTasks.removeAt(index);
+    });
+  }
+
+  void _onMenuSelect(int index) {
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) Navigator.pop(context);
+    setState(() => _selectedIndex = index);
   }
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      HomeScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
+      HomeScreen(
+        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        openEndDrawer: () => _scaffoldKey.currentState?.openEndDrawer(),
+        todoList: _todoTasks,
+        onTodoToggle: (index) => _toggleTodo(index),
+      ),
       EncyclopediaScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
       CookingScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
       GatheringScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
       PetScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
     ];
 
-    return Scaffold(
-      key: _scaffoldKey,
-      extendBody: true,
-      drawer: _buildCommonDrawer(),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: pages,
+    // ★ PopScope로 Scaffold를 감싸서 뒤로가기 동작을 제어합니다.
+    return PopScope(
+      canPop: false, // 시스템 뒤로가기 기본 동작을 일단 막습니다.
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+
+        // 1. 왼쪽 드로워가 열려있으면 닫기
+        if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+          _scaffoldKey.currentState?.closeDrawer();
+        }
+        // 2. 오른쪽 드로워(투두)가 열려있으면 닫기
+        else if (_scaffoldKey.currentState?.isEndDrawerOpen ?? false) {
+          _scaffoldKey.currentState?.closeEndDrawer();
+        }
+        // 3. 드로워가 없을 때 처리
+        else {
+          if (_selectedIndex != 0) {
+            // 홈이 아니면 홈 화면으로 이동
+            setState(() => _selectedIndex = 0);
+          } else {
+            // 홈 화면이면 앱을 종료(이전 화면으로 이동)하도록 허용
+            Navigator.of(context).pop();
+          }
+        }
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        extendBody: true,
+        drawer: _buildCommonDrawer(),
+        endDrawer: _buildTodoDrawer(),
+        body: IndexedStack(index: _selectedIndex, children: pages),
+        bottomNavigationBar: _buildBottomNavigationBar(),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
+  // --- 오른쪽 드로워 (투두) ---
+  Widget _buildTodoDrawer() {
+    int doneCount = _todoTasks.where((t) => t['completed'] == true).length;
+    double progress = _todoTasks.isEmpty ? 0 : doneCount / _todoTasks.length;
+
+    return Drawer(
+      width: MediaQuery.of(context).size.width * 0.85,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.only(topLeft: Radius.circular(30), bottomLeft: Radius.circular(30))),
+      child: Container(
+        color: const Color(0xFFF9F9F9),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildTodoHeader(progress),
+              Expanded(child: _buildTodoListArea()),
+              _buildTodoInputArea(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTodoHeader(double progress) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("오늘의 할 일 🌿", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'SF Pro')),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text("오전 06:00에 모든 항목이 초기화됩니다.", style: TextStyle(fontSize: 11, color: Colors.grey)),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: const Color(0xFFE0E0E0),
+              color: const Color(0xFFFF8E7C),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTodoListArea() {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: _todoTasks.length,
+      itemBuilder: (context, index) {
+        return _buildTodoTile(_todoTasks[index], index);
+      },
+    );
+  }
+
+  Widget _buildTodoTile(Map<String, dynamic> todo, int index) {
+    bool isDone = todo['completed'];
+    return GestureDetector(
+      onTap: () => _toggleTodo(index),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(isDone ? Icons.check_circle : Icons.circle_outlined, color: isDone ? const Color(0xFFFF8E7C) : Colors.grey[300], size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: IntrinsicWidth(
+                    child: Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        Text(todo['taskName'], style: TextStyle(fontSize: 14, fontFamily: 'SF Pro', color: isDone ? Colors.grey.withOpacity(0.6) : Colors.black87)),
+                        if (isDone)
+                          Positioned(
+                            left: 0, right: 0,
+                            child: Container(height: 1.2, color: Colors.grey.withOpacity(0.5)),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (!todo['isSystem'])
+                IconButton(
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                  onPressed: () => _deleteTodo(index),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTodoInputArea() {
+    return Container(
+      padding: EdgeInsets.only(left: 16, right: 16, top: 12, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
+      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -2))]),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _todoController,
+              onSubmitted: (_) => _addTodo(),
+              decoration: InputDecoration(
+                hintText: "오늘 뭐 할까요?",
+                hintStyle: const TextStyle(fontSize: 14, color: Colors.grey),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+                filled: true, fillColor: const Color(0xFFF5F5F5),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(onTap: _addTodo, child: const CircleAvatar(backgroundColor: Color(0xFFFF8E7C), child: Icon(Icons.add, color: Colors.white))),
+        ],
+      ),
+    );
+  }
+
+  // --- 왼쪽 드로워 (메인 메뉴) ---
   Widget _buildCommonDrawer() {
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
-
     return Drawer(
       child: Column(
         children: [
@@ -123,12 +282,7 @@ class _MainWrapperState extends State<MainWrapper> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.only(left: 20, top: 40, bottom: 20),
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/images/profile_header_bg.png'),
-                    fit: BoxFit.cover,
-                  ),
-                ),
+                decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/images/profile_header_bg.png'), fit: BoxFit.cover)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -136,21 +290,13 @@ class _MainWrapperState extends State<MainWrapper> {
                     Container(
                       width: 60, height: 60,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                        image: DecorationImage(
-                          image: _profileImageUrl != null
-                              ? NetworkImage(_profileImageUrl!) as ImageProvider
-                              : const AssetImage('assets/images/profile.png'),
-                          fit: BoxFit.cover,
-                        ),
+                        shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2),
+                        image: DecorationImage(image: _profileImageUrl != null ? NetworkImage(_profileImageUrl!) as ImageProvider : const AssetImage('assets/images/profile.png'), fit: BoxFit.cover),
                       ),
                     ),
                     const SizedBox(height: 15),
-                    // ★ 변수 적용: 닉네임 님 / UID 또는 가이드 문구
                     Text("$_userName 님", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white, fontFamily: 'SF Pro')),
                     Text("UID: $_userUid", style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.9), fontFamily: 'SF Pro')),
-                    Text("오늘도 타운에서 즐거운 시간 보내세요!", style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.7), fontFamily: 'SF Pro')),
                   ],
                 ),
               ),
@@ -159,45 +305,30 @@ class _MainWrapperState extends State<MainWrapper> {
                 child: GestureDetector(
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const SettingsScreen())
-                    ).then((_) => _fetchUserInfo()); // 돌아올 때 정보 새로고침
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())).then((_) => _fetchUserInfo());
                   },
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), shape: BoxShape.circle),
-                    child: const Icon(Icons.edit_rounded, color: Colors.white, size: 16),
-                  ),
+                  child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), shape: BoxShape.circle), child: const Icon(Icons.edit_rounded, color: Colors.white, size: 16)),
                 ),
               ),
             ],
           ),
-
           _buildDrawerItem(Icons.home_rounded, '홈', () => _onMenuSelect(0)),
           _buildDrawerItem(Icons.auto_stories_rounded, '아이템 도감', () => _onMenuSelect(1)),
           _buildDrawerItem(Icons.restaurant_menu_rounded, '요리 레시피', () => _onMenuSelect(2)),
           _buildDrawerItem(Icons.backpack_rounded, '채집 도감', () => _onMenuSelect(3)),
           _buildDrawerItem(Icons.pets_rounded, '동물 도감', () => _onMenuSelect(4)),
-
           const Spacer(),
           const Divider(height: 1),
-
           _buildDrawerItem(Icons.settings_rounded, '설정', () {
             Navigator.pop(context);
-            Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen())
-            ).then((_) => _fetchUserInfo());
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())).then((_) => _fetchUserInfo());
           }),
-
           SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
         ],
       ),
     );
   }
 
-  // --- 기존 리스트 타일 및 하단바 위젯 생략 (변동 없음) ---
   Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
       leading: Icon(icon, color: const Color(0xFF636363), size: 22),
@@ -211,11 +342,7 @@ class _MainWrapperState extends State<MainWrapper> {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.only(bottom: bottomPadding > 0 ? bottomPadding : 10),
-      decoration: const ShapeDecoration(
-        color: Color(0xEAFFFDF9),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))),
-        shadows: [BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, -5))],
-      ),
+      decoration: const ShapeDecoration(color: Color(0xEAFFFDF9), shape: RoundedRectangleBorder(borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))), shadows: [BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, -5))]),
       child: Container(
         height: 85,
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -242,14 +369,9 @@ class _MainWrapperState extends State<MainWrapper> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(40),
-          border: isSelected ? Border.all(color: Colors.black.withOpacity(0.1), width: 0.8) : null,
-        ),
+        decoration: BoxDecoration(color: isSelected ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(40), border: isSelected ? Border.all(color: Colors.black.withOpacity(0.1), width: 0.8) : null),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SvgPicture.asset(assetPath, width: 24, height: 24, colorFilter: isSelected ? null : const ColorFilter.mode(Colors.black38, BlendMode.srcIn)),
             const SizedBox(height: 4),
