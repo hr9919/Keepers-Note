@@ -41,6 +41,17 @@ class _MainWrapperState extends State<MainWrapper> {
     _fetchUserInfo();
   }
 
+  // --- ★ 6시 정각 리셋 함수 추가 ---
+  void _handleSixAMReset() {
+    setState(() {
+      // 유저 항목 삭제 없이 모든 항목의 체크(completed)만 false로 변경
+      for (var task in _todoTasks) {
+        task['completed'] = false;
+      }
+    });
+    debugPrint("오전 6시 기준: 모든 투두 리스트가 초기화되었습니다.");
+  }
+
   Future<void> _fetchUserInfo() async {
     try {
       User user = await UserApi.instance.me();
@@ -93,6 +104,8 @@ class _MainWrapperState extends State<MainWrapper> {
         openEndDrawer: () => _scaffoldKey.currentState?.openEndDrawer(),
         todoList: _todoTasks,
         onTodoToggle: (index) => _toggleTodo(index),
+        // ★ 추가: HomeScreen에서 발생한 6시 리셋 신호를 여기서 처리
+        onResetAll: _handleSixAMReset,
       ),
       EncyclopediaScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
       CookingScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
@@ -100,27 +113,18 @@ class _MainWrapperState extends State<MainWrapper> {
       PetScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
     ];
 
-    // ★ PopScope로 Scaffold를 감싸서 뒤로가기 동작을 제어합니다.
     return PopScope(
-      canPop: false, // 시스템 뒤로가기 기본 동작을 일단 막습니다.
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-
-        // 1. 왼쪽 드로워가 열려있으면 닫기
         if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
           _scaffoldKey.currentState?.closeDrawer();
-        }
-        // 2. 오른쪽 드로워(투두)가 열려있으면 닫기
-        else if (_scaffoldKey.currentState?.isEndDrawerOpen ?? false) {
+        } else if (_scaffoldKey.currentState?.isEndDrawerOpen ?? false) {
           _scaffoldKey.currentState?.closeEndDrawer();
-        }
-        // 3. 드로워가 없을 때 처리
-        else {
+        } else {
           if (_selectedIndex != 0) {
-            // 홈이 아니면 홈 화면으로 이동
             setState(() => _selectedIndex = 0);
           } else {
-            // 홈 화면이면 앱을 종료(이전 화면으로 이동)하도록 허용
             Navigator.of(context).pop();
           }
         }
