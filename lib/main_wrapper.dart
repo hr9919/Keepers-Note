@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 import 'home_screen.dart';
 import 'encyclopedia_screen.dart';
 import 'cooking_screen.dart';
@@ -18,8 +22,69 @@ class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // --- ★ 초기값 설정 ---
+  String _userName = "로그인 중...";
+  String _userUid = "UID를 입력해보세요";
+  String? _profileImageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserInfo();
+  }
+
+  // --- ★ 핵심: 정보 호출 및 초기값 분기 처리 ---
+  Future<void> _fetchUserInfo() async {
+    try {
+      // 1. 카카오에서 즉시 정보 가져오기 (서버 응답 전 초기값 세팅)
+      User user = await UserApi.instance.me();
+      String kakaoNickname = user.kakaoAccount?.profile?.nickname ?? "사용자";
+      String? kakaoProfile = user.kakaoAccount?.profile?.thumbnailImageUrl;
+
+      if (mounted) {
+        setState(() {
+          _userName = kakaoNickname; // 일단 카카오 이름으로 표시
+          _profileImageUrl = kakaoProfile;
+        });
+      }
+
+      // 2. 서버에 로그인/조회 요청
+      final response = await http.post(
+        Uri.parse('http://161.33.30.40:8080/api/user/login'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "kakaoId": user.id,
+          "nickname": kakaoNickname,
+        }),
+      ).timeout(const Duration(seconds: 3));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (mounted) {
+          setState(() {
+            // ★ 서버에 저장된 닉네임이 있다면 그것을 우선 사용
+            _userName = data['nickname']?.toString() ?? kakaoNickname;
+
+            // ★ 서버에 저장된 UID가 있다면 반영
+            if (data['gameUid'] != null && data['gameUid'].toString().trim().isNotEmpty) {
+              _userUid = data['gameUid'].toString();
+            } else {
+              _userUid = "UID를 입력해보세요";
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print("유저 정보 로드 에러: $e");
+      // 네트워크 에러 등이 나도 초기값인 카카오 닉네임은 유지되도록 함
+    }
+  }
+
   void _onMenuSelect(int index) {
-    Navigator.pop(context);
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.pop(context);
+    }
     setState(() {
       _selectedIndex = index;
     });
@@ -27,7 +92,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> _pages = [
+    final List<Widget> pages = [
       HomeScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
       EncyclopediaScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
       CookingScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
@@ -38,24 +103,21 @@ class _MainWrapperState extends State<MainWrapper> {
     return Scaffold(
       key: _scaffoldKey,
       extendBody: true,
-      drawer: _buildCommonDrawer(), // ★ 여기서 메뉴를 부릅니다.
+      drawer: _buildCommonDrawer(),
       body: IndexedStack(
         index: _selectedIndex,
-        children: _pages,
+        children: pages,
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
-  // --- 공통 햄버거 메뉴 디자인 ---
   Widget _buildCommonDrawer() {
-    // ★ 시스템 바 높이를 가져옵니다.
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Drawer(
       child: Column(
         children: [
-          // 1. 헤더 영역 (프로필, 배경, 수정버튼)
           Stack(
             children: [
               Container(
@@ -76,15 +138,18 @@ class _MainWrapperState extends State<MainWrapper> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
-                        image: const DecorationImage(
-                          image: AssetImage('assets/images/profile.png'),
+                        image: DecorationImage(
+                          image: _profileImageUrl != null
+                              ? NetworkImage(_profileImageUrl!) as ImageProvider
+                              : const AssetImage('assets/images/profile.png'),
                           fit: BoxFit.cover,
                         ),
                       ),
                     ),
                     const SizedBox(height: 15),
-                    const Text("해림 님", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white, fontFamily: 'SF Pro')),
-                    Text("UID: 0000000", style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.9), fontFamily: 'SF Pro')),
+                    // ★ 변수 적용: 닉네임 님 / UID 또는 가이드 문구
+                    Text("$_userName 님", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white, fontFamily: 'SF Pro')),
+                    Text("UID: $_userUid", style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.9), fontFamily: 'SF Pro')),
                     Text("오늘도 타운에서 즐거운 시간 보내세요!", style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.7), fontFamily: 'SF Pro')),
                   ],
                 ),
@@ -92,7 +157,13 @@ class _MainWrapperState extends State<MainWrapper> {
               Positioned(
                 bottom: 12, right: 12,
                 child: GestureDetector(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SettingsScreen())
+                    ).then((_) => _fetchUserInfo()); // 돌아올 때 정보 새로고침
+                  },
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), shape: BoxShape.circle),
@@ -103,7 +174,6 @@ class _MainWrapperState extends State<MainWrapper> {
             ],
           ),
 
-          // 2. 메뉴 아이템 리스트
           _buildDrawerItem(Icons.home_rounded, '홈', () => _onMenuSelect(0)),
           _buildDrawerItem(Icons.auto_stories_rounded, '아이템 도감', () => _onMenuSelect(1)),
           _buildDrawerItem(Icons.restaurant_menu_rounded, '요리 레시피', () => _onMenuSelect(2)),
@@ -113,19 +183,21 @@ class _MainWrapperState extends State<MainWrapper> {
           const Spacer(),
           const Divider(height: 1),
 
-          // 3. 설정 버튼
           _buildDrawerItem(Icons.settings_rounded, '설정', () {
             Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+            Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen())
+            ).then((_) => _fetchUserInfo());
           }),
 
-          // ★ 핵심: 시스템 바 높이만큼 바닥 여백 추가 (가려짐 방지)
           SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
         ],
       ),
     );
   }
 
+  // --- 기존 리스트 타일 및 하단바 위젯 생략 (변동 없음) ---
   Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
       leading: Icon(icon, color: const Color(0xFF636363), size: 22),
@@ -134,10 +206,8 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
-  // --- 하단 내비게이션 바 디자인 ---
   Widget _buildBottomNavigationBar() {
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
-
     return Container(
       width: double.infinity,
       padding: EdgeInsets.only(bottom: bottomPadding > 0 ? bottomPadding : 10),
