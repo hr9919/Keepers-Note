@@ -53,43 +53,89 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Future<void> _fetchUserInfo() async {
-    try {
-      User user = await UserApi.instance.me();
-      if (mounted) {
+  try {
+    User user = await UserApi.instance.me();
+    if (mounted) {
+      setState(() {
+        _userName = user.kakaoAccount?.profile?.nickname ?? "사용자";
+        _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
+        _userUid = user.id.toString(); // ★ ID 확보 완료
+      });
+      
+      // ★ ID를 확실히 받은 후에 서버에서 데이터를 불러옵니다.
+      _loadTodoFromServer();
+    }
+  } catch (e) {
+    print("유저 정보 로드 에러: $e");
+  }
+}
+  // 데이터를 서버에 저장하는 함수
+Future<void> _saveTodoToServer() async {
+  // 실제 서버 URL로 변경 필요
+  final url = Uri.parse('http://161.33.30.40:3000/todos');
+  try {
+    await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "userId": _userUid, // 카카오 UID 사용
+        "tasks": _todoTasks,
+      }),
+    );
+  } catch (e) {
+    debugPrint("서버 저장 실패: $e");
+  }
+}
+
+// 데이터를 서버에서 불러오는 함수
+Future<void> _loadTodoFromServer() async {
+  if (_userUid == "UID를 입력해보세요") return; // 유효한 ID가 아니면 중단
+
+  final url = Uri.parse('http://161.33.30.40:3000/todos/$_userUid');
+  try {
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      final decodedData = jsonDecode(response.body);
+      if (decodedData != null && decodedData is List) {
         setState(() {
-          _userName = user.kakaoAccount?.profile?.nickname ?? "사용자";
-          _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
+          _todoTasks = List<Map<String, dynamic>>.from(decodedData);
         });
       }
-    } catch (e) {
-      print("유저 정보 로드 에러: $e");
     }
+  } catch (e) {
+    debugPrint("서버 로드 실패 (신규 유저일 수 있음): $e");
   }
+}
 
   void _toggleTodo(int index) {
-    setState(() {
-      _todoTasks[index]['completed'] = !_todoTasks[index]['completed'];
-    });
-  }
+  setState(() {
+    _todoTasks[index]['completed'] = !_todoTasks[index]['completed'];
+  });
+  _saveTodoToServer(); // ★ 체크할 때마다 서버에 동기화
+}
 
-  void _addTodo() {
-    if (_todoController.text.trim().isEmpty) return;
-    setState(() {
-      _todoTasks.add({
-        "id": DateTime.now().millisecondsSinceEpoch,
-        "taskName": _todoController.text.trim(),
-        "completed": false,
-        "isSystem": false
-      });
-      _todoController.clear();
+  // 할 일 추가 함수 수정
+void _addTodo() {
+  if (_todoController.text.trim().isEmpty) return;
+  setState(() {
+    _todoTasks.add({
+      "id": DateTime.now().millisecondsSinceEpoch,
+      "taskName": _todoController.text.trim(),
+      "completed": false,
+      "isSystem": false
     });
-  }
+    _todoController.clear();
+  });
+  _saveTodoToServer(); // ★ 추가
+}
 
-  void _deleteTodo(int index) {
-    setState(() {
-      _todoTasks.removeAt(index);
-    });
-  }
+// 할 일 삭제 함수 수정
+void _deleteTodo(int index) {
+  setState(() {
+    _todoTasks.removeAt(index);
+  });
+  _saveTodoToServer(); // ★ 추가
+}
 
   void _onMenuSelect(int index) {
     if (_scaffoldKey.currentState?.isDrawerOpen ?? false) Navigator.pop(context);
