@@ -25,14 +25,15 @@ class _MainWrapperState extends State<MainWrapper> {
 
   // --- 유저 및 투두 데이터 ---
   String _userName = "로그인 중...";
-  String _userUid = "UID를 입력해보세요";
+  String _userUid = "";
   String? _profileImageUrl;
 
+  // 기본 투두 리스트 (서버 로드 전 초기값)
   List<Map<String, dynamic>> _todoTasks = [
-    {"id": 1, "taskName": "가게 판매 품목 확인", "completed": true, "isSystem": true},
-    {"id": 2, "taskName": "그자리 참나무 파밍", "completed": false, "isSystem": true},
-    {"id": 3, "taskName": "완벽한 형광석 채집", "completed": false, "isSystem": true},
-    {"id": 4, "taskName": "작물에 물 주기", "completed": true, "isSystem": true},
+    {"id": 0, "taskName": "가게 판매 품목 확인", "completed": false, "isSystem": true},
+    {"id": 0, "taskName": "그자리 참나무 파밍", "completed": false, "isSystem": true},
+    {"id": 0, "taskName": "완벽한 형광석 채집", "completed": false, "isSystem": true},
+    {"id": 0, "taskName": "작물에 물 주기", "completed": false, "isSystem": true},
   ];
 
   @override
@@ -41,101 +42,143 @@ class _MainWrapperState extends State<MainWrapper> {
     _fetchUserInfo();
   }
 
-  // --- ★ 6시 정각 리셋 함수 추가 ---
-  void _handleSixAMReset() {
-    setState(() {
-      // 유저 항목 삭제 없이 모든 항목의 체크(completed)만 false로 변경
-      for (var task in _todoTasks) {
-        task['completed'] = false;
-      }
-    });
-    debugPrint("오전 6시 기준: 모든 투두 리스트가 초기화되었습니다.");
-  }
-
+  // --- [로직] 유저 정보 가져오기 ---
   Future<void> _fetchUserInfo() async {
-  try {
-    User user = await UserApi.instance.me();
-    if (mounted) {
-      setState(() {
-        _userName = user.kakaoAccount?.profile?.nickname ?? "사용자";
-        _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
-        _userUid = user.id.toString(); // ★ ID 확보 완료
-      });
-      
-      // ★ ID를 확실히 받은 후에 서버에서 데이터를 불러옵니다.
-      _loadTodoFromServer();
-    }
-  } catch (e) {
-    print("유저 정보 로드 에러: $e");
-  }
-}
-  // 데이터를 서버에 저장하는 함수
-Future<void> _saveTodoToServer() async {
-  // 실제 서버 URL로 변경 필요
-  final url = Uri.parse('http://161.33.30.40:3000/todos');
-  try {
-    await http.post(
-      url,
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "userId": _userUid, // 카카오 UID 사용
-        "tasks": _todoTasks,
-      }),
-    );
-  } catch (e) {
-    debugPrint("서버 저장 실패: $e");
-  }
-}
-
-// 데이터를 서버에서 불러오는 함수
-Future<void> _loadTodoFromServer() async {
-  if (_userUid == "UID를 입력해보세요") return; // 유효한 ID가 아니면 중단
-
-  final url = Uri.parse('http://161.33.30.40:3000/todos/$_userUid');
-  try {
-    final response = await http.get(url);
-    if (response.statusCode == 200) {
-      final decodedData = jsonDecode(response.body);
-      if (decodedData != null && decodedData is List) {
+    try {
+      User user = await UserApi.instance.me();
+      if (mounted) {
+        final String uid = user.id.toString();
         setState(() {
-          _todoTasks = List<Map<String, dynamic>>.from(decodedData);
+          _userName = user.kakaoAccount?.profile?.nickname ?? "사용자";
+          _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
+          _userUid = uid;
+        });
+        _loadTodoFromServer(uid);
+      }
+    } catch (e) {
+      debugPrint("유저 정보 로드 에러: $e");
+    }
+  }
+
+  // --- [API] 할 일 불러오기 ---
+  Future<void> _loadTodoFromServer([String? uid]) async {
+    final targetUid = uid ?? _userUid;
+    if (targetUid.isEmpty || targetUid == "UID를 입력해보세요") return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('http://161.33.30.40:8080/api/todo/$targetUid'),
+      );
+
+      if (response.statusCode == 200) {
+        // ★ 1. 여기서 변수(decodedData)를 먼저 선언합니다.
+        final List<dynamic> decodedData = jsonDecode(utf8.decode(response.bodyBytes));
+
+        if (decodedData.isEmpty) {
+          debugPrint("신규 유저: 기본 투두 생성 중...");
+          final defaultTasks = ["가게 판매 품목 확인", "그자리 참나무 파밍", "완벽한 형광석 채집", "작물에 물 주기"];
+          for (var taskName in defaultTasks) {
+            await http.post(
+              Uri.parse('http://161.33.30.40:8080/api/todo/add'),
+              headers: {"Content-Type": "application/json"},
+              body: jsonEncode({"kakaoId": targetUid, "taskName": taskName}),
+            );
+          }
+          _loadTodoFromServer(targetUid);
+        } else {
+          // ★ 2. 선언된 decodedData를 여기서 사용합니다.
+          setState(() {
+            _todoTasks = decodedData.map((task) => {
+              "id": task['id'],
+              "taskName": task['taskName'],
+              // DB의 0x01(BIT) 값을 안전하게 읽기 위한 강력한 매핑
+              "completed": (task['completed'] == true ||
+                  task['completed'] == 1 ||
+                  task['completed'].toString().contains('1')) ||
+                  (task['isCompleted'] == true ||
+                      task['isCompleted'] == 1 ||
+                      task['isCompleted'].toString().contains('1')),
+              "isSystem": task['isSystem'] ?? false
+            }).toList();
+          });
+          debugPrint("서버 동기화 완료 및 BIT 데이터 매핑 성공");
+        }
+      }
+    } catch (e) {
+      debugPrint("로드 에러: $e");
+    }
+  }
+
+  // --- [API] 할 일 체크 토글 ---
+  void _toggleTodo(int index) async {
+    final taskId = _todoTasks[index]['id'];
+    if (taskId == 0) return;
+
+    setState(() {
+      _todoTasks[index]['completed'] = !_todoTasks[index]['completed'];
+    });
+
+    try {
+      await http.put(
+        Uri.parse('http://161.33.30.40:8080/api/todo/toggle/$taskId'),
+      );
+    } catch (e) {
+      debugPrint("토글 동기화 실패: $e");
+    }
+  }
+
+  // --- [API] 할 일 추가 ---
+  void _addTodo() async {
+    if (_todoController.text.trim().isEmpty) return;
+    final taskName = _todoController.text.trim();
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://161.33.30.40:8080/api/todo/add'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"kakaoId": _userUid, "taskName": taskName}),
+      );
+
+      if (response.statusCode == 200) {
+        _todoController.clear();
+        _loadTodoFromServer();
+      }
+    } catch (e) {
+      debugPrint("추가 실패: $e");
+    }
+  }
+
+  // --- [API] 할 일 삭제 ---
+  void _deleteTodo(int index) async {
+    final taskId = _todoTasks[index]['id'];
+    if (taskId == 0) return;
+
+    try {
+      final response = await http.delete(
+        Uri.parse('http://161.33.30.40:8080/api/todo/$taskId'),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _todoTasks.removeAt(index);
         });
       }
+    } catch (e) {
+      debugPrint("삭제 실패: $e");
     }
-  } catch (e) {
-    debugPrint("서버 로드 실패 (신규 유저일 수 있음): $e");
   }
-}
 
-  void _toggleTodo(int index) {
-  setState(() {
-    _todoTasks[index]['completed'] = !_todoTasks[index]['completed'];
-  });
-  _saveTodoToServer(); // ★ 체크할 때마다 서버에 동기화
-}
+  // --- [로직] 오전 6시 자동 리셋 (HomeScreen에서 호출됨) ---
+  void _handleSixAMReset() async {
+    await _loadTodoFromServer();
+    debugPrint("오전 6시 자동 리셋 완료");
+  }
 
-  // 할 일 추가 함수 수정
-void _addTodo() {
-  if (_todoController.text.trim().isEmpty) return;
-  setState(() {
-    _todoTasks.add({
-      "id": DateTime.now().millisecondsSinceEpoch,
-      "taskName": _todoController.text.trim(),
-      "completed": false,
-      "isSystem": false
-    });
-    _todoController.clear();
-  });
-  _saveTodoToServer(); // ★ 추가
-}
-
-// 할 일 삭제 함수 수정
-void _deleteTodo(int index) {
-  setState(() {
-    _todoTasks.removeAt(index);
-  });
-  _saveTodoToServer(); // ★ 추가
-}
+  // --- [로직] 단순 새로고침 (당겨서 새로고침 시 호출) ---
+  Future<void> _onRefreshData() async {
+    await _loadTodoFromServer();
+    debugPrint("데이터 새로고침(동기화) 완료");
+  }
 
   void _onMenuSelect(int index) {
     if (_scaffoldKey.currentState?.isDrawerOpen ?? false) Navigator.pop(context);
@@ -150,8 +193,8 @@ void _deleteTodo(int index) {
         openEndDrawer: () => _scaffoldKey.currentState?.openEndDrawer(),
         todoList: _todoTasks,
         onTodoToggle: (index) => _toggleTodo(index),
-        // ★ 추가: HomeScreen에서 발생한 6시 리셋 신호를 여기서 처리
-        onResetAll: _handleSixAMReset,
+        onResetAll: _handleSixAMReset, // 정각 리셋용
+        onRefresh: _onRefreshData,     // 당겨서 새로고침용
       ),
       EncyclopediaScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
       CookingScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
@@ -186,7 +229,7 @@ void _deleteTodo(int index) {
     );
   }
 
-  // --- 오른쪽 드로워 (투두) ---
+  // --- [UI] 투두 드로워 ---
   Widget _buildTodoDrawer() {
     int doneCount = _todoTasks.where((t) => t['completed'] == true).length;
     double progress = _todoTasks.isEmpty ? 0 : doneCount / _todoTasks.length;
@@ -281,7 +324,7 @@ void _deleteTodo(int index) {
                   ),
                 ),
               ),
-              if (!todo['isSystem'])
+              if (todo['isSystem'] == false)
                 IconButton(
                   constraints: const BoxConstraints(),
                   padding: EdgeInsets.zero,
@@ -321,9 +364,8 @@ void _deleteTodo(int index) {
     );
   }
 
-  // --- 왼쪽 드로워 (메인 메뉴) ---
+  // --- [UI] 공통 드로워 및 하단 네비 ---
   Widget _buildCommonDrawer() {
-    final double bottomPadding = MediaQuery.of(context).padding.bottom;
     return Drawer(
       child: Column(
         children: [
@@ -373,7 +415,7 @@ void _deleteTodo(int index) {
             Navigator.pop(context);
             Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())).then((_) => _fetchUserInfo());
           }),
-          SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -388,24 +430,20 @@ void _deleteTodo(int index) {
   }
 
   Widget _buildBottomNavigationBar() {
-    final double bottomPadding = MediaQuery.of(context).padding.bottom;
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.only(bottom: bottomPadding > 0 ? bottomPadding : 10),
+      height: 85,
+      padding: const EdgeInsets.only(bottom: 10),
       decoration: const ShapeDecoration(color: Color(0xEAFFFDF9), shape: RoundedRectangleBorder(borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))), shadows: [BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, -5))]),
-      child: Container(
-        height: 85,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildNavItem(0, 'home', '홈'),
-            _buildNavItem(1, 'book', '도감'),
-            _buildNavItem(2, 'cook', '요리'),
-            _buildNavItem(3, 'fish', '채집'),
-            _buildNavItem(4, 'pet', '동물'),
-          ],
-        ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildNavItem(0, 'home', '홈'),
+          _buildNavItem(1, 'book', '도감'),
+          _buildNavItem(2, 'cook', '요리'),
+          _buildNavItem(3, 'fish', '채집'),
+          _buildNavItem(4, 'pet', '동물'),
+        ],
       ),
     );
   }

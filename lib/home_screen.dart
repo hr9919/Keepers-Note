@@ -12,6 +12,7 @@ class HomeScreen extends StatefulWidget {
   final List<Map<String, dynamic>> todoList;
   final Function(int)? onTodoToggle;
   final VoidCallback? onResetAll;
+  final Future<void> Function()? onRefresh; // 새로고침 전용 파라미터
 
   const HomeScreen({
     super.key,
@@ -20,6 +21,7 @@ class HomeScreen extends StatefulWidget {
     this.todoList = const [],
     this.onTodoToggle,
     this.onResetAll,
+    this.onRefresh,
   });
 
   @override
@@ -42,55 +44,40 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // --- [로직 1] 앱 실행 시점 리셋 체크 ---
+  // --- [로직] 앱 실행 시점 리셋 체크 ---
   Future<void> _checkAndResetAtStart() async {
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now();
-
     String? lastResetDate = prefs.getString('last_six_am_reset');
-
     DateTime resetThreshold = DateTime(now.year, now.month, now.day, 6);
     DateTime currentResetDate = now.isBefore(resetThreshold)
         ? resetThreshold.subtract(const Duration(days: 1))
         : resetThreshold;
-
     String currentResetStr = "${currentResetDate.year}-${currentResetDate.month}-${currentResetDate.day}";
-
     if (lastResetDate != currentResetStr) {
       _executeReset(currentResetStr);
     }
   }
 
-  // --- [로직 2] 앱 사용 중 6시 정각 타이머 ---
+  // --- [로직] 오전 6시 정각 타이머 ---
   void _scheduleSixAMTimer() {
     _sixAMTimer?.cancel();
-
     final now = DateTime.now();
     DateTime nextSixAM = DateTime(now.year, now.month, now.day, 6);
-
-    if (now.isAfter(nextSixAM)) {
-      nextSixAM = nextSixAM.add(const Duration(days: 1));
-    }
-
+    if (now.isAfter(nextSixAM)) nextSixAM = nextSixAM.add(const Duration(days: 1));
     final durationUntilSix = nextSixAM.difference(now);
-
     _sixAMTimer = Timer(durationUntilSix, () {
       _executeReset("${nextSixAM.year}-${nextSixAM.month}-${nextSixAM.day}");
       _scheduleSixAMTimer();
     });
   }
 
-  // --- [공통] 리셋 실행 ---
+  // --- [로직] 리셋 실행 ---
   Future<void> _executeReset(String dateStr) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('last_six_am_reset', dateStr);
-
     debugPrint("오전 6시 리셋 실행: $dateStr");
-
-    if (widget.onResetAll != null) {
-      widget.onResetAll!();
-    }
-
+    if (widget.onResetAll != null) widget.onResetAll!();
     if (mounted) setState(() {});
   }
 
@@ -112,24 +99,36 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildCustomAppBar(context),
             _buildSearchBar(),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.zero,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 20),
-                    _buildSectionTitle('날씨 정보'),
-                    const SizedBox(height: 8),
-                    _buildWeatherCard(),
-                    const SizedBox(height: 32),
-                    _buildTodoSection(),
-                    const SizedBox(height: 32),
-                    _buildMapSection(context),
-                    const SizedBox(height: 32),
-                    _buildEventSection(context),
-                    const SizedBox(height: 120),
-                  ],
+              child: RefreshIndicator(
+                color: const Color(0xFFFF8E7C),
+                backgroundColor: Colors.white,
+                onRefresh: () async {
+                  // ★ 리셋이 아닌 동기화(onRefresh)만 실행
+                  if (widget.onRefresh != null) {
+                    await widget.onRefresh!();
+                  }
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      _buildSectionTitle('날씨 정보'),
+                      const SizedBox(height: 8),
+                      _buildWeatherCard(),
+                      const SizedBox(height: 32),
+                      _buildTodoSection(),
+                      const SizedBox(height: 32),
+                      _buildMapSection(context),
+                      const SizedBox(height: 32),
+                      _buildEventSection(context),
+                      const SizedBox(height: 120),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -200,8 +199,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 10.0),
                             child: _buildTodoItemSummary(
-                              todo['taskName'],
-                              todo['completed'],
+                              todo['taskName'] ?? "",
+                              todo['completed'] ?? false,
                                   () => widget.onTodoToggle?.call(index),
                             ),
                           );
@@ -230,9 +229,44 @@ class _HomeScreenState extends State<HomeScreen> {
       behavior: HitTestBehavior.opaque,
       child: Row(
         children: [
-          Container(width: 16, height: 16, decoration: BoxDecoration(color: isDone ? const Color(0x2890CDFF) : Colors.transparent, borderRadius: BorderRadius.circular(4), border: Border.all(width: 1, color: const Color(0xFF90CDFF))), child: isDone ? const Icon(Icons.check, size: 10, color: Color(0xFF90CDFF)) : null),
+          Container(
+              width: 16, height: 16,
+              decoration: BoxDecoration(
+                  color: isDone ? const Color(0x2890CDFF) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(width: 1, color: const Color(0xFF90CDFF))
+              ),
+              child: isDone ? const Icon(Icons.check, size: 10, color: Color(0xFF90CDFF)) : null
+          ),
           const SizedBox(width: 10),
-          Expanded(child: Align(alignment: Alignment.centerLeft, child: IntrinsicWidth(child: Stack(alignment: Alignment.centerLeft, children: [Text(task, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontFamily: 'SF Pro', color: isDone ? Colors.grey : Colors.black87)), if (isDone) Positioned(left: 0, right: 0, child: Container(height: 1.2, color: Colors.grey.withOpacity(0.6)))])))),
+          Expanded(
+              child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: IntrinsicWidth(
+                      child: Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [
+                            Text(
+                                task,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontFamily: 'SF Pro',
+                                  color: isDone ? Colors.grey.withOpacity(0.6) : Colors.black87,
+                                  decoration: isDone ? TextDecoration.lineThrough : null,
+                                )
+                            ),
+                            if (isDone)
+                              Positioned(
+                                  left: 0, right: 0,
+                                  child: Container(height: 1.2, color: Colors.grey.withOpacity(0.4))
+                              )
+                          ]
+                      )
+                  )
+              )
+          ),
         ],
       ),
     );
@@ -273,9 +307,6 @@ class _HomeScreenState extends State<HomeScreen> {
     double screenWidth = MediaQuery.of(context).size.width;
     double itemWidth = (screenWidth - (16 * 2) - (12 * 2)) / 3;
 
-    const String fbImg = 'https://scontent-icn2-1.xx.fbcdn.net/v/t39.30808-6/653560105_122127351237021391_2534542623193999458_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=13d280&_nc_ohc=GJ6gMkapj0EQ7kNvwGe2VZj&_nc_oc=AdoiTg1t670K8-kTotsOj-LbC134Aq6plrE5HNZuqP7TmI07StiCU9mt_MJCAlh2YlE&_nc_zt=23&_nc_ht=scontent-icn2-1.xx&_nc_gid=cd7roSdfW4Yhunct6S5Ghg&_nc_ss=7a32e&oh=00_AfwXPj2QZt7wKp-poD2VpNQkENY9kC40PFj5WJa_DwUSZA&oe=69CE102B';
-    const String fbLink = 'https://www.facebook.com/HeartopiaKR/photos/122127351225021391/';
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -286,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildEventCard(context, fbImg, itemWidth, fbLink, isNetworkImage: true),
+              _buildEventCard(context, 'https://scontent-icn2-1.xx.fbcdn.net/v/t39.30808-6/653560105_122127351237021391_2534542623193999458_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=13d280&_nc_ohc=GJ6gMkapj0EQ7kNvwGe2VZj&_nc_oc=AdoiTg1t670K8-kTotsOj-LbC134Aq6plrE5HNZuqP7TmI07StiCU9mt_MJCAlh2YlE&_nc_zt=23&_nc_ht=scontent-icn2-1.xx&_nc_gid=cd7roSdfW4Yhunct6S5Ghg&_nc_ss=7a32e&oh=00_AfwXPj2QZt7wKp-poD2VpNQkENY9kC40PFj5WJa_DwUSZA&oe=69CE102B', itemWidth, 'https://www.facebook.com/HeartopiaKR/photos/122127351225021391/', isNetworkImage: true),
               _buildEventCard(context, 'assets/images/event_2.png', itemWidth, 'https://www.leagueoflegends.com'),
               _buildEventCard(context, 'assets/images/event_3.png', itemWidth, 'https://github.com'),
             ],
@@ -308,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: isNetworkImage
-              ? Image.network(path, fit: BoxFit.cover, loadingBuilder: (c, child, p) => p == null ? child : const Center(child: CircularProgressIndicator()), errorBuilder: (c, e, s) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image, color: Colors.grey)))
+              ? Image.network(path, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image, color: Colors.grey)))
               : Image.asset(path, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: Colors.grey[200], child: const Icon(Icons.image, color: Colors.grey))),
         ),
       ),
