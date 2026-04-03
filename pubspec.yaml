@@ -28,6 +28,7 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
+  image_path_ios: "assets/icons/icon_ios.png"
   image_path: "assets/images/app_icon.png" # 파일이 실제로 이 경로에 있어야 함
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/images/app_icon.png"

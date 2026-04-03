@@ -71,7 +71,7 @@ class _MainWrapperState extends State<MainWrapper> {
       );
 
       if (response.statusCode == 200) {
-        // ★ 1. 여기서 변수(decodedData)를 먼저 선언합니다.
+        // ★ 1. JSON 디코딩
         final List<dynamic> decodedData = jsonDecode(utf8.decode(response.bodyBytes));
 
         if (decodedData.isEmpty) {
@@ -86,12 +86,11 @@ class _MainWrapperState extends State<MainWrapper> {
           }
           _loadTodoFromServer(targetUid);
         } else {
-          // ★ 2. 선언된 decodedData를 여기서 사용합니다.
+          // ★ 2. 데이터 매핑 (BIT 타입 0x01 대응 포함)
           setState(() {
             _todoTasks = decodedData.map((task) => {
               "id": task['id'],
               "taskName": task['taskName'],
-              // DB의 0x01(BIT) 값을 안전하게 읽기 위한 강력한 매핑
               "completed": (task['completed'] == true ||
                   task['completed'] == 1 ||
                   task['completed'].toString().contains('1')) ||
@@ -101,7 +100,7 @@ class _MainWrapperState extends State<MainWrapper> {
               "isSystem": task['isSystem'] ?? false
             }).toList();
           });
-          debugPrint("서버 동기화 완료 및 BIT 데이터 매핑 성공");
+          debugPrint("서버 동기화 완료");
         }
       }
     } catch (e) {
@@ -168,16 +167,12 @@ class _MainWrapperState extends State<MainWrapper> {
     }
   }
 
-  // --- [로직] 오전 6시 자동 리셋 (HomeScreen에서 호출됨) ---
   void _handleSixAMReset() async {
     await _loadTodoFromServer();
-    debugPrint("오전 6시 자동 리셋 완료");
   }
 
-  // --- [로직] 단순 새로고침 (당겨서 새로고침 시 호출) ---
   Future<void> _onRefreshData() async {
     await _loadTodoFromServer();
-    debugPrint("데이터 새로고침(동기화) 완료");
   }
 
   void _onMenuSelect(int index) {
@@ -187,14 +182,17 @@ class _MainWrapperState extends State<MainWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    // ★ 기기 하단 바 높이 계산
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+
     final List<Widget> pages = [
       HomeScreen(
         openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
         openEndDrawer: () => _scaffoldKey.currentState?.openEndDrawer(),
         todoList: _todoTasks,
         onTodoToggle: (index) => _toggleTodo(index),
-        onResetAll: _handleSixAMReset, // 정각 리셋용
-        onRefresh: _onRefreshData,     // 당겨서 새로고침용
+        onResetAll: _handleSixAMReset,
+        onRefresh: _onRefreshData,
       ),
       EncyclopediaScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
       CookingScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
@@ -221,10 +219,10 @@ class _MainWrapperState extends State<MainWrapper> {
       child: Scaffold(
         key: _scaffoldKey,
         extendBody: true,
-        drawer: _buildCommonDrawer(),
+        drawer: _buildCommonDrawer(bottomPadding),
         endDrawer: _buildTodoDrawer(),
         body: IndexedStack(index: _selectedIndex, children: pages),
-        bottomNavigationBar: _buildBottomNavigationBar(),
+        bottomNavigationBar: _buildBottomNavigationBar(bottomPadding),
       ),
     );
   }
@@ -364,8 +362,8 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
-  // --- [UI] 공통 드로워 및 하단 네비 ---
-  Widget _buildCommonDrawer() {
+  // --- [UI] 공통 드로워 ---
+  Widget _buildCommonDrawer(double bottomPadding) {
     return Drawer(
       child: Column(
         children: [
@@ -415,7 +413,8 @@ class _MainWrapperState extends State<MainWrapper> {
             Navigator.pop(context);
             Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())).then((_) => _fetchUserInfo());
           }),
-          const SizedBox(height: 20),
+          // ★ 시스템 바만큼 하단 여백 추가
+          SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
         ],
       ),
     );
@@ -429,11 +428,13 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
-  Widget _buildBottomNavigationBar() {
+  // --- [UI] 하단 내비게이션 바 ---
+  Widget _buildBottomNavigationBar(double bottomPadding) {
     return Container(
       width: double.infinity,
-      height: 85,
-      padding: const EdgeInsets.only(bottom: 10),
+      // 시스템 바 높이 반영하여 전체 높이 조절
+      height: bottomPadding > 0 ? 85 + bottomPadding : 85,
+      padding: EdgeInsets.only(bottom: bottomPadding > 0 ? bottomPadding : 10),
       decoration: const ShapeDecoration(color: Color(0xEAFFFDF9), shape: RoundedRectangleBorder(borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))), shadows: [BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, -5))]),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
