@@ -16,6 +16,8 @@ dependencies:
   url_launcher: ^6.3.2
   photo_view: ^0.15.0
   shared_preferences: ^2.5.5
+  image_picker: ^1.2.1
+  http_parser: ^4.1.2
 
 dev_dependencies:
   flutter_test:
@@ -28,10 +30,16 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
+
+  # iOS: 여백 없는 꽉 찬 이미지
   image_path_ios: "assets/icons/icon_ios.png"
-  image_path: "assets/images/app_icon.png" # 파일이 실제로 이 경로에 있어야 함
+
+  # 안드로이드: 적응형 아이콘
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/images/app_icon.png"
+
+  # 폴백용 기본 경로
+  image_path: "assets/images/app_icon.png"
 
 # --- 스플래시 화면 설정 ---
 flutter_native_splash:
