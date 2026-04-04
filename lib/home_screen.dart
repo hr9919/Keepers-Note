@@ -282,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MapScreen())),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => MapScreen())),
             child: Container(
               width: double.infinity, height: 227,
               decoration: ShapeDecoration(color: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)), shadows: _kCommonShadow),

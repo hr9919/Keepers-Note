@@ -54,3 +54,6 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/images/resources/
+    - assets/images/npcs/
+    - assets/images/animals/
