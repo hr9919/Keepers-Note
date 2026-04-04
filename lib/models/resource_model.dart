@@ -94,7 +94,7 @@ class ResourceModel {
       case 'massimo': return '마시모';
       case 'mrs-joan': return '조안 여사';
       case 'bailey-j': return '베일리';
-      case 'albert-jr': return '알버트 주니어';
+      case 'albert-jr': return '알버트 2세';
       case 'ka-ching': return '카칭';
       case 'naniwa': return '나니와';
       case 'andrew': return '앤드류';
