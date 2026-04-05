@@ -851,6 +851,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   // 공통 리스트 빌더 함수 (새, 원예 등에서 사용)
+  // 공통 리스트 빌더 함수 수정
   Widget _buildDynamicTabContent<T>(bool isLoading, List<T> list, Widget Function(T) buildCard) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -858,37 +859,29 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     if (list.isEmpty) {
       return RefreshIndicator(
-        onRefresh: () async {
-          _fetchAllData();
-        },
+        onRefresh: () async { _fetchAllData(); },
         child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           children: const [
             SizedBox(height: 180),
-            Center(
-              child: Text(
-                '검색 결과가 없어요.',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF666666),
-                ),
-              ),
-            ),
+            Center(child: Text('검색 결과가 없어요.', style: TextStyle(fontSize: 14, color: Color(0xFF666666)))),
           ],
         ),
       );
     }
 
     return RefreshIndicator(
-      onRefresh: () async {
-        _fetchAllData();
-      },
+      onRefresh: () async { _fetchAllData(); },
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: list.length,
-        itemBuilder: (context, index) => buildCard(list[index]),
+        itemCount: list.length + 1, // ★ 마지막에 여백 공간을 위해 +1 해줍니다.
+        itemBuilder: (context, index) {
+          // ★ 마지막 인덱스일 때 하단 메뉴바만큼의 여백(SizedBox)을 반환합니다.
+          if (index == list.length) {
+            return const SizedBox(height: 120); // 물고기 탭과 동일한 높이의 여백
+          }
+          return buildCard(list[index]);
+        },
       ),
     );
   }
@@ -1013,58 +1006,19 @@ class _GatheringScreenState extends State<GatheringScreen>
             )
                 : ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: _visibleInsectList.length,
-              itemBuilder: (context, index) => _buildInsectCard(_visibleInsectList[index]),
+              // ★ 수정: 하단 여백을 위해 1개를 더 추가합니다.
+              itemCount: _visibleInsectList.length + 1,
+              itemBuilder: (context, index) {
+                // ★ 수정: 마지막 인덱스일 때 투명한 여백 박스를 반환합니다.
+                if (index == _visibleInsectList.length) {
+                  return const SizedBox(height: 120);
+                }
+                return _buildInsectCard(_visibleInsectList[index]);
+              },
             ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildInsectFilters() {
-    return Wrap(
-      spacing: 8.0,
-      runSpacing: 4.0,
-      children: [
-        FilterChip(
-          label: Text("도시"),
-          selected: _selectedFilter == "도시",
-          onSelected: (bool selected) {
-            setState(() {
-              _selectedFilter = selected ? "도시" : "전체";
-            });
-            _applyFilters();
-          },
-        ),
-        FilterChip(
-          label: Text("온천 산"),
-          selected: _selectedFilter == "온천 산",
-          onSelected: (bool selected) {
-            setState(() {
-              _selectedFilter = selected ? "온천 산" : "전체";
-            });
-            _applyFilters();
-          },
-        ),
-        // 추가적인 위치 필터 추가 가능
-      ],
-    );
-  }
-
-  Widget _buildLevelTag(int level) {
-    Color bgColor;
-    if (level == 1) {
-      bgColor = Colors.grey[300]!;
-    } else if (level == 2) {
-      bgColor = Colors.red[200]!;
-    } else {
-      bgColor = Colors.green[200]!;
-    }
-
-    return Chip(
-      label: Text("레벨 $level"),
-      backgroundColor: bgColor,
     );
   }
 
