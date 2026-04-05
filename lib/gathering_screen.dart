@@ -163,9 +163,6 @@ class FishItem {
   });
 
   factory FishItem.fromJson(Map<String, dynamic> json) {
-    // 디버깅을 위해 전체 JSON 구조를 한 번 출력해보는 것이 가장 정확합니다.
-    // debugPrint('전체 JSON: $json');
-
     return FishItem(
       id: (json['id'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
@@ -247,9 +244,19 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
 // 물고기 이미지 경로를 반환하는 함수
-  String _imageAssetPath(String image) {
-    if (image.startsWith('assets/')) return image;
-    return 'assets/$image';
+  String _imageAssetPath(String? image) {
+    if (image == null || image.isEmpty) return 'assets/images/default.png';
+
+    String fullPath = image.startsWith('assets/') ? image : 'assets/$image';
+
+    // 확장자가 없는 경우 .webp 기본 추가
+    if (!fullPath.toLowerCase().endsWith('.webp') &&
+        !fullPath.toLowerCase().endsWith('.png') &&
+        !fullPath.toLowerCase().endsWith('.jpg')) {
+      fullPath = '$fullPath.webp';
+    }
+
+    return fullPath;
   }
 
 // 1. 시간대 레이블 변환 함수: 숫자를 직관적인 한글로 변환
@@ -374,30 +381,21 @@ class _GatheringScreenState extends State<GatheringScreen>
       _isBirdLoading = true;
       _errorMessage = null;
     });
-
     try {
       final response = await http.get(Uri.parse(_birdApiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        // BirdItem 모델로 변환
         final birds = data.map((e) => BirdItem.fromJson(e as Map<String, dynamic>)).toList();
-
         setState(() {
           _birdList = birds;
           _isBirdLoading = false;
         });
         _applyFilters();
       } else {
-        setState(() {
-          _errorMessage = '새 데이터를 불러오지 못했어요.';
-          _isBirdLoading = false;
-        });
+        setState(() => _isBirdLoading = false);
       }
     } catch (e) {
-      debugPrint('새 fetch 에러: $e');
-      setState(() {
-        _isBirdLoading = false;
-      });
+      setState(() => _isBirdLoading = false);
     }
   }
 
@@ -406,55 +404,41 @@ class _GatheringScreenState extends State<GatheringScreen>
       _isPlantLoading = true;
       _errorMessage = null;
     });
-
     try {
       final response = await http.get(Uri.parse(_plantApiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        // PlantItem 모델로 변환
         final plants = data.map((e) => PlantItem.fromJson(e as Map<String, dynamic>)).toList();
-
         setState(() {
           _plantList = plants;
           _isPlantLoading = false;
         });
         _applyFilters();
       } else {
-        setState(() {
-          _errorMessage = '원예 데이터를 불러오지 못했어요.';
-          _isPlantLoading = false;
-        });
+        setState(() => _isPlantLoading = false);
       }
     } catch (e) {
-      debugPrint('원예 fetch 에러: $e');
-      setState(() {
-        _isPlantLoading = false;
-      });
+      setState(() => _isPlantLoading = false);
     }
   }
 
   Future<void> _fetchInsects() async {
-    setState(() {
-      _isInsectLoading = true;
-    });
-
+    setState(() => _isInsectLoading = true);
     try {
       final response = await http.get(Uri.parse(_insectApiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         final insects = data.map((e) => InsectItem.fromJson(e)).toList();
-        debugPrint("곤충 데이터 로드됨: ${insects.length}");
         setState(() {
           _insectList = insects;
           _isInsectLoading = false;
         });
-        _applyFilters(); // 곤충 리스트가 들어왔으니 필터 적용
+        _applyFilters();
       } else {
         setState(() => _isInsectLoading = false);
       }
     } catch (e) {
       setState(() => _isInsectLoading = false);
-      debugPrint("곤충 데이터 로드 에러: $e");
     }
   }
 
@@ -1126,15 +1110,13 @@ class _GatheringScreenState extends State<GatheringScreen>
                 child: Image.asset(
                   _imageAssetPath(fish.image),
                   fit: BoxFit.contain,
-                  errorBuilder: (c, e, s) {
-                    debugPrint('이미지 로드 실패: ${_imageAssetPath(fish.image)}');
-                    // 여기에 느낌표 대신 물고기 관련 아이콘을 넣습니다.
+                  errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      color: const Color(0xFFF5F5F5), // 아이콘 배경색 (연회색)
-                      child: Icon(
-                        Icons.phishing, // 낚시/물고기 모양과 가장 유사한 아이콘
+                      color: const Color(0xFFF5F5F5),
+                      child: const Icon(
+                        Icons.phishing,
                         size: 40,
-                        color: const Color(0xFFD9D9D9), // 아이콘 색상 (연한 회색)
+                        color: Color(0xFFD9D9D9),
                       ),
                     );
                   },
@@ -1458,16 +1440,24 @@ Widget _buildPriceTagLabel() {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              width: 88, height: 88,
+              width: 88,
+              height: 88,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: Colors.black.withOpacity(0.05)),
               ),
               child: Image.asset(
-                _imageAssetPath(insect.image),
+                _imageAssetPath(insect.image), // path 대신 fish.image 사용
                 fit: BoxFit.contain,
-                errorBuilder: (c, e, s) => const Icon(Icons.bug_report, size: 40, color: Color(0xFFD9D9D9)),
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Color(0xFFF5F5F5),
+                  child: Icon(
+                    Icons.bug_report, // errorIcon 대신 물고기 아이콘 직접 지정
+                    size: 40,
+                    color: Color(0xFFD9D9D9),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -1554,9 +1544,10 @@ Widget _buildPriceTagLabel() {
   }
 
 // 카드 내 이미지 박스
-  Widget _buildCardImage(String path, IconData errorIcon) {
+  Widget _buildCardImage(String? path, IconData errorIcon) {
     return Container(
-      width: 88, height: 88,
+      width: 88,
+      height: 88,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(4),
@@ -1565,7 +1556,8 @@ Widget _buildPriceTagLabel() {
       child: Image.asset(
         _imageAssetPath(path),
         fit: BoxFit.contain,
-        errorBuilder: (c, e, s) => Icon(errorIcon, size: 40, color: const Color(0xFFD9D9D9)),
+        errorBuilder: (context, error, stackTrace) =>
+            Icon(errorIcon, size: 40, color: const Color(0xFFD9D9D9)),
       ),
     );
   }
