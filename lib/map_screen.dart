@@ -43,15 +43,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   String _voterId = "";
 
   bool _isProgressiveVotePin(ResourceModel res) {
-    return res.koName == '그 자리 참나무' || res.koName == '완벽한 형광석';
+    final key = _normalizeFilterKey(res);
+    return key == 'roaming_oak' || key == 'fluorite';
   }
 
   bool _isVoteCompleted(ResourceModel res) {
-    return res.voteCount >= 5 || res.isFixed;
+    return res.voteCount >= 5 || res.isFixed || res.isVerified;
   }
 
   double _votePinOpacity(ResourceModel res) {
     if (!_isProgressiveVotePin(res)) return 1.0;
+
+    // 내가 투표해서 남아 있는 핀은 항상 완전 불투명
+    if (res.votedByMe) return 1.0;
+
     if (_isVoteCompleted(res)) return 1.0;
 
     switch (res.voteCount) {
@@ -84,9 +89,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   void initState() {
-  super.initState();
-  _loadVoterId();
-  _loadResources();
+    super.initState();
+    _initializeMap();
+  }
+
+  Future<void> _initializeMap() async {
+    await _loadVoterId();
+    await _loadResources();
   }
 
   @override
@@ -115,10 +124,23 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _handleVote(ResourceModel res) async {
+    // 먼저 상세 팝업 닫기
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+
     if (_voterId.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다. 다시 시도해주세요.')),
+      );
+      return;
+    }
+
+    if (res.alreadyVotedSameType) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이미 이 자원 종류에 투표했어요.')),
       );
       return;
     }
@@ -130,26 +152,35 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ),
       );
 
+      await _loadResources();
+
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
-        await _loadResources();
-
-        if (!mounted) return;
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${res.koName}에 투표했습니다!')),
         );
+        return;
+      }
 
-        Navigator.pop(context);
-      } else {
-        if (!mounted) return;
+      if (response.statusCode == 409) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              response.body.isNotEmpty ? response.body : '투표에 실패했습니다.',
+              response.body.isNotEmpty ? response.body : '이미 이 자원 종류에 투표했어요.',
             ),
           ),
         );
+        return;
       }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            response.body.isNotEmpty ? response.body : '투표에 실패했습니다.',
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -160,7 +191,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   Future<void> _loadResources() async {
     try {
-      final data = await ApiService.getResources();
+      final data = await ApiService.getResources(voterId: _voterId);
       if (!mounted) return;
 
       setState(() {
@@ -172,9 +203,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           res.category != 'npc' &&
               res.category != 'animal' &&
               res.category != 'location' &&
-              !res.isFixed,
+              !res.isFixed &&
+              _normalizeFilterKey(res) != 'gold_bubble',
         )
-            .map((res) => res.resourceName)
+            .map((res) => _normalizeFilterKey(res))
             .toSet();
 
         _showAllNpcs = true;
@@ -188,6 +220,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       setState(() => _isLoading = false);
       _openDrawerIfNeeded();
     }
+  }
+
+  String _getDisplayName(String filterKey) {
+    final sample = _getRepresentativeByFilterKey(filterKey);
+    return sample?.koName ?? filterKey;
   }
 
   void _openDrawerIfNeeded() {
@@ -409,7 +446,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   void _showResourceDetail(ResourceModel res) {
     final bool isVoteTarget = _isProgressiveVotePin(res);
     final bool isActuallyVerified = _isVoteCompleted(res);
-    final bool needsVote = isVoteTarget && !isActuallyVerified;
+    final bool isAlreadyVoted = res.alreadyVotedSameType;
+
+    final bool showVoteButton = isVoteTarget && !isActuallyVerified;
+    final bool canVote = showVoteButton && !isAlreadyVoted;
 
     showModalBottomSheet(
       context: context,
@@ -463,8 +503,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     ),
                   ],
                 ),
-                if (isActuallyVerified)
-                  const Icon(Icons.verified, color: Colors.blue, size: 24),
               ],
             ),
             const SizedBox(height: 20),
@@ -478,15 +516,21 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             const SizedBox(height: 30),
             Row(
               children: [
-                if (needsVote) ...[
+                if (showVoteButton) ...[
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _handleVote(res),
                       icon: const Icon(Icons.thumb_up_outlined),
-                      label: Text("여기 있어요! (${res.voteCount})"),
+                      label: Text(
+                        canVote
+                            ? "여기 있어요! (${res.voteCount})"
+                            : "이미 투표했어요",
+                      ),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: accentColor,
-                        side: BorderSide(color: accentColor),
+                        foregroundColor: canVote ? accentColor : Colors.grey,
+                        side: BorderSide(
+                          color: canVote ? accentColor : Colors.grey.shade400,
+                        ),
                       ),
                     ),
                   ),
@@ -510,12 +554,44 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
+  ResourceModel? _getRepresentativeByFilterKey(String filterKey) {
+    try {
+      return _resources.firstWhere(
+            (r) => _normalizeFilterKey(r) == filterKey,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   List<String> _getDistinctNamesByCategory(List<String> categories) {
     return _resources
         .where((res) => categories.contains(res.category))
-        .map((res) => res.resourceName)
+        .map((res) => _normalizeFilterKey(res))
         .toSet()
-        .toList();
+        .toList()
+      ..sort((a, b) => _getDisplayName(a).compareTo(_getDisplayName(b)));
+  }
+
+  String _normalizeFilterKey(ResourceModel res) {
+    if (res.resourceName == 'fluorite' ||
+        res.resourceName == 'flawless_fluorite' ||
+        res.koName.contains('형광석')) {
+      return 'fluorite';
+    }
+
+    if (res.resourceName == 'roaming_oak' ||
+        res.koName.contains('참나무')) {
+      return 'roaming_oak';
+    }
+
+    if (res.resourceName == 'black_truffle' ||
+        res.resourceName == 'black-truffle' ||
+        res.koName.contains('트러플')) {
+      return 'black_truffle';
+    }
+
+    return res.resourceName;
   }
 
   void _toggleResource(String resourceName) {
@@ -529,10 +605,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   bool _isVisibleOnMap(ResourceModel res) {
+    if (_shouldHideOtherSameTypePins(res)) return false;
+
     if (res.category == 'npc') return _showAllNpcs;
     if (res.category == 'animal') return _showAllAnimals;
     if (res.category == 'location') return false;
-    return _enabledResources.contains(res.resourceName);
+
+    return _enabledResources.contains(_normalizeFilterKey(res));
   }
 
   List<ResourceModel> _findNearbyCharacters(
@@ -737,14 +816,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildMapFilterChip(String resourceName) {
-    if (_resources.isEmpty) return const SizedBox.shrink();
-
     final bool isEnabled = _enabledResources.contains(resourceName);
-
-    final ResourceModel sampleRes = _resources.firstWhere(
-          (r) => r.resourceName == resourceName,
-      orElse: () => _resources.first,
-    );
+    final ResourceModel? sampleRes = _getRepresentativeByFilterKey(resourceName);
 
     return GestureDetector(
       onTap: () => _toggleResource(resourceName),
@@ -778,7 +851,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       : const Color(0xFFE5E7EB),
                 ),
               ),
-              child: Image.asset(
+              child: sampleRes == null
+                  ? const Icon(
+                Icons.inventory_2_outlined,
+                size: 12,
+                color: Colors.grey,
+              )
+                  : Image.asset(
                 sampleRes.iconPath,
                 fit: BoxFit.contain,
                 errorBuilder: (c, e, s) => const Icon(
@@ -790,7 +869,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             ),
             const SizedBox(width: 7),
             Text(
-              sampleRes.koName,
+              _getDisplayName(resourceName),
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
@@ -826,8 +905,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildFilterDrawer() {
-    final gatherItems =
-    _getDistinctNamesByCategory(['fruit', 'bubble', 'tree', 'material']);
+    final gatherItems = _getDistinctNamesByCategory([
+      'fruit',
+      'bubble',
+      'tree',
+      'material',
+      'mineral',
+    ]);
     final mushroomItems = _getDistinctNamesByCategory(['mushroom']);
 
     return Drawer(
@@ -1051,9 +1135,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildMapMarker(ResourceModel res, double mapSize) {
-    const double markerSize = 28;
+    const double markerSize = 24;
 
-    final double visualScale = (1 / _currentScale).clamp(0.5, 1.0);
+    // 줌인해도 핀이 너무 커 보이지 않게 더 작게 유지
+    final double visualScale = (1 / (_currentScale * 1.18)).clamp(0.42, 0.92);
 
     return Positioned(
       left: (res.x * mapSize) - (markerSize / 2),
@@ -1144,6 +1229,21 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   bool _shouldShowPlaceLabel(PlaceLabel place) {
     if (place.showFromBaseZoom) return true;
     return _currentScale >= _placeRevealScale;
+  }
+
+  bool _shouldHideOtherSameTypePins(ResourceModel res) {
+    final String key = _normalizeFilterKey(res);
+    final bool isVoteTarget = key == 'roaming_oak' || key == 'fluorite';
+
+    if (!isVoteTarget) return false;
+
+    final bool hasMyVoteInSameType = _resources.any((r) {
+      return _normalizeFilterKey(r) == key && r.votedByMe;
+    });
+
+    if (!hasMyVoteInSameType) return false;
+
+    return !res.votedByMe;
   }
 
   Widget _buildPlaceLabels(double mapSize) {
@@ -1280,8 +1380,25 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           final double mapSize = constraints.maxWidth * _baseMapWidthFactor;
           _applyInitialTransform(constraints, mapSize);
 
-          final visibleResources =
-          _resources.where((res) => _isVisibleOnMap(res)).toList();
+          final visibleResources = _resources.where((res) {
+            final hidden = _shouldHideOtherSameTypePins(res);
+
+            if (hidden) {
+              debugPrint('❌ HIDE ${res.id} ${res.resourceName}');
+              return false;
+            }
+
+            final visible = _isVisibleOnMap(res);
+
+            debugPrint(
+              '✅ CHECK ${res.id} ${res.resourceName} '
+                  'visible=$visible '
+                  'sameType=${res.alreadyVotedSameType} '
+                  'votedByMe=${res.votedByMe}',
+            );
+
+            return visible;
+          }).toList();
 
           visibleResources.sort((a, b) {
             final int aPriority = a.id == _selectedResourceId ? 1 : 0;

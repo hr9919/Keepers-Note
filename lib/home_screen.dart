@@ -37,30 +37,36 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Timer? _sixAMTimer;
 
-  List<String> _getDistinctPreviewNamesByCategory(List<String> categories) {
+  List<String> _getDistinctPreviewResourceKeysByCategory(List<String> categories) {
     return _allPreviewCandidates
         .where((res) => categories.contains(res.category))
         .where((res) => res.category != 'npc' && res.category != 'animal')
-        .map((res) => res.koName)
+        .map((res) => _normalizePreviewFilterKey(res))
         .toSet()
         .toList()
-      ..sort();
+      ..sort((a, b) {
+        final aName = _getPreviewDisplayName(a);
+        final bName = _getPreviewDisplayName(b);
+        return aName.compareTo(bName);
+      });
   }
 
-  ResourceModel? _getPreviewRepresentativeByKoName(String koName) {
+  ResourceModel? _getPreviewRepresentativeByResourceName(String resourceName) {
     try {
-      return _allPreviewCandidates.firstWhere((res) => res.koName == koName);
+      return _allPreviewCandidates.firstWhere(
+            (res) => _normalizePreviewFilterKey(res) == resourceName,
+      );
     } catch (_) {
       return null;
     }
   }
 
-  void _togglePreviewResource(String koName) {
+  void _togglePreviewResource(String resourceName) {
     setState(() {
-      if (_previewEnabledResources.contains(koName)) {
-        _previewEnabledResources.remove(koName);
+      if (_previewEnabledResources.contains(resourceName)) {
+        _previewEnabledResources.remove(resourceName);
       } else {
-        _previewEnabledResources.add(koName);
+        _previewEnabledResources.add(resourceName);
       }
       _mapPreviewResources = _getFilteredPreviewResources(_allPreviewCandidates);
     });
@@ -77,14 +83,42 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _didSetPreviewInitialTransform = false;
   bool _isPointerDownOnMapPreview = false;
-  bool _isPreviewVotableResource(ResourceModel res) {
-    return res.koName == '그 자리 참나무' || res.koName == '완벽한 형광석';
+
+  bool _isProgressiveVotePin(ResourceModel res) {
+    final key = _normalizePreviewFilterKey(res);
+    return key == 'roaming_oak' || key == 'fluorite';
   }
+
+  bool _isPreviewVotableResource(ResourceModel res) {
+    final key = _normalizePreviewFilterKey(res);
+    return key == 'roaming_oak' || key == 'fluorite';
+  }
+
+  bool _isPreviewVoteCompleted(ResourceModel res) {
+    return res.voteCount >= 5 || res.isFixed || res.isVerified;
+  }
+
+  bool _shouldHideOtherSameTypePins(ResourceModel res) {
+    final String key = _normalizePreviewFilterKey(res);
+    final bool isVoteTarget = key == 'roaming_oak' || key == 'fluorite';
+
+    if (!isVoteTarget) return false;
+
+    final bool hasMyVoteInSameType = _allPreviewCandidates.any((r) {
+      return _normalizePreviewFilterKey(r) == key && r.votedByMe;
+    });
+
+    if (!hasMyVoteInSameType) return false;
+
+    // 내가 투표한 좌표만 남기고 나머지는 숨김
+    return !res.votedByMe;
+  }
+
   int _mapPreviewPointerCount = 0;
 
   static const double _previewMinScale = 1.0;
   static const double _previewMaxScale = 4.0;
-  static const double _previewInitialScale = 1.35;
+  static const double _previewInitialScale = 1.0;
   static const double _previewPlaceRevealScale = 1.55;
 
   Set<String> _previewEnabledResources = {};
@@ -101,12 +135,12 @@ class _HomeScreenState extends State<HomeScreen> {
     ),
   ];
 
-  bool _isPreviewVoteCompleted(ResourceModel res) {
-    return res.voteCount >= 5 || res.isFixed;
-  }
-
   double _previewVotePinOpacity(ResourceModel res) {
     if (!_isPreviewVotableResource(res)) return 1.0;
+
+    // 내가 투표해서 남아 있는 핀은 항상 완전 불투명
+    if (res.votedByMe) return 1.0;
+
     if (_isPreviewVoteCompleted(res)) return 1.0;
 
     switch (res.voteCount) {
@@ -164,8 +198,73 @@ class _HomeScreenState extends State<HomeScreen> {
     _previewTransformController.addListener(_onPreviewTransformChanged);
     _checkAndResetAtStart();
     _scheduleSixAMTimer();
-    _loadVoterId();
-    _loadMapPreviewResources();
+    _initializePreview();
+  }
+
+  Future<void> _handlePreviewVote(ResourceModel res) async {
+    // 팝업 먼저 닫기
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+
+    if (_voterId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다.')),
+      );
+      return;
+    }
+
+    if (res.alreadyVotedSameType) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이미 이 자원 종류에 투표했어요.')),
+      );
+      return;
+    }
+
+    try {
+      final response = await ApiService.voteResource(
+        id: res.id,
+        voterId: _voterId,
+      );
+
+      await _loadMapPreviewResources();
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${res.koName}에 투표했습니다!')),
+        );
+        return;
+      }
+
+      if (response.statusCode == 409) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.body.isNotEmpty
+                ? response.body
+                : '이미 투표했어요'),
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('투표 실패')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('오류: $e')),
+      );
+    }
+  }
+
+  Future<void> _initializePreview() async {
+    await _loadVoterId();
+    await _loadMapPreviewResources();
   }
 
   @override
@@ -175,6 +274,27 @@ class _HomeScreenState extends State<HomeScreen> {
     _previewTransformController.dispose();
     super.dispose();
   }
+
+  String _normalizePreviewFilterKey(ResourceModel res) {
+    if (res.resourceName.contains('fluorite') ||
+        res.koName.contains('형광석')) {
+      return 'fluorite';
+    }
+
+    if (res.resourceName.contains('oak') ||
+        res.koName.contains('참나무')) {
+      return 'roaming_oak';
+    }
+
+    if (res.resourceName.contains('truffle') ||
+        res.koName.contains('트러플')) {
+      return 'black_truffle';
+    }
+
+    return res.resourceName;
+  }
+
+
 
   Future<void> _loadVoterId() async {
     try {
@@ -244,24 +364,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadMapPreviewResources() async {
     try {
-      final data = await ApiService.getResources();
+      final data = await ApiService.getResources(voterId: _voterId);
       if (!mounted) return;
 
       final defaultNames = <String>{};
 
       for (final res in data) {
-        if (res.koName == '그 자리 참나무' ||
-            res.koName == '완벽한 형광석' ||
-            res.koName == '검은 트러플') {
-          defaultNames.add(res.koName);
+        final key = _normalizePreviewFilterKey(res);
+
+        if (key == 'roaming_oak' ||
+            key == 'fluorite' ||
+            key == 'black_truffle') {
+          defaultNames.add(key);
         }
       }
 
       setState(() {
         _allPreviewCandidates = data;
+
         if (_previewEnabledResources.isEmpty) {
           _previewEnabledResources = defaultNames;
         }
+
         _mapPreviewResources = _getFilteredPreviewResources(data);
         _isMapPreviewLoading = false;
       });
@@ -273,76 +397,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _handlePreviewVote(ResourceModel res) async {
-    if (_voterId.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다. 다시 시도해주세요.')),
-      );
-      return;
-    }
-
-    final int index =
-    _allPreviewCandidates.indexWhere((item) => item.id == res.id);
-    if (index == -1) return;
-
-    try {
-      final response = await http.post(
-        Uri.parse(
-          'http://161.33.30.40:8080/api/map/vote/${res.id}?voterId=$_voterId',
-        ),
-      );
-
-      if (response.statusCode == 200) {
-        final int nextVoteCount = _allPreviewCandidates[index].voteCount + 1;
-
-        final ResourceModel updated = _allPreviewCandidates[index].copyWith(
-          voteCount: nextVoteCount,
-          isVerified: nextVoteCount >= 5,
-        );
-
-        setState(() {
-          _allPreviewCandidates[index] = updated;
-
-          final int previewIndex =
-          _mapPreviewResources.indexWhere((item) => item.id == res.id);
-          if (previewIndex != -1) {
-            _mapPreviewResources[previewIndex] = updated;
-          }
-        });
-
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${res.koName}에 투표했습니다! 현재 ${updated.voteCount}표'),
-          ),
-        );
-
-        Navigator.pop(context);
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              response.body.isNotEmpty ? response.body : '투표에 실패했습니다.',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('투표 중 오류가 발생했습니다: $e')),
-      );
-    }
-  }
-
   List<ResourceModel> _getFilteredPreviewResources(List<ResourceModel> source) {
     return source.where((res) {
-      final String name = res.koName;
+      if (_shouldHideOtherSameTypePins(res)) {
+        return false;
+      }
 
-      final bool isMatched = _previewEnabledResources.contains(name);
+      final String key = _normalizePreviewFilterKey(res);
+      final bool isMatched = _previewEnabledResources.contains(key);
       final bool isNpc = res.category == 'npc';
       final bool isAnimal = res.category == 'animal';
 
@@ -370,9 +432,15 @@ class _HomeScreenState extends State<HomeScreen> {
     bool tempShowNpcs = _previewShowNpcs;
     bool tempShowAnimals = _previewShowAnimals;
 
-    final gatherItems =
-    _getDistinctPreviewNamesByCategory(['fruit', 'bubble', 'tree', 'material']);
-    final mushroomItems = _getDistinctPreviewNamesByCategory(['mushroom']);
+    final gatherItems = _getDistinctPreviewResourceKeysByCategory([
+      'fruit',
+      'bubble',
+      'tree',
+      'material',
+      'mineral',
+    ]);
+    final mushroomItems =
+    _getDistinctPreviewResourceKeysByCategory(['mushroom']);
 
     showModalBottomSheet(
       context: context,
@@ -381,17 +449,18 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            Widget buildChip(String koName) {
-              final bool selected = tempResources.contains(koName);
-              final ResourceModel? sample = _getPreviewRepresentativeByKoName(koName);
+            Widget buildChip(String resourceName) {
+              final bool selected = tempResources.contains(resourceName);
+              final ResourceModel? sample =
+              _getPreviewRepresentativeByResourceName(resourceName);
 
               return GestureDetector(
                 onTap: () {
                   setModalState(() {
                     if (selected) {
-                      tempResources.remove(koName);
+                      tempResources.remove(resourceName);
                     } else {
-                      tempResources.add(koName);
+                      tempResources.add(resourceName);
                     }
                   });
                 },
@@ -444,7 +513,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(width: 7),
                       Text(
-                        koName,
+                        sample?.koName ?? resourceName,
                         style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
@@ -561,11 +630,14 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: OutlinedButton(
                               onPressed: () {
                                 final defaults = <String>{};
+
                                 for (final res in _allPreviewCandidates) {
-                                  if (res.koName == '그 자리 참나무' ||
-                                      res.koName == '완벽한 형광석' ||
-                                      res.koName == '검은 트러플') {
-                                    defaults.add(res.koName);
+                                  final key = _normalizePreviewFilterKey(res);
+
+                                  if (key == 'roaming_oak' ||
+                                      key == 'fluorite' ||
+                                      key == 'black_truffle') {
+                                    defaults.add(key);
                                   }
                                 }
 
@@ -635,121 +707,127 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showPreviewResourceDetail(ResourceModel res) {
-    final bool isActuallyVerified = _isPreviewVoteCompleted(res);
-    final bool isVotable =
-        _isPreviewVotableResource(res) && !isActuallyVerified;
+    void _showPreviewResourceDetail(ResourceModel res) {
+      final bool isActuallyVerified = _isPreviewVoteCompleted(res);
+      final bool isVoteTarget = _isPreviewVotableResource(res);
+      final bool isAlreadyVoted = res.alreadyVotedSameType;
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 18),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Image.asset(
-                    res.iconPath,
-                    fit: BoxFit.contain,
-                    errorBuilder: (c, e, s) => const Icon(
-                      Icons.inventory_2_outlined,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    res.koName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                ),
-                if (isActuallyVerified)
-                  const Icon(
-                    Icons.verified,
-                    color: Colors.blue,
-                    size: 22,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                (res.description != null && res.description!.trim().isNotEmpty)
-                    ? res.description!
-                    : '설명 정보가 없습니다.',
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1.45,
-                  color: Color(0xFF475569),
+      final bool showVoteButton = isVoteTarget && !isActuallyVerified;
+      final bool canVote = showVoteButton && !isAlreadyVoted;
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (context) => Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 18),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(999),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                if (isVotable) ...[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _handlePreviewVote(res),
-                      icon: const Icon(Icons.thumb_up_outlined),
-                      label: Text("여기 있어요! (${res.voteCount})"),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFFF8E7C),
-                        side: const BorderSide(color: Color(0xFFFF8E7C)),
-                        minimumSize: const Size.fromHeight(48),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Image.asset(
+                      res.iconPath,
+                      fit: BoxFit.contain,
+                      errorBuilder: (c, e, s) => const Icon(
+                        Icons.inventory_2_outlined,
+                        color: Colors.grey,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF8E7C),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(48),
-                      elevation: 0,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      res.koName,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
+                      ),
                     ),
-                    child: const Text('확인'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  (res.description != null && res.description!.trim().isNotEmpty)
+                      ? res.description!
+                      : '설명 정보가 없습니다.',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.45,
+                    color: Color(0xFF475569),
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  if (showVoteButton) ...[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _handlePreviewVote(res),
+                        icon: const Icon(Icons.thumb_up_outlined),
+                        label: Text(
+                          canVote
+                              ? "여기 있어요! (${res.voteCount})"
+                              : "이미 투표했어요",
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor:
+                          canVote ? const Color(0xFFFF8E7C) : Colors.grey,
+                          side: BorderSide(
+                            color: canVote
+                                ? const Color(0xFFFF8E7C)
+                                : Colors.grey.shade400,
+                          ),
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF8E7C),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(48),
+                        elevation: 0,
+                      ),
+                      child: const Text('확인'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
   void _openMap({bool openFilter = false}) {
     Navigator.push(
@@ -781,12 +859,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return currentScale >= _previewPlaceRevealScale;
   }
 
-  Widget _buildPreviewResourceChip(String koName) {
-    final bool selected = _previewEnabledResources.contains(koName);
-    final ResourceModel? sample = _getPreviewRepresentativeByKoName(koName);
+  String _getPreviewDisplayName(String resourceName) {
+    final sample = _getPreviewRepresentativeByResourceName(resourceName);
+    return sample?.koName ?? resourceName;
+  }
+
+  Widget _buildPreviewResourceChip(String resourceName) {
+    final bool selected = _previewEnabledResources.contains(resourceName);
+    final ResourceModel? sample =
+    _getPreviewRepresentativeByResourceName(resourceName);
 
     return GestureDetector(
-      onTap: () => _togglePreviewResource(koName),
+      onTap: () => _togglePreviewResource(resourceName),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -835,7 +919,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(width: 7),
             Text(
-              koName,
+              _getPreviewDisplayName(resourceName),
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
@@ -1561,14 +1645,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _buildPreviewCaption() {
-    final List<String> labels = [
-      ..._previewEnabledResources.toList()..sort(),
-      if (_previewShowNpcs) 'NPC',
-      if (_previewShowAnimals) '동물',
-    ];
+    if (_previewEnabledResources.isEmpty &&
+        !_previewShowNpcs &&
+        !_previewShowAnimals) {
+      return '표시할 핀을 선택해보세요';
+    }
 
-    if (labels.isEmpty) {
-      return '프리뷰 핀을 선택해보세요';
+    final labels = <String>[];
+
+    for (final resourceName in _previewEnabledResources) {
+      labels.add(_getPreviewDisplayName(resourceName));
+    }
+
+    if (_previewShowNpcs) {
+      labels.add('NPC');
+    }
+
+    if (_previewShowAnimals) {
+      labels.add('동물');
     }
 
     return labels.join(' · ');
