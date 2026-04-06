@@ -36,8 +36,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadUserInfo() async {
     try {
-      if (mounted) setState(() => _isLoading = true);
-
+      // 1. 서버 통신 전에 로컬(카카오 SDK) 정보를 즉시 가져와서 화면에 먼저 띄웁니다.
+      // 여기서 _isLoading을 true로 만들지 않아야 화면이 바로 뜹니다!
       User user = await UserApi.instance.me();
       String kakaoNickname = user.kakaoAccount?.profile?.nickname ?? "사용자";
 
@@ -45,9 +45,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() {
           _nickname = kakaoNickname;
           _userUid = user.id.toString();
+          // 로딩바를 끄고 로컬 정보를 먼저 보여줍니다. (광속 전환!)
+          _isLoading = false;
         });
       }
 
+      // 2. 이제 백그라운드에서 서버 데이터를 요청합니다.
+      // 사용자는 이미 화면을 보고 있는 상태입니다.
       final response = await http
           .post(
         Uri.parse('http://161.33.30.40:8080/api/user/login'),
@@ -60,28 +64,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (mounted) {
           setState(() {
+            // 서버에서 받아온 상세 정보(진짜 닉네임, UID, 이미지 등)로 슬쩍 업데이트합니다.
             _nickname = data['nickname']?.toString() ?? kakaoNickname;
 
-            if (data['gameUid'] != null &&
-                data['gameUid'].toString().isNotEmpty) {
+            if (data['gameUid'] != null && data['gameUid'].toString().isNotEmpty) {
               _displayUid = data['gameUid'].toString();
             }
 
             if (data['profileImageUrl'] != null) {
-              _profileImageUrl =
-              "http://161.33.30.40:8080${data['profileImageUrl']}";
+              // 캐시 방지를 위해 타임스탬프를 살짝 붙여주는 센스!
+              _profileImageUrl = "http://161.33.30.40:8080${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
             }
 
             if (data['headerImageUrl'] != null) {
-              _headerImageUrl =
-              "http://161.33.30.40:8080${data['headerImageUrl']}";
+              _headerImageUrl = "http://161.33.30.40:8080${data['headerImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
             }
           });
         }
       }
     } catch (e) {
-      debugPrint("에러: $e");
+      debugPrint("서버 응답 지연 또는 에러(로컬 데이터 유지됨): $e");
     } finally {
+      // 혹시 모를 로딩 상태를 확실히 종료합니다.
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -109,7 +113,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         String newUrl =
-            "http://161.33.30.40:8080${data['url']}?t=${DateTime.now().millisecondsSinceEpoch}";
+            "http://161.33.30.40:8080${data['url']}?t=${DateTime
+            .now()
+            .millisecondsSinceEpoch}";
 
         setState(() {
           if (isProfile) {
@@ -296,9 +302,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Column(
                             children: [
                               GestureDetector(
-                                onTap: () => _launchURL(
-                                  'https://cafe.naver.com/heartopia',
-                                ),
+                                onTap: () =>
+                                    _launchURL(
+                                      'https://cafe.naver.com/heartopia',
+                                    ),
                                 child: _buildLinkItem(
                                   '두근두근 타운 네이버 공식 카페',
                                   'assets/icons/ic_naver_cafe.png',
@@ -311,9 +318,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 endIndent: 20,
                               ),
                               GestureDetector(
-                                onTap: () => _launchURL(
-                                  'https://www.youtube.com/@Heartopia-KR',
-                                ),
+                                onTap: () =>
+                                    _launchURL(
+                                      'https://www.youtube.com/@Heartopia-KR',
+                                    ),
                                 child: _buildLinkItem(
                                   '두근두근 타운 한국 공식 유튜브',
                                   'assets/icons/ic_youtube.png',
@@ -446,71 +454,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildUidRow() => SizedBox(
-    height: _infoRowHeight,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            'UID: $_displayUid',
-            style: const TextStyle(
-              color: Color(0xFF636363),
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
+  Widget _buildUidRow() =>
+      SizedBox(
+        height: _infoRowHeight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'UID: $_displayUid',
+                style: const TextStyle(
+                  color: Color(0xFF636363),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+            ],
           ),
-          const Spacer(),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 
-  Widget _buildBugReportRow() => GestureDetector(
-    onTap: _sendEmail,
-    behavior: HitTestBehavior.opaque,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Row(
-        children: [
-          const Text(
-            '버그 리포트',
-            style: TextStyle(
-              color: Color(0xFF636363),
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
+  Widget _buildBugReportRow() =>
+      GestureDetector(
+        onTap: _sendEmail,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            children: [
+              const Text(
+                '버그 리포트',
+                style: TextStyle(
+                  color: Color(0xFF636363),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Image.asset(
+                'assets/icons/ic_mail_send.png',
+                width: 18,
+                height: 18,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'mintblue1078@gmail.com',
+                style: TextStyle(
+                  color: Color(0xFFA4A4A4),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 14,
+                color: Color(0xFFA4A4A4),
+              ),
+            ],
           ),
-          const Spacer(),
-          Image.asset(
-            'assets/icons/ic_mail_send.png',
-            width: 18,
-            height: 18,
-          ),
-          const SizedBox(width: 6),
-          const Text(
-            'mintblue1078@gmail.com',
-            style: TextStyle(
-              color: Color(0xFFA4A4A4),
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Icon(
-            Icons.arrow_forward_ios,
-            size: 14,
-            color: Color(0xFFA4A4A4),
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 
-  Widget _buildCopyrightText() => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    child: Text(
-      '''키퍼노트는 XD와 공식적인 관계가 없는
+  Widget _buildCopyrightText() =>
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Text(
+          '''키퍼노트는 XD와 공식적인 관계가 없는
 팬 메이드 비영리 가이드 앱이며, 게임사의 지적 재산권을 존중합니다.
 
 본 앱에 사용된 모든 게임 이미지, 데이터 등의 저작권은
@@ -518,15 +529,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 사용된 이미지 및 데이터는 오직 유저 가이드 목적으로만 사용되며,
 상업적으로 이용되지 않습니다.''',
-      textAlign: TextAlign.center,
-      style: const TextStyle(
-        color: Color(0xFF8C8C8C),
-        fontSize: 10,
-        fontFamily: 'SF Pro',
-        height: 1.6,
-      ),
-    ),
-  );
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Color(0xFF8C8C8C),
+            fontSize: 10,
+            fontFamily: 'SF Pro',
+            height: 1.6,
+          ),
+        ),
+      );
 
   void _showIntegratedEditDialog() {
     final nameController = TextEditingController(text: _nickname);
@@ -536,178 +547,189 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.12),
-                blurRadius: 30,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '프로필 정보 수정',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF222222),
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                '두근두근 타운 닉네임과 UID를 등록해 보세요.',
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.4,
-                  color: Color(0xFF8E8E93),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                '닉네임',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF444444),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: nameController,
-                maxLength: 10,
-                decoration: _dialogInputDecoration(
-                  hintText: '새로운 닉네임 입력',
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'UID',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF444444),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: uidController,
-                maxLength: 7,
-                decoration: _dialogInputDecoration(
-                  hintText: '소문자와 숫자 조합 7자리',
-                ),
-              ),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () => _copyToClipboard(_displayUid),
-                  icon: const Icon(
-                    Icons.content_copy_rounded,
-                    size: 16,
-                    color: Color(0xFFFF8E7C),
-                  ),
-                  label: const Text(
-                    '현재 UID 복사',
-                    style: TextStyle(
-                      color: Color(0xFFFF8E7C),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFFF8E7C),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 4,
-                    ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE7E7E7)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                      ),
-                      child: const Text(
-                        '취소',
-                        style: TextStyle(
-                          color: Color(0xFF666666),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final name = nameController.text.trim();
-                        final uid = uidController.text.trim();
-
-                        if (uid.isNotEmpty &&
-                            !RegExp(r'^[a-z0-9]{7}$').hasMatch(uid)) {
-                          _showSnackBar("7자리 소문자와 숫자를 입력해주세요.");
-                          return;
-                        }
-
-                        if (name.isNotEmpty || uid.isNotEmpty) {
-                          _updateUserInfoOnServer(name, uid);
-                          Navigator.pop(context);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF8E7C),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                      ),
-                      child: const Text(
-                        '저장',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
+      builder: (context) =>
+          Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 30,
+                    offset: const Offset(0, 12),
                   ),
                 ],
               ),
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '프로필 정보 수정',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF222222),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    '두근두근 타운 닉네임과 UID를 등록해 보세요.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: Color(0xFF8E8E93),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    '닉네임',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF444444),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: nameController,
+                    maxLength: 10,
+                    decoration: _dialogInputDecoration(
+                      hintText: '새로운 닉네임 입력',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'UID',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF444444),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: uidController,
+                    maxLength: 7,
+                    decoration: _dialogInputDecoration(
+                      hintText: '소문자와 숫자 조합 7자리',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => _copyToClipboard(_displayUid),
+                      icon: const Icon(
+                        Icons.content_copy_rounded,
+                        size: 16,
+                        color: Color(0xFFFF8E7C),
+                      ),
+                      label: const Text(
+                        '현재 UID 복사',
+                        style: TextStyle(
+                          color: Color(0xFFFF8E7C),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFFF8E7C),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFE7E7E7)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                          ),
+                          child: const Text(
+                            '취소',
+                            style: TextStyle(
+                              color: Color(0xFF666666),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            final name = nameController.text.trim();
+                            final uid = uidController.text.trim();
+
+                            // UID 유효성 검사
+                            if (uid.isNotEmpty && !RegExp(r'^[a-z0-9]{7}$').hasMatch(uid)) {
+                              _showSnackBar("7자리 소문자와 숫자를 입력해주세요.");
+                              return;
+                            }
+
+                            if (name.isNotEmpty || uid.isNotEmpty) {
+                              // ★ 1. 여기서 다이얼로그를 즉시 닫습니다. (설정창으로 돌아감)
+                              Navigator.pop(context);
+
+                              // ★ 2. 설정창 배경에서 서버 저장을 시작합니다.
+                              _updateUserInfoOnServer(name, uid);
+                            } else {
+                              Navigator.pop(context);
+                            }
+                          },
+
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF8E7C),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                          ),
+                          child: const Text(
+                            '저장',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
     );
   }
 
   Future<void> _updateUserInfoOnServer(String name, String uid) async {
     try {
+      // 1. 설정창 배경에 로딩 표시 시작
+      if (mounted) setState(() => _isLoading = true);
+
       User user = await UserApi.instance.me();
 
+      // 2. 닉네임 업데이트
       if (name.isNotEmpty) {
         await http.put(
           Uri.parse('http://161.33.30.40:8080/api/user/update-nickname'),
@@ -716,6 +738,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
 
+      // 3. UID 업데이트
       if (uid.isNotEmpty && RegExp(r'^[a-z0-9]{7}$').hasMatch(uid)) {
         await http.put(
           Uri.parse('http://161.33.30.40:8080/api/user/update-uid'),
@@ -724,40 +747,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
 
-      _loadUserInfo();
+      // ★ 4번 Navigator.pop(context) 코드를 여기서 완전히 삭제했습니다!
+      // 이미 버튼 클릭 시(onPressed) 다이얼로그를 닫았기 때문입니다.
+
+      // 5. 설정창 데이터를 서버에서 다시 불러와 화면 갱신
+      await _loadUserInfo();
+
+      // 6. 성공 메시지 출력
+      _showSnackBar("정보가 수정되었습니다! ✨");
+
     } catch (e) {
+      debugPrint("업데이트 에러: $e");
       _showSnackBar("업데이트 실패");
+    } finally {
+      // 7. 로딩 종료 (설정창의 인디케이터가 사라짐)
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Widget _buildSectionTitle(String title) => Padding(
-    padding: const EdgeInsets.only(left: 4, bottom: 12),
-    child: Text(
-      title,
-      style: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.w600,
-      ),
-    ),
-  );
-
-  Widget _buildInfoCard({required Widget child}) => Container(
-    width: double.infinity,
-    decoration: ShapeDecoration(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
-      shadows: const [
-        BoxShadow(
-          color: Color(0x0C000000),
-          blurRadius: 4,
-          offset: Offset(4, 4),
+  Widget _buildSectionTitle(String title) =>
+      Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 12),
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      ],
-    ),
-    child: child,
-  );
+      );
+
+  Widget _buildInfoCard({required Widget child}) =>
+      Container(
+        width: double.infinity,
+        decoration: ShapeDecoration(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          shadows: const [
+            BoxShadow(
+              color: Color(0x0C000000),
+              blurRadius: 4,
+              offset: Offset(4, 4),
+            ),
+          ],
+        ),
+        child: child,
+      );
 
   Widget _buildIconButton(String iconPath) {
     return SizedBox(
@@ -809,81 +846,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
 
-  Widget _buildLinkItem(String title, String imagePath) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    child: Row(
-      children: [
-        Image.asset(imagePath, width: 40),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF636363),
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+  Widget _buildLinkItem(String title, String imagePath) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Image.asset(imagePath, width: 40),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF636363),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: Color(0xFFA4A4A4),
+            ),
+          ],
+        ),
+      );
+
+  Widget _buildCustomSwitch(bool isActive) =>
+      GestureDetector(
+        onTap: () => setState(() => _isPushEnabled = !_isPushEnabled),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 53,
+          height: 30,
+          decoration: BoxDecoration(
+            color: isActive
+                ? const Color(0xFFFF8E7C).withOpacity(0.56)
+                : const Color(0xFFD9D9D9),
+            borderRadius: BorderRadius.circular(99),
+          ),
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 200),
+            alignment:
+            isActive ? Alignment.centerRight : Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2.5),
+              child: Container(
+                width: 25,
+                height: 25,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
             ),
           ),
         ),
-        const Icon(
-          Icons.arrow_forward_ios,
-          size: 14,
-          color: Color(0xFFA4A4A4),
-        ),
-      ],
-    ),
-  );
+      );
 
-  Widget _buildCustomSwitch(bool isActive) => GestureDetector(
-    onTap: () => setState(() => _isPushEnabled = !_isPushEnabled),
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      width: 53,
-      height: 30,
-      decoration: BoxDecoration(
-        color: isActive
-            ? const Color(0xFFFF8E7C).withOpacity(0.56)
-            : const Color(0xFFD9D9D9),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: AnimatedAlign(
-        duration: const Duration(milliseconds: 200),
-        alignment:
-        isActive ? Alignment.centerRight : Alignment.centerLeft,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2.5),
-          child: Container(
-            width: 25,
-            height: 25,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
+  PreferredSizeWidget _buildAppBar(BuildContext context) =>
+      AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.black,
+            size: 20,
+          ),
+          // ★ Navigator.pop 시 true를 전달하여 메인 화면의 갱신을 유도합니다.
+          onPressed: () => Navigator.pop(context, true),
+        ),
+        title: const Text(
+          '설정',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
           ),
         ),
-      ),
-    ),
-  );
-
-  PreferredSizeWidget _buildAppBar(BuildContext context) => AppBar(
-    backgroundColor: Colors.white,
-    elevation: 0,
-    leading: IconButton(
-      icon: const Icon(
-        Icons.arrow_back_ios_new,
-        color: Colors.black,
-        size: 20,
-      ),
-      onPressed: () => Navigator.pop(context),
-    ),
-    title: const Text(
-      '설정',
-      style: TextStyle(
-        color: Colors.black,
-        fontSize: 20,
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-    centerTitle: true,
-  );
+        centerTitle: true,
+      );
 }

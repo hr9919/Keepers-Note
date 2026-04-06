@@ -46,17 +46,37 @@ class _MainWrapperState extends State<MainWrapper> {
   Future<void> _fetchUserInfo() async {
     try {
       User user = await UserApi.instance.me();
-      if (mounted) {
-        final String uid = user.id.toString();
+      final String kakaoId = user.id.toString();
+
+      // 1. 서버에 저장된 최신 정보 먼저 가져오기
+      final response = await http.post(
+        Uri.parse('http://161.33.30.40:8080/api/user/login'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "kakaoId": user.id,
+          "nickname": user.kakaoAccount?.profile?.nickname ?? "사용자"
+        }),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
-          _userName = user.kakaoAccount?.profile?.nickname ?? "사용자";
-          _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
-          _userUid = uid;
+          _userUid = data['gameUid'] ?? kakaoId;
+          _userName = data['nickname'] ?? "사용자";
+
+          if (data['profileImageUrl'] != null) {
+            // ★ URL 뒤에 타임스탬프(?t=...)를 붙여서 이미지가 즉시 바뀌게 합니다.
+            _profileImageUrl = "http://161.33.30.40:8080${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
+          } else {
+            // 서버에 이미지가 없다면 카카오 이미지를 사용
+            _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
+          }
         });
-        _loadTodoFromServer(uid);
       }
+
+      _loadTodoFromServer(kakaoId);
     } catch (e) {
-      debugPrint("유저 정보 로드 에러: $e");
+      debugPrint("메인 유저 정보 갱신 에러: $e");
     }
   }
 
@@ -409,9 +429,20 @@ class _MainWrapperState extends State<MainWrapper> {
           _buildDrawerItem(Icons.pets_rounded, '동물 도감', () => _onMenuSelect(4)),
           const Spacer(),
           const Divider(height: 1),
-          _buildDrawerItem(Icons.settings_rounded, '설정', () {
+          _buildDrawerItem(Icons.settings_rounded, '설정', () async {
+            // 1. 드로워 먼저 닫기
             Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())).then((_) => _fetchUserInfo());
+
+            // 2. 설정 화면 이동 후 결과(true/false)를 기다림
+            final bool? isUpdated = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+            );
+
+            // 3. 만약 저장 버튼을 눌러서 true가 넘어왔다면 데이터 다시 불러오기
+            if (isUpdated == true) {
+              _fetchUserInfo(); // 이 함수가 실행되면서 드로워의 이름과 UID가 갱신됩니다.
+            }
           }),
           // ★ 시스템 바만큼 하단 여백 추가
           SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
