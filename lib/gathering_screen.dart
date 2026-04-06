@@ -261,7 +261,9 @@ class _GatheringScreenState extends State<GatheringScreen>
 
 // 1. 시간대 레이블 변환 함수: 숫자를 직관적인 한글로 변환
   String _timeLabel(String? time) {
-    if (time == null || time.trim().isEmpty) return '';
+    if (time == null || time
+        .trim()
+        .isEmpty) return '';
 
     final raw = time.trim();
     final lower = raw.toLowerCase();
@@ -385,7 +387,8 @@ class _GatheringScreenState extends State<GatheringScreen>
       final response = await http.get(Uri.parse(_birdApiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        final birds = data.map((e) => BirdItem.fromJson(e as Map<String, dynamic>)).toList();
+        final birds = data.map((e) =>
+            BirdItem.fromJson(e as Map<String, dynamic>)).toList();
         setState(() {
           _birdList = birds;
           _isBirdLoading = false;
@@ -408,7 +411,8 @@ class _GatheringScreenState extends State<GatheringScreen>
       final response = await http.get(Uri.parse(_plantApiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        final plants = data.map((e) => PlantItem.fromJson(e as Map<String, dynamic>)).toList();
+        final plants = data.map((e) =>
+            PlantItem.fromJson(e as Map<String, dynamic>)).toList();
         setState(() {
           _plantList = plants;
           _isPlantLoading = false;
@@ -474,7 +478,9 @@ class _GatheringScreenState extends State<GatheringScreen>
             item.name.toLowerCase().contains(query)).toList();
       }
       if (_selectedFilter != '전체' && tabIndex == 0) {
-        filteredFish = filteredFish.where((item) => _matchesFilter(item, _selectedFilter)).toList();
+        filteredFish =
+            filteredFish.where((item) => _matchesFilter(item, _selectedFilter))
+                .toList();
       }
       _sortFish(filteredFish);
       _visibleFishList = filteredFish;
@@ -482,10 +488,12 @@ class _GatheringScreenState extends State<GatheringScreen>
       // 2. 새 관찰 필터링 (Tab 1)
       List<BirdItem> filteredBirds = List.from(_birdList);
       if (query.isNotEmpty) {
-        filteredBirds = filteredBirds.where((item) => item.nameKo.contains(query)).toList();
+        filteredBirds =
+            filteredBirds.where((item) => item.nameKo.contains(query)).toList();
       }
       if (_selectedFilter != '전체' && tabIndex == 1) {
-        filteredBirds = filteredBirds.where((item) => item.location.contains(_selectedFilter)).toList();
+        filteredBirds = filteredBirds.where((item) =>
+            item.location.contains(_selectedFilter)).toList();
       }
       _sortBirds(filteredBirds); // 새 정렬 추가
       _visibleBirdList = filteredBirds;
@@ -498,7 +506,8 @@ class _GatheringScreenState extends State<GatheringScreen>
             item.name.toLowerCase().contains(query)).toList();
       }
       if (_selectedFilter != '전체' && tabIndex == 2) {
-        filteredInsects = filteredInsects.where((item) => item.location.contains(_selectedFilter)).toList();
+        filteredInsects = filteredInsects.where((item) =>
+            item.location.contains(_selectedFilter)).toList();
       }
       _sortInsects(filteredInsects);
       _visibleInsectList = filteredInsects;
@@ -506,7 +515,9 @@ class _GatheringScreenState extends State<GatheringScreen>
       // 4. 원예 필터링 (Tab 3)
       List<PlantItem> filteredPlants = List.from(_plantList);
       if (query.isNotEmpty) {
-        filteredPlants = filteredPlants.where((item) => item.nameKo.contains(query)).toList();
+        filteredPlants =
+            filteredPlants.where((item) => item.nameKo.contains(query))
+                .toList();
       }
       if (_selectedFilter != '전체' && tabIndex == 3) {
         filteredPlants = filteredPlants.where((item) =>
@@ -524,8 +535,14 @@ class _GatheringScreenState extends State<GatheringScreen>
       case '가격순':
         list.sort((a, b) {
           // prices 리스트 중 가장 높은 가격 기준
-          final aMax = a.prices.reduce((curr, next) => curr > next ? curr : next);
-          final bMax = b.prices.reduce((curr, next) => curr > next ? curr : next);
+          final aMax = a.prices.reduce((curr, next) =>
+          curr > next
+              ? curr
+              : next);
+          final bMax = b.prices.reduce((curr, next) =>
+          curr > next
+              ? curr
+              : next);
           return bMax.compareTo(aMax);
         });
         break;
@@ -568,20 +585,25 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   void _sortBirds(List<BirdItem> list) {
-    _genericSort(list, (item) => item.nameKo, (item) => item.prices, (item) => item.id);
+    _genericSort(
+        list, (item) => item.nameKo, (item) => item.prices, (item) => item.id);
   }
 
   void _sortPlants(List<PlantItem> list) {
-    _genericSort(list, (item) => item.nameKo, (item) => item.prices, (item) => item.id);
+    _genericSort(
+        list, (item) => item.nameKo, (item) => item.prices, (item) => item.id);
   }
 
 // 중복 코드를 줄이기 위한 공통 정렬 로직
-  void _genericSort<T>(List<T> list, String Function(T) getName, List<int> Function(T) getPrices, String Function(T) getId) {
+  void _genericSort<T>(List<T> list, String Function(T) getName,
+      List<int> Function(T) getPrices, String Function(T) getId) {
     switch (_selectedSort) {
       case '가격순':
         list.sort((a, b) {
-          final aMax = getPrices(a).isEmpty ? 0 : getPrices(a).reduce((curr, next) => curr > next ? curr : next);
-          final bMax = getPrices(b).isEmpty ? 0 : getPrices(b).reduce((curr, next) => curr > next ? curr : next);
+          final aMax = getPrices(a).isEmpty ? 0 : getPrices(a).reduce((curr,
+              next) => curr > next ? curr : next);
+          final bMax = getPrices(b).isEmpty ? 0 : getPrices(b).reduce((curr,
+              next) => curr > next ? curr : next);
           return bMax.compareTo(aMax);
         });
         break;
@@ -629,20 +651,20 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     // 필터 종류에 따른 물고기 필터링
     switch (filter) {
-      case '강 물고기':  // '강 물고기' 필터일 경우
+      case '강 물고기': // '강 물고기' 필터일 경우
         return isRiver;
-      case '호수 물고기':  // '호수 물고기' 필터일 경우
+      case '호수 물고기': // '호수 물고기' 필터일 경우
         return isLake;
-      case '바다 물고기':  // '바다 물고기' 필터일 경우
+      case '바다 물고기': // '바다 물고기' 필터일 경우
         return isSea;
-      case '하루종일 날씨':  // '하루종일 날씨' 필터일 경우
+      case '하루종일 날씨': // '하루종일 날씨' 필터일 경우
         return isAllDayWeather;
-      case '아침 날씨':  // '아침 날씨' 필터일 경우
+      case '아침 날씨': // '아침 날씨' 필터일 경우
         return isMorningWeather;
-      case '저녁 날씨':  // '저녁 날씨' 필터일 경우
+      case '저녁 날씨': // '저녁 날씨' 필터일 경우
         return isEveningWeather;
       default:
-        return true;  // 필터가 설정되지 않은 경우 모든 물고기 반환
+        return true; // 필터가 설정되지 않은 경우 모든 물고기 반환
     }
   }
 
@@ -745,9 +767,9 @@ class _GatheringScreenState extends State<GatheringScreen>
                   controller: _tabController,
                   children: [
                     _buildFishingTabContent(), // 낚시
-                    _buildBirdTabContent(),    // 새 관찰 (추가/수정)
-                    _buildInsectTabContent(),  // 곤충 채집
-                    _buildPlantTabContent(),   // 원예 (추가/수정)
+                    _buildBirdTabContent(), // 새 관찰 (추가/수정)
+                    _buildInsectTabContent(), // 곤충 채집
+                    _buildPlantTabContent(), // 원예 (추가/수정)
                   ],
                 ),
               ),
@@ -852,26 +874,33 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   // 공통 리스트 빌더 함수 (새, 원예 등에서 사용)
   // 공통 리스트 빌더 함수 수정
-  Widget _buildDynamicTabContent<T>(bool isLoading, List<T> list, Widget Function(T) buildCard) {
+  Widget _buildDynamicTabContent<T>(bool isLoading, List<T> list,
+      Widget Function(T) buildCard) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
     if (list.isEmpty) {
       return RefreshIndicator(
-        onRefresh: () async { _fetchAllData(); },
+        onRefresh: () async {
+          _fetchAllData();
+        },
         child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics()),
           children: const [
             SizedBox(height: 180),
-            Center(child: Text('검색 결과가 없어요.', style: TextStyle(fontSize: 14, color: Color(0xFF666666)))),
+            Center(child: Text('검색 결과가 없어요.',
+                style: TextStyle(fontSize: 14, color: Color(0xFF666666)))),
           ],
         ),
       );
     }
 
     return RefreshIndicator(
-      onRefresh: () async { _fetchAllData(); },
+      onRefresh: () async {
+        _fetchAllData();
+      },
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: list.length + 1, // ★ 마지막에 여백 공간을 위해 +1 해줍니다.
@@ -976,9 +1005,10 @@ class _GatheringScreenState extends State<GatheringScreen>
           child: Column(
             children: [
               ..._visibleFishList.map(
-                    (fish) => _buildGatheringCard(
-                  fish: fish,
-                ),
+                    (fish) =>
+                    _buildGatheringCard(
+                      fish: fish,
+                    ),
               ),
               const SizedBox(height: 120),
             ],
@@ -1001,7 +1031,8 @@ class _GatheringScreenState extends State<GatheringScreen>
                 ? ListView(
               children: const [
                 SizedBox(height: 180),
-                Center(child: Text('검색 결과가 없어요.', style: TextStyle(color: Color(0xFF666666)))),
+                Center(child: Text(
+                    '검색 결과가 없어요.', style: TextStyle(color: Color(0xFF666666)))),
               ],
             )
                 : ListView.builder(
@@ -1107,18 +1138,23 @@ class _GatheringScreenState extends State<GatheringScreen>
                               children: [
                                 // 1. 레벨 칩
                                 _buildSmallTag(
-                                  fish.level != null ? '낚시 ${fish.level}레벨' : '낚시',
+                                  fish.level != null
+                                      ? '낚시 ${fish.level}레벨'
+                                      : '낚시',
                                 ),
                                 // 2. 시간 칩 (아침, 밤, 하루종일 등)
                                 if (_timeLabel(fish.availableTime).isNotEmpty)
-                                  _buildSmallTag(_timeLabel(fish.availableTime)),
+                                  _buildSmallTag(
+                                      _timeLabel(fish.availableTime)),
 
                                 // 3. 위치 칩 추가 (예: 강, 바다 등)
                                 if (fish.location.isNotEmpty)
-                                  _buildSmallTag(fish.location, isLocation: true),
+                                  _buildSmallTag(
+                                      fish.location, isLocation: true),
 
                                 // 4. 날씨 칩 추가 (예: 맑음, 비 등)
-                                if (fish.weather != 'Unknown' && fish.weather.isNotEmpty)
+                                if (fish.weather != 'Unknown' &&
+                                    fish.weather.isNotEmpty)
                                   _buildSmallTag(fish.weather, isWeather: true),
                               ],
                             ),
@@ -1153,7 +1189,8 @@ class _GatheringScreenState extends State<GatheringScreen>
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 4), // 터치 영역 확보
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          // 터치 영역 확보
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -1161,10 +1198,12 @@ class _GatheringScreenState extends State<GatheringScreen>
                                 constraints: const BoxConstraints(minWidth: 46),
                                 height: 20,
                                 alignment: Alignment.center,
-                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6),
                                 decoration: BoxDecoration(
                                   border: Border.all(
-                                    color: const Color(0xFFFF7A65).withOpacity(0.5),
+                                    color: const Color(0xFFFF7A65).withOpacity(
+                                        0.5),
                                   ),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
@@ -1209,38 +1248,46 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-Widget _buildPriceTagLabel() {
-  return Container(
-    constraints: const BoxConstraints(minWidth: 46),
-    height: 20,
-    alignment: Alignment.center,
-    padding: const EdgeInsets.symmetric(horizontal: 6),
-    decoration: BoxDecoration(
-      border: Border.all(
-        color: const Color(0xFFFF7A65).withOpacity(0.5),
+  Widget _buildPriceTagLabel() {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 46),
+      height: 20,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: const Color(0xFFFF7A65).withOpacity(0.5),
+        ),
+        borderRadius: BorderRadius.circular(6),
       ),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: const Text(
-      '판매가',
-      style: TextStyle(
-        color: Color(0xFFFF7A65),
-        fontSize: 9,
-        fontWeight: FontWeight.bold,
-        height: 1.0,
+      child: const Text(
+        '판매가',
+        style: TextStyle(
+          color: Color(0xFFFF7A65),
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          height: 1.0,
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
 // 새 관찰 카드
   // 새 관찰 카드 수정본
   Widget _buildBirdCard(BirdItem bird) {
     final isFavorite = _favoriteIds.contains(bird.id);
     // 가격 텍스트 계산
-    final minPrice = bird.prices.isNotEmpty ? bird.prices.reduce((a, b) => a < b ? a : b) : 0;
-    final maxPrice = bird.prices.isNotEmpty ? bird.prices.reduce((a, b) => a > b ? a : b) : 0;
-    final priceText = minPrice == maxPrice ? '${_formatPrice(minPrice)}원' : '${_formatPrice(minPrice)}원 ~ ${_formatPrice(maxPrice)}원';
+    final minPrice = bird.prices.isNotEmpty ? bird.prices.reduce((a, b) =>
+    a < b
+        ? a
+        : b) : 0;
+    final maxPrice = bird.prices.isNotEmpty ? bird.prices.reduce((a, b) =>
+    a > b
+        ? a
+        : b) : 0;
+    final priceText = minPrice == maxPrice
+        ? '${_formatPrice(minPrice)}원'
+        : '${_formatPrice(minPrice)}원 ~ ${_formatPrice(maxPrice)}원';
 
     return _buildBaseContainer(
       child: Row(
@@ -1251,13 +1298,15 @@ Widget _buildPriceTagLabel() {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildCardTitle(bird.nameKo, bird.id), // 여기서 bird.nameKo가 표시됩니다.
+                _buildCardTitle(bird.nameKo, bird.id),
+                // 여기서 bird.nameKo가 표시됩니다.
                 const SizedBox(height: 4),
                 Wrap(
                   spacing: 4, runSpacing: 4,
                   children: [
                     _buildSmallTag('관찰 ${bird.level}레벨'),
-                    if (bird.availableTime.isNotEmpty) _buildSmallTag(bird.availableTime),
+                    if (bird.availableTime.isNotEmpty) _buildSmallTag(
+                        bird.availableTime),
                     _buildSmallTag(bird.location, isLocation: true),
                   ],
                 ),
@@ -1266,24 +1315,33 @@ Widget _buildPriceTagLabel() {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     PopupMenuButton<String>(
-                      itemBuilder: (context) => List.generate(bird.prices.length, (i) =>
-                          PopupMenuItem(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('${i + 1}성', style: const TextStyle(fontSize: 13)),
-                                const SizedBox(width: 20),
-                                Text('${_formatPrice(bird.prices[i])}원', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                              ],
-                            ),
-                          )
-                      ),
+                      itemBuilder: (context) =>
+                          List.generate(bird.prices.length, (i) =>
+                              PopupMenuItem(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment
+                                      .spaceBetween,
+                                  children: [
+                                    Text('${i + 1}성',
+                                        style: const TextStyle(fontSize: 13)),
+                                    const SizedBox(width: 20),
+                                    Text('${_formatPrice(bird.prices[i])}원',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13)),
+                                  ],
+                                ),
+                              )
+                          ),
                       child: Row(
                         children: [
                           _buildPriceTagLabel(),
                           const SizedBox(width: 8),
-                          Text(priceText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                          const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF616161)),
+                          Text(priceText, style: const TextStyle(fontSize: 13,
+                              fontWeight: FontWeight.bold)),
+                          const Icon(
+                              Icons.keyboard_arrow_down, size: 16, color: Color(
+                              0xFF616161)),
                         ],
                       ),
                     ),
@@ -1323,7 +1381,8 @@ Widget _buildPriceTagLabel() {
                   spacing: 4, runSpacing: 4,
                   children: [
                     _buildSmallTag('원예 ${plant.level}레벨'),
-                    if (plant.availableTime.isNotEmpty) _buildSmallTag(plant.availableTime),
+                    if (plant.availableTime.isNotEmpty) _buildSmallTag(
+                        plant.availableTime),
                     _buildSmallTag(plant.location, isLocation: true),
                   ],
                 ),
@@ -1333,25 +1392,33 @@ Widget _buildPriceTagLabel() {
                   children: [
                     // 곤충처럼 5단계 가격을 볼 수 있게 PopupMenuButton 적용
                     PopupMenuButton<String>(
-                      itemBuilder: (context) => List.generate(plant.prices.length, (i) =>
-                          PopupMenuItem(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('${i + 1}성', style: const TextStyle(fontSize: 13)),
-                                const SizedBox(width: 20),
-                                Text('${_formatPrice(plant.prices[i])}원',
-                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                              ],
-                            ),
-                          )
-                      ),
+                      itemBuilder: (context) =>
+                          List.generate(plant.prices.length, (i) =>
+                              PopupMenuItem(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment
+                                      .spaceBetween,
+                                  children: [
+                                    Text('${i + 1}성',
+                                        style: const TextStyle(fontSize: 13)),
+                                    const SizedBox(width: 20),
+                                    Text('${_formatPrice(plant.prices[i])}원',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13)),
+                                  ],
+                                ),
+                              )
+                          ),
                       child: Row(
                         children: [
                           _buildPriceTagLabel(),
                           const SizedBox(width: 8),
-                          Text(priceText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                          const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF616161)),
+                          Text(priceText, style: const TextStyle(fontSize: 13,
+                              fontWeight: FontWeight.bold)),
+                          const Icon(
+                              Icons.keyboard_arrow_down, size: 16, color: Color(
+                              0xFF616161)),
                         ],
                       ),
                     ),
@@ -1404,14 +1471,15 @@ Widget _buildPriceTagLabel() {
               child: Image.asset(
                 _imageAssetPath(insect.image), // path 대신 fish.image 사용
                 fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: Color(0xFFF5F5F5),
-                  child: Icon(
-                    Icons.bug_report, // errorIcon 대신 물고기 아이콘 직접 지정
-                    size: 40,
-                    color: Color(0xFFD9D9D9),
-                  ),
-                ),
+                errorBuilder: (context, error, stackTrace) =>
+                    Container(
+                      color: Color(0xFFF5F5F5),
+                      child: Icon(
+                        Icons.bug_report, // errorIcon 대신 물고기 아이콘 직접 지정
+                        size: 40,
+                        color: Color(0xFFD9D9D9),
+                      ),
+                    ),
               ),
             ),
             const SizedBox(width: 12),
@@ -1424,14 +1492,18 @@ Widget _buildPriceTagLabel() {
                       Expanded(
                         child: Text(
                           insect.nameKo,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF333333)),
+                          style: const TextStyle(fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF333333)),
                         ),
                       ),
                       InkWell(
                         onTap: () => _toggleFavorite(insect.id),
                         child: Icon(
                           isFavorite ? Icons.favorite : Icons.favorite_border,
-                          color: isFavorite ? const Color(0xFFFF8E7C) : const Color(0xFFD9D9D9),
+                          color: isFavorite
+                              ? const Color(0xFFFF8E7C)
+                              : const Color(0xFFD9D9D9),
                         ),
                       ),
                     ],
@@ -1441,8 +1513,10 @@ Widget _buildPriceTagLabel() {
                     spacing: 4, runSpacing: 4,
                     children: [
                       _buildSmallTag('채집 ${insect.level}레벨'),
-                      if (insect.availableTime.isNotEmpty) _buildSmallTag(insect.availableTime),
-                      if (insect.location.isNotEmpty) _buildSmallTag(insect.location, isLocation: true),
+                      if (insect.availableTime.isNotEmpty) _buildSmallTag(
+                          insect.availableTime),
+                      if (insect.location.isNotEmpty) _buildSmallTag(
+                          insect.location, isLocation: true),
                     ],
                   ),
                   const Spacer(),
@@ -1450,25 +1524,32 @@ Widget _buildPriceTagLabel() {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       PopupMenuButton<String>(
-                        itemBuilder: (context) => List.generate(insect.prices.length, (i) =>
-                            PopupMenuItem(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text('${i + 1}성', style: const TextStyle(fontSize: 13)),
-                                  const SizedBox(width: 20),
-                                  Text('${_formatPrice(insect.prices[i])}원',
-                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                                ],
-                              ),
-                            )
-                        ),
+                        itemBuilder: (context) =>
+                            List.generate(insect.prices.length, (i) =>
+                                PopupMenuItem(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment
+                                        .spaceBetween,
+                                    children: [
+                                      Text('${i + 1}성',
+                                          style: const TextStyle(fontSize: 13)),
+                                      const SizedBox(width: 20),
+                                      Text('${_formatPrice(insect.prices[i])}원',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13)),
+                                    ],
+                                  ),
+                                )
+                            ),
                         child: Row(
                           children: [
                             _buildPriceTagLabel(),
                             const SizedBox(width: 8),
-                            Text(priceText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                            const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF616161)),
+                            Text(priceText, style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.bold)),
+                            const Icon(Icons.keyboard_arrow_down, size: 16,
+                                color: Color(0xFF616161)),
                           ],
                         ),
                       ),
@@ -1491,7 +1572,9 @@ Widget _buildPriceTagLabel() {
       decoration: ShapeDecoration(
         color: Colors.white.withOpacity(0.85),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        shadows: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 14)],
+        shadows: [
+          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 14)
+        ],
       ),
       child: IntrinsicHeight(child: child),
     );
@@ -1522,18 +1605,22 @@ Widget _buildPriceTagLabel() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+        Text(name, style: const TextStyle(fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF333333))),
         InkWell(
           onTap: () => _toggleFavorite(id),
           child: Icon(isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: isFavorite ? const Color(0xFFFF8E7C) : const Color(0xFFD9D9D9)),
+              color: isFavorite ? const Color(0xFFFF8E7C) : const Color(
+                  0xFFD9D9D9)),
         ),
       ],
     );
   }
 
   // 2. 칩 위젯 생성 함수 (장소 색상 추가 및 쏠림 해결)
-  Widget _buildSmallTag(String text, {bool isLocation = false, bool isWeather = false}) {
+  Widget _buildSmallTag(String text,
+      {bool isLocation = false, bool isWeather = false}) {
     final rawText = text.trim();
     final lowerText = rawText.toLowerCase();
 
@@ -1549,22 +1636,57 @@ Widget _buildPriceTagLabel() {
       level = int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
 
       if (level == 1) {
-        bg = const Color(0xFFEEEEEE); border = const Color(0xFFBDBDBD); textColor = const Color(0xFF616161);
-      } else if (level == 2) { bg = const Color(0xFFFFEBEE); border = const Color(0xFFFFCDD2); textColor = const Color(0xFFC62828); }
-      else if (level == 3) { bg = const Color(0xFFFFF3E0); border = const Color(0xFFFFE0B2); textColor = const Color(0xFFE65100); }
-      else if (level == 4) { bg = const Color(0xFFFFFDE7); border = const Color(0xFFFFF9C4); textColor = const Color(0xFFF57F17); }
-      else if (level == 5) { bg = const Color(0xFFE8F5E9); border = const Color(0xFFC8E6C9); textColor = const Color(0xFF2E7D32); }
-      else if (level == 6) { bg = const Color(0xFFE1F5FE); border = const Color(0xFFB3E5FC); textColor = const Color(0xFF0277BD); }
-      else if (level == 7) { bg = const Color(0xFFE8EAF6); border = const Color(0xFFC5CAE9); textColor = const Color(0xFF1A237E); }
-      else if (level == 8) { bg = const Color(0xFFF3E5F5); border = const Color(0xFFE1BEE7); textColor = const Color(0xFF7B1FA2); }
-      else if (level == 9) { bg = const Color(0xFFFCE4EC); border = const Color(0xFFF8BBD0); textColor = const Color(0xFFC2185B); }
+        bg = const Color(0xFFEEEEEE);
+        border = const Color(0xFFBDBDBD);
+        textColor = const Color(0xFF616161);
+      } else if (level == 2) {
+        bg = const Color(0xFFFFEBEE);
+        border = const Color(0xFFFFCDD2);
+        textColor = const Color(0xFFC62828);
+      }
+      else if (level == 3) {
+        bg = const Color(0xFFFFF3E0);
+        border = const Color(0xFFFFE0B2);
+        textColor = const Color(0xFFE65100);
+      }
+      else if (level == 4) {
+        bg = const Color(0xFFFFFDE7);
+        border = const Color(0xFFFFF9C4);
+        textColor = const Color(0xFFF57F17);
+      }
+      else if (level == 5) {
+        bg = const Color(0xFFE8F5E9);
+        border = const Color(0xFFC8E6C9);
+        textColor = const Color(0xFF2E7D32);
+      }
+      else if (level == 6) {
+        bg = const Color(0xFFE1F5FE);
+        border = const Color(0xFFB3E5FC);
+        textColor = const Color(0xFF0277BD);
+      }
+      else if (level == 7) {
+        bg = const Color(0xFFE8EAF6);
+        border = const Color(0xFFC5CAE9);
+        textColor = const Color(0xFF1A237E);
+      }
+      else if (level == 8) {
+        bg = const Color(0xFFF3E5F5);
+        border = const Color(0xFFE1BEE7);
+        textColor = const Color(0xFF7B1FA2);
+      }
+      else if (level == 9) {
+        bg = const Color(0xFFFCE4EC);
+        border = const Color(0xFFF8BBD0);
+        textColor = const Color(0xFFC2185B);
+      }
       else { // 10레벨 이상 마스터
         textColor = const Color(0xFF424242);
         border = const Color(0xFFBDBDBD).withOpacity(0.5);
       }
     }
     // B. 시간대 (연분홍/주황 계열 - 따뜻한 느낌)
-    else if (rawText == '하루종일' || rawText.contains('~') || lowerText.contains('day') || lowerText.contains('time')) {
+    else if (rawText == '하루종일' || rawText.contains('~') ||
+        lowerText.contains('day') || lowerText.contains('time')) {
       bg = const Color(0xFFFFEDE1);
       border = const Color(0xFFFFCCBC);
       textColor = const Color(0xFFD84315);
@@ -1572,21 +1694,35 @@ Widget _buildPriceTagLabel() {
     // C. 날씨 (맑음: 노랑 / 비: 파랑 / 흐림: 민트)
     else if (isWeather) {
       if (lowerText.contains('sun') || rawText.contains('맑음')) {
-        bg = const Color(0xFFFFF9C4); border = const Color(0xFFFFF176); textColor = const Color(0xFFF57F17);
+        bg = const Color(0xFFFFF9C4);
+        border = const Color(0xFFFFF176);
+        textColor = const Color(0xFFF57F17);
       } else if (lowerText.contains('rain') || rawText.contains('비')) {
-        bg = const Color(0xFFE1F5FE); border = const Color(0xFF81D4FA); textColor = const Color(0xFF01579B);
+        bg = const Color(0xFFE1F5FE);
+        border = const Color(0xFF81D4FA);
+        textColor = const Color(0xFF01579B);
       } else {
-        bg = const Color(0xFFE0F2F1); border = const Color(0xFF80CBC4); textColor = const Color(0xFF00695C);
+        bg = const Color(0xFFE0F2F1);
+        border = const Color(0xFF80CBC4);
+        textColor = const Color(0xFF00695C);
       }
     }
     // D. 장소 (강: 청록 / 호수·산수: 남색 / 바다·구해: 진파랑)
     else if (isLocation) {
       if (rawText.contains('강') || lowerText.contains('river')) {
-        bg = const Color(0xFFE0F7FA); border = const Color(0xFF80DEEA); textColor = const Color(0xFF006064);
-      } else if (rawText.contains('호수') || rawText.contains('산수') || lowerText.contains('lake')) {
-        bg = const Color(0xFFE8EAF6); border = const Color(0xFF9FA8DA); textColor = const Color(0xFF1A237E);
-      } else if (rawText.contains('바다') || rawText.contains('구해') || lowerText.contains('sea')) {
-        bg = const Color(0xFFE3F2FD); border = const Color(0xFF64B5F6); textColor = const Color(0xFF0D47A1);
+        bg = const Color(0xFFE0F7FA);
+        border = const Color(0xFF80DEEA);
+        textColor = const Color(0xFF006064);
+      } else if (rawText.contains('호수') || rawText.contains('산수') ||
+          lowerText.contains('lake')) {
+        bg = const Color(0xFFE8EAF6);
+        border = const Color(0xFF9FA8DA);
+        textColor = const Color(0xFF1A237E);
+      } else if (rawText.contains('바다') || rawText.contains('구해') ||
+          lowerText.contains('sea')) {
+        bg = const Color(0xFFE3F2FD);
+        border = const Color(0xFF64B5F6);
+        textColor = const Color(0xFF0D47A1);
       }
     }
 
@@ -1597,7 +1733,13 @@ Widget _buildPriceTagLabel() {
       decoration: BoxDecoration(
         gradient: isMasterLevel
             ? const LinearGradient(
-          colors: [Color(0xFFFFD1D1), Color(0xFFFFF4D1), Color(0xFFD1FFDA), Color(0xFFD1E3FF), Color(0xFFE5D1FF)],
+          colors: [
+            Color(0xFFFFD1D1),
+            Color(0xFFFFF4D1),
+            Color(0xFFD1FFDA),
+            Color(0xFFD1E3FF),
+            Color(0xFFE5D1FF)
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         )
@@ -1613,7 +1755,9 @@ Widget _buildPriceTagLabel() {
           style: TextStyle(
             fontSize: 9.5,
             color: textColor,
-            fontWeight: (isMasterLevel || isLocation) ? FontWeight.w700 : FontWeight.w600,
+            fontWeight: (isMasterLevel || isLocation)
+                ? FontWeight.w700
+                : FontWeight.w600,
             height: 1.0,
             fontFamily: 'SF Pro',
           ),
@@ -1626,65 +1770,74 @@ Widget _buildPriceTagLabel() {
     List<String> filters = ['전체'];
 
     switch (_tabController.index) {
-      case 0: filters.addAll(['강 물고기', '호수 물고기', '바다 물고기']); break;
-      case 1: filters.addAll(['도시', '숲', '물가', '고래산']); break; // 새 위치
-      case 2: filters.addAll(['도시', '곤충 유인', '꽃밭', '온천 산', '숲']); break;
-      case 3: filters.addAll(['꽃', '농작물', '나무']); break; // 원예 타입
+      case 0:
+        filters.addAll(['강 물고기', '호수 물고기', '바다 물고기']);
+        break;
+      case 1:
+        filters.addAll(['도시', '숲', '물가', '고래산']);
+        break; // 새 위치
+      case 2:
+        filters.addAll(['도시', '곤충 유인', '꽃밭', '온천 산', '숲']);
+        break;
+      case 3:
+        filters.addAll(['꽃', '농작물', '나무']);
+        break; // 원예 타입
     }
 
-  return IntrinsicHeight(
-    child: Row(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(left: 16),
-            child: SizedBox(
-              height: 48,
-              child: ListView.builder( // 2. ListView.builder로 동적 생성
-                scrollDirection: Axis.horizontal,
-                itemCount: filters.length,
-                itemBuilder: (context, index) {
-                  return _buildFilterChip(filters[index]);
-                },
+    return IntrinsicHeight(
+      child: Row(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: SizedBox(
+                height: 48,
+                child: ListView.builder( // 2. ListView.builder로 동적 생성
+                  scrollDirection: Axis.horizontal,
+                  itemCount: filters.length,
+                  itemBuilder: (context, index) {
+                    return _buildFilterChip(filters[index]);
+                  },
+                ),
               ),
             ),
           ),
-        ),
-        // 정렬 버튼 (이 부분은 모든 탭 공통이므로 유지)
-        Padding(
-          padding: const EdgeInsets.only(right: 16, left: 8),
-          child: PopupMenuButton<String>(
-            onSelected: _onSortSelected,
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: '이름순', child: Text('이름순')),
-              PopupMenuItem(value: '가격순', child: Text('가격순')),
-              PopupMenuItem(value: '좋아요순', child: Text('좋아요순')),
-            ],
-            offset: const Offset(0, 30),
-            child: Row(
-              children: [
-                Text(
-                  _selectedSort,
-                  style: const TextStyle(
-                    color: Color(0xFF616161),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(width: 2),
-                const Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 16,
-                  color: Color(0xFF616161),
-                ),
+          // 정렬 버튼 (이 부분은 모든 탭 공통이므로 유지)
+          Padding(
+            padding: const EdgeInsets.only(right: 16, left: 8),
+            child: PopupMenuButton<String>(
+              onSelected: _onSortSelected,
+              itemBuilder: (context) =>
+              const [
+                PopupMenuItem(value: '이름순', child: Text('이름순')),
+                PopupMenuItem(value: '가격순', child: Text('가격순')),
+                PopupMenuItem(value: '좋아요순', child: Text('좋아요순')),
               ],
+              offset: const Offset(0, 30),
+              child: Row(
+                children: [
+                  Text(
+                    _selectedSort,
+                    style: const TextStyle(
+                      color: Color(0xFF616161),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    size: 16,
+                    color: Color(0xFF616161),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   Widget _buildFilterChip(String label) {
     final isSelected = _selectedFilter == label;
@@ -1722,7 +1875,8 @@ Widget _buildPriceTagLabel() {
           ),
           // ★ 아래 속성들이 도감 탭의 정렬 비결입니다.
           visualDensity: const VisualDensity(horizontal: 0, vertical: -2),
-          labelPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: -2),
+          labelPadding: const EdgeInsets.symmetric(
+              horizontal: 12, vertical: -2),
           padding: EdgeInsets.zero,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           showCheckmark: false,
@@ -1739,7 +1893,10 @@ Widget _buildPriceTagLabel() {
         decoration: ShapeDecoration(
           color: const Color(0xFFFFFDFD),
           shape: RoundedRectangleBorder(
-            side: const BorderSide(width: 1, color: Color(0x30FF7A65)),
+            side: const BorderSide(
+              width: 1,
+              color: Color(0x30FF7A65),
+            ),
             borderRadius: BorderRadius.circular(36),
           ),
           shadows: [
