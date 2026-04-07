@@ -153,6 +153,88 @@ class _MainWrapperState extends State<MainWrapper> {
     }
   }
 
+  void _showImageViewer({
+    required ImageProvider imageProvider,
+    required bool isProfile,
+  }) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'image_viewer',
+      barrierColor: Colors.black.withOpacity(0.9),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        final size = MediaQuery.of(context).size;
+
+        return SafeArea(
+          child: Stack(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: size.width,
+                  height: size.height,
+                  color: Colors.transparent,
+                  alignment: Alignment.center,
+                  child: isProfile
+                      ? Hero(
+                    tag: 'drawer_profile_image',
+                    child: InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 4.0,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: SizedBox(
+                          width: size.width * 0.72,
+                          height: size.width * 0.72,
+                          child: Image(
+                            image: imageProvider,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                      : InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 4.0,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: SizedBox(
+                        width: size.width * 0.92,
+                        child: Image(
+                          image: imageProvider,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Material(
+                  color: Colors.black.withOpacity(0.35),
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      },
+    );
+  }
+
   // --- [API] 할 일 추가 ---
   void _addTodo() async {
     if (_todoController.text.trim().isEmpty) return;
@@ -396,49 +478,113 @@ class _MainWrapperState extends State<MainWrapper> {
         children: [
           Stack(
             children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.only(left: 20, top: 40, bottom: 20),
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: _headerImageUrl != null
-                        ? NetworkImage(_headerImageUrl!)
-                        : const AssetImage('assets/images/profile_header_bg.png')
-                    as ImageProvider,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 60, height: 60,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2),
-                        image: DecorationImage(image: _profileImageUrl != null ? NetworkImage(_profileImageUrl!) as ImageProvider : const AssetImage('assets/images/profile.png'), fit: BoxFit.cover),
-                      ),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  final ImageProvider provider = _headerImageUrl != null
+                      ? NetworkImage(_headerImageUrl!)
+                      : const AssetImage('assets/images/profile_header_bg.png');
+
+                  _showImageViewer(
+                    imageProvider: provider,
+                    isProfile: false,
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.only(left: 20, top: 40, bottom: 20),
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: _headerImageUrl != null
+                          ? NetworkImage(_headerImageUrl!)
+                          : const AssetImage('assets/images/profile_header_bg.png')
+                      as ImageProvider,
+                      fit: BoxFit.cover,
                     ),
-                    const SizedBox(height: 15),
-                    Text("$_userName 님", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white, fontFamily: 'SF Pro')),
-                    Text("UID: $_userUid", style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.9), fontFamily: 'SF Pro')),
-                  ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          final ImageProvider provider = _profileImageUrl != null
+                              ? NetworkImage(_profileImageUrl!)
+                              : const AssetImage('assets/images/profile.png');
+
+                          _showImageViewer(
+                            imageProvider: provider,
+                            isProfile: true,
+                          );
+                        },
+                        child: Hero(
+                          tag: 'drawer_profile_image',
+                          child: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              image: DecorationImage(
+                                image: _profileImageUrl != null
+                                    ? NetworkImage(_profileImageUrl!) as ImageProvider
+                                    : const AssetImage('assets/images/profile.png'),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      Text(
+                        "$_userName 님",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Colors.white,
+                          fontFamily: 'SF Pro',
+                        ),
+                      ),
+                      Text(
+                        "UID: $_userUid",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.9),
+                          fontFamily: 'SF Pro',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               Positioned(
-                bottom: 12, right: 12,
+                bottom: 12,
+                right: 12,
                 child: GestureDetector(
                   onTap: () async {
                     Navigator.pop(context);
 
                     await Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsScreen(),
+                      ),
                     );
 
                     _fetchUserInfo();
                   },
-                  child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), shape: BoxShape.circle), child: const Icon(Icons.edit_rounded, color: Colors.white, size: 16)),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.edit_rounded,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -451,10 +597,8 @@ class _MainWrapperState extends State<MainWrapper> {
           const Spacer(),
           const Divider(height: 1),
           _buildDrawerItem(Icons.settings_rounded, '설정', () async {
-            // 1. 드로워 먼저 닫기
             Navigator.pop(context);
 
-            // 2. 설정 화면 이동 후 결과(true/false)를 기다림
             await Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const SettingsScreen()),
@@ -462,7 +606,6 @@ class _MainWrapperState extends State<MainWrapper> {
 
             _fetchUserInfo();
           }),
-          // ★ 시스템 바만큼 하단 여백 추가
           SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
         ],
       ),

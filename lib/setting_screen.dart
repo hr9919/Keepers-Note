@@ -36,6 +36,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadUserInfo();
+    _recoverLostImage();
   }
 
   Future<void> _loadUserInfo() async {
@@ -123,13 +124,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       compressQuality: 92,
       uiSettings: [
         AndroidUiSettings(
-          toolbarTitle: isProfile ? '프로필 사진 편집' : '배경 사진 편집',
-          toolbarColor: const Color(0xFFFF8E7C),
-          toolbarWidgetColor: Colors.white,
-          backgroundColor: Colors.black,
+          toolbarTitle: isProfile ? '프로필 사진 조정' : '배경 사진 조정',          toolbarColor: const Color(0xFFFFFBF8),
+          toolbarWidgetColor: const Color(0xFF2F2F2F),
+          backgroundColor: const Color(0xFF111111),
           activeControlsWidgetColor: const Color(0xFFFF8E7C),
-          lockAspectRatio: false,
+          dimmedLayerColor: Colors.black.withOpacity(0.72),
+          cropFrameColor: const Color(0xFFFFE1DA),
+          cropGridColor: Colors.white.withOpacity(0.18),
+          statusBarColor: const Color(0xFFFFFBF8),
           hideBottomControls: false,
+          lockAspectRatio: false,
           initAspectRatio: isProfile
               ? CropAspectRatioPreset.square
               : CropAspectRatioPreset.ratio16x9,
@@ -210,6 +214,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _showSnackBar("업로드 중 오류 발생");
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _recoverLostImage() async {
+    final LostDataResponse response = await _picker.retrieveLostData();
+    if (response.isEmpty) return;
+
+    if (response.files != null && response.files!.isNotEmpty) {
+      debugPrint('복구된 이미지: ${response.files!.first.path}');
+    } else {
+      debugPrint('lostData error: ${response.exception}');
     }
   }
 
