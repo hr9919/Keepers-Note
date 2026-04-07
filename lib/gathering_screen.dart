@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'setting_screen.dart';
 
+import 'models/global_search_item.dart';
+
 // 새 관찰 데이터 모델
 class BirdItem {
   final String id;
@@ -193,8 +195,14 @@ class FishItem {
 class GatheringScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
   final GlobalSearchItem? initialSearchItem;
+  final int resetSearchSignal;
 
-  const GatheringScreen({super.key, this.openDrawer, this.initialSearchItem});
+  const GatheringScreen({
+    super.key,
+    this.openDrawer,
+    this.initialSearchItem,
+    this.resetSearchSignal = 0,
+  });
 
   @override
   State<GatheringScreen> createState() => _GatheringScreenState();
@@ -212,17 +220,32 @@ class _GatheringScreenState extends State<GatheringScreen>
   String _selectedSort = '이름순';
 
   String? _highlightedId;
+  GlobalSearchItem? _pendingSearchItem;
 
-  String _formatPrice(int? price) {
-    if (price == null) return '';
-    // 숫자를 세 자리마다 콤마를 찍는 정규식입니다.
-    return price.toString().replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+  String _normalizeGatheringTargetId(String rawId) {
+    if (rawId.startsWith('fish_')) {
+      return rawId.replaceFirst('fish_', '');
+    }
+    if (rawId.startsWith('bird_')) {
+      return rawId.replaceFirst('bird_', '');
+    }
+    if (rawId.startsWith('insect_')) {
+      return rawId.replaceFirst('insect_', '');
+    }
+    if (rawId.startsWith('plant_')) {
+      return rawId.replaceFirst('plant_', '');
+    }
+    return rawId;
   }
+
+  final ScrollController _fishScrollController = ScrollController();
+  final ScrollController _birdScrollController = ScrollController();
+  final ScrollController _insectScrollController = ScrollController();
+  final ScrollController _plantScrollController = ScrollController();
 
   bool _isFishLoading = true;
   bool _isInsectLoading = true;
-  bool _isBirdLoading = true; // API 연결 전이므로 false 기본값
+  bool _isBirdLoading = true;
   bool _isPlantLoading = true;
   String? _errorMessage;
 
@@ -241,18 +264,24 @@ class _GatheringScreenState extends State<GatheringScreen>
   final String _birdApiUrl = 'http://161.33.30.40:8080/api/birds';
   final String _plantApiUrl = 'http://161.33.30.40:8080/api/gardening';
 
-  // 물고기 이름을 반환하는 함수
-  String _displayName(FishItem fish) {
-    return fish.nameKo ?? fish.name;
+  String _formatPrice(int? price) {
+    if (price == null) return '';
+    return price.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},',
+    );
   }
 
-// 물고기 이미지 경로를 반환하는 함수
+  String _displayName(FishItem fish) {
+    final ko = fish.nameKo?.trim() ?? '';
+    return ko.isNotEmpty ? ko : fish.name;
+  }
+
   String _imageAssetPath(String? image) {
     if (image == null || image.isEmpty) return 'assets/images/default.png';
 
     String fullPath = image.startsWith('assets/') ? image : 'assets/$image';
 
-    // 확장자가 없는 경우 .webp 기본 추가
     if (!fullPath.toLowerCase().endsWith('.webp') &&
         !fullPath.toLowerCase().endsWith('.png') &&
         !fullPath.toLowerCase().endsWith('.jpg')) {
@@ -262,24 +291,19 @@ class _GatheringScreenState extends State<GatheringScreen>
     return fullPath;
   }
 
-// 1. 시간대 레이블 변환 함수: 숫자를 직관적인 한글로 변환
   String _timeLabel(String? time) {
-    if (time == null || time
-        .trim()
-        .isEmpty) return '';
+    if (time == null || time.trim().isEmpty) return '';
 
     final raw = time.trim();
     final lower = raw.toLowerCase();
     final t = raw.replaceAll(' ', '');
 
-    // 이미지 및 DB 숫자 범위 대응
     if (lower == 'all day' || t == '0~24' || t == '0-24') return '하루종일';
     if (t == '4~21' || t == '4-21') return '새벽~밤';
     if (t == '4~19' || t == '4-19') return '새벽~저녁';
     if (t == '0~18' || t == '0-18') return '밤~저녁';
     if (t == '6~18' || t == '6-18') return '아침~저녁';
 
-    // 기본 단일 시간대
     if (t == '6~12' || lower == 'morning') return '아침';
     if (t == '12~18' || lower == 'afternoon') return '낮';
     if (t == '18~24' || lower == 'evening') return '저녁';
@@ -291,13 +315,12 @@ class _GatheringScreenState extends State<GatheringScreen>
   @override
   void initState() {
     super.initState();
+
     _tabController = TabController(length: 4, vsync: this);
 
-    // ★ 탭이 바뀔 때마다 화면을 다시 그리도록 리스너 추가
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() {
-          // 탭이 바뀌면 기존 필터를 '전체'로 초기화해주는 것이 자연스럽습니다.
           _selectedFilter = '전체';
         });
         _applyFilters();
@@ -305,10 +328,46 @@ class _GatheringScreenState extends State<GatheringScreen>
     });
 
     _searchController.addListener(_onSearchChanged);
-    _loadFavorites();
 
-    // 데이터 로드 호출
+    _loadFavorites();
     _fetchAllData();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.initialSearchItem != null) {
+        _pendingSearchItem = widget.initialSearchItem;
+        _applySearchItem(widget.initialSearchItem!);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant GatheringScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.initialSearchItem != null &&
+        widget.initialSearchItem != oldWidget.initialSearchItem) {
+      _pendingSearchItem = widget.initialSearchItem;
+      _applySearchItem(widget.initialSearchItem!);
+      return;
+    }
+
+    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
+      _clearSearchState();
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+
+    _fishScrollController.dispose();
+    _birdScrollController.dispose();
+    _insectScrollController.dispose();
+    _plantScrollController.dispose();
+
+    super.dispose();
   }
 
   void _fetchAllData() {
@@ -318,12 +377,112 @@ class _GatheringScreenState extends State<GatheringScreen>
     _fetchPlants();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _searchController.removeListener(_onSearchChanged);
-    _searchController.dispose();
-    super.dispose();
+  void _scrollToTopForTab(GatheringTabType tab) {
+    ScrollController? controller;
+
+    switch (tab) {
+      case GatheringTabType.fish:
+        controller = _fishScrollController;
+        break;
+      case GatheringTabType.bird:
+        controller = _birdScrollController;
+        break;
+      case GatheringTabType.insect:
+        controller = _insectScrollController;
+        break;
+      case GatheringTabType.plant:
+        controller = _plantScrollController;
+        break;
+      default:
+        return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || controller == null || !controller.hasClients) return;
+
+      controller.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  void _moveSelectedItemToTop(GlobalSearchItem item) {
+    if (item.gatheringTab == null) return;
+
+    final normalizedId = _normalizeGatheringTargetId(item.id);
+
+    void moveToTop<T>(List<T> list, bool Function(T e) match) {
+      final index = list.indexWhere(match);
+      if (index <= 0) return;
+      final selected = list.removeAt(index);
+      list.insert(0, selected);
+    }
+
+    switch (item.gatheringTab!) {
+      case GatheringTabType.fish:
+        moveToTop<FishItem>(_visibleFishList, (e) => e.id.trim() == normalizedId.trim());
+        break;
+      case GatheringTabType.bird:
+        moveToTop<BirdItem>(_visibleBirdList, (e) => e.id.trim() == normalizedId.trim());
+        break;
+      case GatheringTabType.insect:
+        moveToTop<InsectItem>(_visibleInsectList, (e) => e.id.trim() == normalizedId.trim());
+        break;
+      case GatheringTabType.plant:
+        moveToTop<PlantItem>(_visiblePlantList, (e) => e.id.trim() == normalizedId.trim());
+        break;
+    }
+  }
+
+  void _applySearchItem(GlobalSearchItem item) {
+    _pendingSearchItem = item;
+
+    if (item.gatheringTab == null) return;
+
+    final normalizedId = _normalizeGatheringTargetId(item.id);
+
+    // 🔥 검색 결과 클릭 시 검색창 비우기
+    _searchController.clear();
+    _searchQuery = '';
+
+    switch (item.gatheringTab!) {
+      case GatheringTabType.fish:
+        _tabController.animateTo(0);
+        break;
+      case GatheringTabType.bird:
+        _tabController.animateTo(1);
+        break;
+      case GatheringTabType.insect:
+        _tabController.animateTo(2);
+        break;
+      case GatheringTabType.plant:
+        _tabController.animateTo(3);
+        break;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _applyFilters();
+      _moveSelectedItemToTop(item);
+
+      setState(() {
+        _highlightedId = normalizedId;
+      });
+
+      _scrollToTopForTab(item.gatheringTab!);
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        if (_highlightedId == normalizedId) {
+          setState(() {
+            _highlightedId = null;
+          });
+        }
+      });
+    });
   }
 
   Future<void> _loadFavorites() async {
@@ -386,12 +545,15 @@ class _GatheringScreenState extends State<GatheringScreen>
       _isBirdLoading = true;
       _errorMessage = null;
     });
+
     try {
       final response = await http.get(Uri.parse(_birdApiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        final birds = data.map((e) =>
-            BirdItem.fromJson(e as Map<String, dynamic>)).toList();
+        final birds = data
+            .map((e) => BirdItem.fromJson(e as Map<String, dynamic>))
+            .toList();
+
         setState(() {
           _birdList = birds;
           _isBirdLoading = false;
@@ -410,12 +572,15 @@ class _GatheringScreenState extends State<GatheringScreen>
       _isPlantLoading = true;
       _errorMessage = null;
     });
+
     try {
       final response = await http.get(Uri.parse(_plantApiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        final plants = data.map((e) =>
-            PlantItem.fromJson(e as Map<String, dynamic>)).toList();
+        final plants = data
+            .map((e) => PlantItem.fromJson(e as Map<String, dynamic>))
+            .toList();
+
         setState(() {
           _plantList = plants;
           _isPlantLoading = false;
@@ -431,11 +596,13 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   Future<void> _fetchInsects() async {
     setState(() => _isInsectLoading = true);
+
     try {
       final response = await http.get(Uri.parse(_insectApiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         final insects = data.map((e) => InsectItem.fromJson(e)).toList();
+
         setState(() {
           _insectList = insects;
           _isInsectLoading = false;
@@ -447,6 +614,22 @@ class _GatheringScreenState extends State<GatheringScreen>
     } catch (e) {
       setState(() => _isInsectLoading = false);
     }
+  }
+
+  void _clearSearchState() {
+    _pendingSearchItem = null;
+
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+    }
+
+    setState(() {
+      _searchQuery = '';
+      _highlightedId = null;
+      _selectedFilter = '전체';
+    });
+
+    _applyFilters();
   }
 
   void _onSearchChanged() {
@@ -473,62 +656,69 @@ class _GatheringScreenState extends State<GatheringScreen>
     final tabIndex = _tabController.index;
 
     setState(() {
-      // 1. 물고기 필터링 (Tab 0)
       List<FishItem> filteredFish = List.from(_fishList);
       if (query.isNotEmpty) {
-        filteredFish = filteredFish.where((item) =>
-        (item.nameKo ?? '').contains(query) ||
-            item.name.toLowerCase().contains(query)).toList();
+        filteredFish = filteredFish.where((item) {
+          final ko = (item.nameKo ?? '').toLowerCase();
+          final en = item.name.toLowerCase();
+          return ko.contains(query) || en.contains(query);
+        }).toList();
       }
       if (_selectedFilter != '전체' && tabIndex == 0) {
-        filteredFish =
-            filteredFish.where((item) => _matchesFilter(item, _selectedFilter))
-                .toList();
+        filteredFish = filteredFish
+            .where((item) => _matchesFilter(item, _selectedFilter))
+            .toList();
       }
       _sortFish(filteredFish);
       _visibleFishList = filteredFish;
 
-      // 2. 새 관찰 필터링 (Tab 1)
       List<BirdItem> filteredBirds = List.from(_birdList);
       if (query.isNotEmpty) {
-        filteredBirds =
-            filteredBirds.where((item) => item.nameKo.contains(query)).toList();
+        filteredBirds = filteredBirds.where((item) {
+          return item.nameKo.toLowerCase().contains(query);
+        }).toList();
       }
       if (_selectedFilter != '전체' && tabIndex == 1) {
-        filteredBirds = filteredBirds.where((item) =>
-            item.location.contains(_selectedFilter)).toList();
+        filteredBirds = filteredBirds
+            .where((item) => item.location.contains(_selectedFilter))
+            .toList();
       }
-      _sortBirds(filteredBirds); // 새 정렬 추가
+      _sortBirds(filteredBirds);
       _visibleBirdList = filteredBirds;
 
-      // 3. 곤충 채집 필터링 (Tab 2)
       List<InsectItem> filteredInsects = List.from(_insectList);
       if (query.isNotEmpty) {
-        filteredInsects = filteredInsects.where((item) =>
-        item.nameKo.contains(query) ||
-            item.name.toLowerCase().contains(query)).toList();
+        filteredInsects = filteredInsects.where((item) {
+          return item.nameKo.toLowerCase().contains(query) ||
+              item.name.toLowerCase().contains(query);
+        }).toList();
       }
       if (_selectedFilter != '전체' && tabIndex == 2) {
-        filteredInsects = filteredInsects.where((item) =>
-            item.location.contains(_selectedFilter)).toList();
+        filteredInsects = filteredInsects
+            .where((item) => item.location.contains(_selectedFilter))
+            .toList();
       }
       _sortInsects(filteredInsects);
       _visibleInsectList = filteredInsects;
 
-      // 4. 원예 필터링 (Tab 3)
       List<PlantItem> filteredPlants = List.from(_plantList);
       if (query.isNotEmpty) {
-        filteredPlants =
-            filteredPlants.where((item) => item.nameKo.contains(query))
-                .toList();
+        filteredPlants = filteredPlants.where((item) {
+          return item.nameKo.toLowerCase().contains(query);
+        }).toList();
       }
       if (_selectedFilter != '전체' && tabIndex == 3) {
-        filteredPlants = filteredPlants.where((item) =>
-        item.location.contains(_selectedFilter) ||
-            item.availableTime.contains(_selectedFilter)).toList();
+        filteredPlants = filteredPlants.where((item) {
+          return item.location.contains(_selectedFilter) ||
+              item.availableTime.contains(_selectedFilter);
+        }).toList();
       }
-      _sortPlants(filteredPlants); // 원예 정렬 추가
+      _sortPlants(filteredPlants);
       _visiblePlantList = filteredPlants;
+
+      if (_pendingSearchItem != null) {
+        _moveSelectedItemToTop(_pendingSearchItem!);
+      }
     });
   }
 
@@ -866,9 +1056,10 @@ class _GatheringScreenState extends State<GatheringScreen>
         _buildFilterBarArea(), // 필터링 칩과 정렬 버튼 표시
         Expanded(
           child: _buildDynamicTabContent(
-              _isBirdLoading,
-              _visibleBirdList,
-              _buildBirdCard
+            _isBirdLoading,
+            _visibleBirdList,
+            _buildBirdCard,
+            controller: _birdScrollController,
           ),
         ),
       ],
@@ -877,8 +1068,12 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   // 공통 리스트 빌더 함수 (새, 원예 등에서 사용)
   // 공통 리스트 빌더 함수 수정
-  Widget _buildDynamicTabContent<T>(bool isLoading, List<T> list,
-      Widget Function(T) buildCard) {
+Widget _buildDynamicTabContent<T>(
+    bool isLoading,
+    List<T> list,
+    Widget Function(T) buildCard, {
+      ScrollController? controller,
+    }) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -889,12 +1084,18 @@ class _GatheringScreenState extends State<GatheringScreen>
           _fetchAllData();
         },
         child: ListView(
+          controller: controller,
           physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics()),
+            parent: BouncingScrollPhysics(),
+          ),
           children: const [
             SizedBox(height: 180),
-            Center(child: Text('검색 결과가 없어요.',
-                style: TextStyle(fontSize: 14, color: Color(0xFF666666)))),
+            Center(
+              child: Text(
+                '검색 결과가 없어요.',
+                style: TextStyle(fontSize: 14, color: Color(0xFF666666)),
+              ),
+            ),
           ],
         ),
       );
@@ -905,6 +1106,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         _fetchAllData();
       },
       child: ListView.builder(
+        controller: controller,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: list.length + 1, // ★ 마지막에 여백 공간을 위해 +1 해줍니다.
         itemBuilder: (context, index) {
@@ -925,9 +1127,10 @@ class _GatheringScreenState extends State<GatheringScreen>
         _buildFilterBarArea(), // 필터링 칩과 정렬 버튼 표시
         Expanded(
           child: _buildDynamicTabContent(
-              _isPlantLoading,
-              _visiblePlantList,
-              _buildPlantCard
+            _isPlantLoading,
+            _visiblePlantList,
+            _buildPlantCard,
+            controller: _plantScrollController,
           ),
         ),
       ],
@@ -978,6 +1181,7 @@ class _GatheringScreenState extends State<GatheringScreen>
       return RefreshIndicator(
         onRefresh: _fetchFish,
         child: ListView(
+          controller: _fishScrollController,
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
@@ -1000,6 +1204,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     return RefreshIndicator(
       onRefresh: _fetchFish,
       child: SingleChildScrollView(
+        controller: _fishScrollController,
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
         ),
@@ -1032,13 +1237,19 @@ class _GatheringScreenState extends State<GatheringScreen>
             onRefresh: _fetchInsects,
             child: _visibleInsectList.isEmpty
                 ? ListView(
+              controller: _insectScrollController,
               children: const [
                 SizedBox(height: 180),
-                Center(child: Text(
-                    '검색 결과가 없어요.', style: TextStyle(color: Color(0xFF666666)))),
+                Center(
+                  child: Text(
+                    '검색 결과가 없어요.',
+                    style: TextStyle(color: Color(0xFF666666)),
+                  ),
+                ),
               ],
             )
                 : ListView.builder(
+              controller: _insectScrollController,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               // ★ 수정: 하단 여백을 위해 1개를 더 추가합니다.
               itemCount: _visibleInsectList.length + 1,
@@ -1061,24 +1272,10 @@ class _GatheringScreenState extends State<GatheringScreen>
   }) {
     final isFavorite = _favoriteIds.contains(fish.id);
     final priceText = _pricePreview(fish);
+    final isHighlighted = (_highlightedId?.trim() ?? '') == fish.id.toString().trim();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: ShapeDecoration(
-        color: Colors.white.withOpacity(0.85),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        shadows: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            spreadRadius: 1.0,
-            blurRadius: 14,
-            offset: const Offset(0, 0),
-          ),
-        ],
-      ),
+    return _buildBaseContainer(
+      itemId: fish.id,
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1275,85 +1472,92 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-// 새 관찰 카드
-  // 새 관찰 카드 수정본
   Widget _buildBirdCard(BirdItem bird) {
     final isFavorite = _favoriteIds.contains(bird.id);
-    // 가격 텍스트 계산
-    final minPrice = bird.prices.isNotEmpty ? bird.prices.reduce((a, b) =>
-    a < b
-        ? a
-        : b) : 0;
-    final maxPrice = bird.prices.isNotEmpty ? bird.prices.reduce((a, b) =>
-    a > b
-        ? a
-        : b) : 0;
+    final minPrice =
+    bird.prices.isNotEmpty ? bird.prices.reduce((a, b) => a < b ? a : b) : 0;
+    final maxPrice =
+    bird.prices.isNotEmpty ? bird.prices.reduce((a, b) => a > b ? a : b) : 0;
     final priceText = minPrice == maxPrice
         ? '${_formatPrice(minPrice)}원'
         : '${_formatPrice(minPrice)}원 ~ ${_formatPrice(maxPrice)}원';
+    final isHighlighted = (_highlightedId?.trim() ?? '') == bird.id.toString().trim();
 
     return _buildBaseContainer(
-      child: Row(
-        children: [
-          _buildCardImage(bird.image, Icons.flutter_dash),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildCardTitle(bird.nameKo, bird.id),
-                // 여기서 bird.nameKo가 표시됩니다.
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 4, runSpacing: 4,
-                  children: [
-                    _buildSmallTag('관찰 ${bird.level}레벨'),
-                    if (bird.availableTime.isNotEmpty) _buildSmallTag(
-                        bird.availableTime),
-                    _buildSmallTag(bird.location, isLocation: true),
-                  ],
-                ),
-                const Spacer(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    PopupMenuButton<String>(
-                      itemBuilder: (context) =>
-                          List.generate(bird.prices.length, (i) =>
-                              PopupMenuItem(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment
-                                      .spaceBetween,
-                                  children: [
-                                    Text('${i + 1}성',
-                                        style: const TextStyle(fontSize: 13)),
-                                    const SizedBox(width: 20),
-                                    Text('${_formatPrice(bird.prices[i])}원',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13)),
-                                  ],
+      itemId: bird.id,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildCardImage(bird.image, Icons.flutter_dash),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCardTitle(bird.nameKo, bird.id),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      _buildSmallTag('관찰 ${bird.level}레벨'),
+                      if (bird.availableTime.isNotEmpty)
+                        _buildSmallTag(bird.availableTime),
+                      _buildSmallTag(bird.location, isLocation: true),
+                    ],
+                  ),
+                  const Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      PopupMenuButton<String>(
+                        itemBuilder: (context) => List.generate(
+                          bird.prices.length,
+                              (i) => PopupMenuItem(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('${i + 1}성',
+                                    style: const TextStyle(fontSize: 13)),
+                                const SizedBox(width: 20),
+                                Text(
+                                  '${_formatPrice(bird.prices[i])}원',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
                                 ),
-                              )
+                              ],
+                            ),
                           ),
-                      child: Row(
-                        children: [
-                          _buildPriceTagLabel(),
-                          const SizedBox(width: 8),
-                          Text(priceText, style: const TextStyle(fontSize: 13,
-                              fontWeight: FontWeight.bold)),
-                          const Icon(
-                              Icons.keyboard_arrow_down, size: 16, color: Color(
-                              0xFF616161)),
-                        ],
+                        ),
+                        child: Row(
+                          children: [
+                            _buildPriceTagLabel(),
+                            const SizedBox(width: 8),
+                            Text(
+                              priceText,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 16,
+                              color: Color(0xFF616161),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1361,76 +1565,88 @@ class _GatheringScreenState extends State<GatheringScreen>
 // 원예 카드 수정
   Widget _buildPlantCard(PlantItem plant) {
     final isFavorite = _favoriteIds.contains(plant.id);
-
-    // prices 리스트에서 최소/최대 가격 계산
     final minPrice = plant.prices.reduce((a, b) => a < b ? a : b);
     final maxPrice = plant.prices.reduce((a, b) => a > b ? a : b);
     final priceText = minPrice == maxPrice
         ? '${_formatPrice(minPrice)}원'
         : '${_formatPrice(minPrice)}원 ~ ${_formatPrice(maxPrice)}원';
+    final isHighlighted = (_highlightedId?.trim() ?? '') == plant.id.toString().trim();
 
     return _buildBaseContainer(
-      child: Row(
-        children: [
-          _buildCardImage(plant.image, Icons.local_florist),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildCardTitle(plant.nameKo, plant.id),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 4, runSpacing: 4,
-                  children: [
-                    _buildSmallTag('원예 ${plant.level}레벨'),
-                    if (plant.availableTime.isNotEmpty) _buildSmallTag(
-                        plant.availableTime),
-                    _buildSmallTag(plant.location, isLocation: true),
-                  ],
-                ),
-                const Spacer(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    // 곤충처럼 5단계 가격을 볼 수 있게 PopupMenuButton 적용
-                    PopupMenuButton<String>(
-                      itemBuilder: (context) =>
-                          List.generate(plant.prices.length, (i) =>
-                              PopupMenuItem(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment
-                                      .spaceBetween,
-                                  children: [
-                                    Text('${i + 1}성',
-                                        style: const TextStyle(fontSize: 13)),
-                                    const SizedBox(width: 20),
-                                    Text('${_formatPrice(plant.prices[i])}원',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13)),
-                                  ],
+      itemId: plant.id,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildCardImage(plant.image, Icons.local_florist),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCardTitle(plant.nameKo, plant.id),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      _buildSmallTag('원예 ${plant.level}레벨'),
+                      if (plant.availableTime.isNotEmpty)
+                        _buildSmallTag(plant.availableTime),
+                      _buildSmallTag(plant.location, isLocation: true),
+                    ],
+                  ),
+                  const Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      PopupMenuButton<String>(
+                        itemBuilder: (context) => List.generate(
+                          plant.prices.length,
+                              (i) => PopupMenuItem(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('${i + 1}성',
+                                    style: const TextStyle(fontSize: 13)),
+                                const SizedBox(width: 20),
+                                Text(
+                                  '${_formatPrice(plant.prices[i])}원',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
                                 ),
-                              )
+                              ],
+                            ),
                           ),
-                      child: Row(
-                        children: [
-                          _buildPriceTagLabel(),
-                          const SizedBox(width: 8),
-                          Text(priceText, style: const TextStyle(fontSize: 13,
-                              fontWeight: FontWeight.bold)),
-                          const Icon(
-                              Icons.keyboard_arrow_down, size: 16, color: Color(
-                              0xFF616161)),
-                        ],
+                        ),
+                        child: Row(
+                          children: [
+                            _buildPriceTagLabel(),
+                            const SizedBox(width: 8),
+                            Text(
+                              priceText,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 16,
+                              color: Color(0xFF616161),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1444,21 +1660,10 @@ class _GatheringScreenState extends State<GatheringScreen>
     final priceText = minPrice == maxPrice
         ? '${_formatPrice(minPrice)}원'
         : '${_formatPrice(minPrice)}원 ~ ${_formatPrice(maxPrice)}원';
+    final isHighlighted = (_highlightedId?.trim() ?? '') == insect.id.toString().trim();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: ShapeDecoration(
-        color: Colors.white.withOpacity(0.85),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        shadows: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 0),
-          ),
-        ],
-      ),
+    return _buildBaseContainer(
+      itemId: insect.id,
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1472,17 +1677,16 @@ class _GatheringScreenState extends State<GatheringScreen>
                 border: Border.all(color: Colors.black.withOpacity(0.05)),
               ),
               child: Image.asset(
-                _imageAssetPath(insect.image), // path 대신 fish.image 사용
+                _imageAssetPath(insect.image),
                 fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) =>
-                    Container(
-                      color: Color(0xFFF5F5F5),
-                      child: Icon(
-                        Icons.bug_report, // errorIcon 대신 물고기 아이콘 직접 지정
-                        size: 40,
-                        color: Color(0xFFD9D9D9),
-                      ),
-                    ),
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: const Color(0xFFF5F5F5),
+                  child: const Icon(
+                    Icons.bug_report,
+                    size: 40,
+                    color: Color(0xFFD9D9D9),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -1568,18 +1772,50 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   // 카드 공통 컨테이너
-  Widget _buildBaseContainer({required Widget child}) {
-    return Container(
+  Widget _buildBaseContainer({
+    required Widget child,
+    required String itemId, // ★ 추가
+  }) {
+    final isHighlighted =
+        (_highlightedId?.trim() ?? '') == itemId.trim();
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
+
       decoration: ShapeDecoration(
-        color: Colors.white.withOpacity(0.85),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: isHighlighted
+            ? const Color(0xFFFFF4D8) // 더 눈에 띄는 색
+            : Colors.white.withOpacity(0.85),
+
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isHighlighted
+                ? const Color(0xFFFF9E58)
+                : Colors.transparent,
+            width: 1.6,
+          ),
+        ),
+
         shadows: [
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 14)
+          BoxShadow(
+            color: isHighlighted
+                ? const Color(0xFFFFC785).withOpacity(0.45)
+                : Colors.black.withOpacity(0.06),
+            spreadRadius: 1.0,
+            blurRadius: isHighlighted ? 18 : 14,
+            offset: const Offset(0, 0),
+          ),
         ],
       ),
-      child: IntrinsicHeight(child: child),
+
+      // ★ 핵심: rebuild 강제용 key
+      key: ValueKey('${itemId}_$isHighlighted'),
+
+      child: child,
     );
   }
 

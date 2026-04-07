@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:image_picker/image_picker.dart';
 import 'setting_screen.dart';
+import 'models/global_search_item.dart';
 
 // --- 데이터 모델 ---
 class Pet {
@@ -46,7 +47,13 @@ class FishItem {
 
 class PetScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
-  const PetScreen({super.key, this.openDrawer});
+  final GlobalSearchItem? initialSearchItem;
+
+  const PetScreen({
+    super.key,
+    this.openDrawer,
+    this.initialSearchItem,
+  });
 
   @override
   State<PetScreen> createState() => _PetScreenState();

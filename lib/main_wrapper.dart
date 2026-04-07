@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/services.dart';
 
 import 'home_screen.dart';
 import 'encyclopedia_screen.dart';
@@ -10,6 +11,7 @@ import 'cooking_screen.dart';
 import 'gathering_screen.dart';
 import 'pet_screen.dart';
 import 'setting_screen.dart';
+import 'models/global_search_item.dart';
 
 class MainWrapper extends StatefulWidget {
   const MainWrapper({super.key});
@@ -20,9 +22,13 @@ class MainWrapper extends StatefulWidget {
 
 class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  int _searchResetSignal = 0;
   final TextEditingController _todoController = TextEditingController();
-  // --- 유저 및 투두 데이터 ---
+
+  bool _isScrimPressed = false;
+  bool _isDrawerOpen = false;
+  bool _isEndDrawerOpen = false;
+
   String _userName = "로그인 중...";
   String _userUid = "";
   String? _profileImageUrl;
@@ -30,7 +36,6 @@ class _MainWrapperState extends State<MainWrapper> {
 
   GlobalSearchItem? _pendingSearchItem;
 
-  // 기본 투두 리스트 (서버 로드 전 초기값)
   List<Map<String, dynamic>> _todoTasks = [
     {"id": 0, "taskName": "가게 판매 품목 확인", "completed": false, "isSystem": true},
     {"id": 0, "taskName": "그자리 참나무 파밍", "completed": false, "isSystem": true},
@@ -38,25 +43,67 @@ class _MainWrapperState extends State<MainWrapper> {
     {"id": 0, "taskName": "작물에 물 주기", "completed": false, "isSystem": true},
   ];
 
+  static const List<String> _defaultSystemTasks = [
+    "가게 판매 품목 확인",
+    "그자리 참나무 파밍",
+    "완벽한 형광석 채집",
+    "작물에 물 주기",
+  ];
+
+  static const Duration _kPanelDuration = Duration(milliseconds: 360);
+  static const Curve _kPanelCurve = Curves.easeOutCubic;
+
+  String _normalizeTaskName(String name) {
+    return name.replaceAll('\n', '').replaceAll('\r', '').trim();
+  }
+
   @override
   void initState() {
     super.initState();
     _fetchUserInfo();
   }
 
-  // --- [로직] 유저 정보 가져오기 ---
+  Future<void> _openDrawerSmooth() async {
+    if (_isEndDrawerOpen) {
+      setState(() => _isEndDrawerOpen = false);
+      await Future.delayed(_kPanelDuration);
+    }
+    if (!mounted) return;
+    setState(() => _isDrawerOpen = true);
+  }
+
+  Future<void> _openEndDrawerSmooth() async {
+    if (_isDrawerOpen) {
+      setState(() => _isDrawerOpen = false);
+      await Future.delayed(_kPanelDuration);
+    }
+    if (!mounted) return;
+    setState(() => _isEndDrawerOpen = true);
+  }
+
+  Future<void> _closeDrawerSmooth() async {
+    if (!_isDrawerOpen) return;
+    setState(() => _isDrawerOpen = false);
+    await Future.delayed(_kPanelDuration);
+  }
+
+  Future<void> _closeEndDrawerSmooth() async {
+    if (!_isEndDrawerOpen) return;
+    setState(() => _isEndDrawerOpen = false);
+    await Future.delayed(_kPanelDuration);
+  }
+
   Future<void> _fetchUserInfo() async {
     try {
       User user = await UserApi.instance.me();
       final String kakaoId = user.id.toString();
 
-      // 1. 서버에 저장된 최신 정보 먼저 가져오기
       final response = await http.post(
         Uri.parse('http://161.33.30.40:8080/api/user/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "kakaoId": user.id,
-          "nickname": user.kakaoAccount?.profile?.nickname ?? "사용자"
+          "nickname": user.kakaoAccount?.profile?.nickname ?? "사용자",
         }),
       );
 
@@ -82,13 +129,10 @@ class _MainWrapperState extends State<MainWrapper> {
         });
       }
 
-      _loadTodoFromServer(kakaoId);
-    } catch (e) {
-      debugPrint("메인 유저 정보 갱신 에러: $e");
-    }
+      await _loadTodoFromServer(kakaoId);
+    } catch (_) {}
   }
 
-  // --- [API] 할 일 불러오기 ---
   Future<void> _loadTodoFromServer([String? uid]) async {
     final targetUid = uid ?? _userUid;
     if (targetUid.isEmpty || targetUid == "UID를 입력해보세요") return;
@@ -98,48 +142,168 @@ class _MainWrapperState extends State<MainWrapper> {
         Uri.parse('http://161.33.30.40:8080/api/todo/$targetUid'),
       );
 
-      if (response.statusCode == 200) {
-        // ★ 1. JSON 디코딩
-        final List<dynamic> decodedData = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode != 200) return;
 
-        if (decodedData.isEmpty) {
-          debugPrint("신규 유저: 기본 투두 생성 중...");
-          final defaultTasks = ["가게 판매 품목 확인", "그자리 참나무 파밍", "완벽한 형광석 채집", "작물에 물 주기"];
-          for (var taskName in defaultTasks) {
-            await http.post(
-              Uri.parse('http://161.33.30.40:8080/api/todo/add'),
-              headers: {"Content-Type": "application/json"},
-              body: jsonEncode({"kakaoId": targetUid, "taskName": taskName}),
-            );
-          }
-          _loadTodoFromServer(targetUid);
-        } else {
-          // ★ 2. 데이터 매핑 (BIT 타입 0x01 대응 포함)
-          setState(() {
-            _todoTasks = decodedData.map((task) => {
-              "id": task['id'],
-              "taskName": task['taskName'],
-              "completed": (task['completed'] == true ||
-                  task['completed'] == 1 ||
-                  task['completed'].toString().contains('1')) ||
-                  (task['isCompleted'] == true ||
-                      task['isCompleted'] == 1 ||
-                      task['isCompleted'].toString().contains('1')),
-              "isSystem": (task['isSystem'] == true ||
-                  task['isSystem'] == 1 ||
-                  task['isSystem'].toString().contains('1')),
-            }).toList();
-          });
-          debugPrint("서버 동기화 완료");
+      final List<dynamic> decodedData = jsonDecode(utf8.decode(response.bodyBytes));
+
+      List<Map<String, dynamic>> mapped = decodedData.map((task) {
+        return {
+          "id": task['id'],
+          "taskName": task['taskName'],
+          "completed": (task['completed'] == true ||
+              task['completed'] == 1 ||
+              task['completed'].toString().contains('1')) ||
+              (task['isCompleted'] == true ||
+                  task['isCompleted'] == 1 ||
+                  task['isCompleted'].toString().contains('1')),
+          "isSystem": (task['isSystem'] == true ||
+              task['isSystem'] == 1 ||
+              task['isSystem'].toString().contains('1')),
+        };
+      }).toList();
+
+      if (mapped.isEmpty) {
+        for (final taskName in _defaultSystemTasks) {
+          await http.post(
+            Uri.parse('http://161.33.30.40:8080/api/todo/add'),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "kakaoId": targetUid,
+              "taskName": taskName,
+            }),
+          );
+        }
+        await _loadTodoFromServer(targetUid);
+        return;
+      }
+
+      final existingNames =
+      mapped.map((e) => _normalizeTaskName(e["taskName"] ?? "")).toSet();
+
+      bool addedMissingDefault = false;
+
+      for (final taskName in _defaultSystemTasks) {
+        if (!existingNames.contains(_normalizeTaskName(taskName))) {
+          addedMissingDefault = true;
+          await http.post(
+            Uri.parse('http://161.33.30.40:8080/api/todo/add'),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "kakaoId": targetUid,
+              "taskName": taskName,
+            }),
+          );
         }
       }
-    } catch (e) {
-      debugPrint("로드 에러: $e");
+
+      if (addedMissingDefault) {
+        await _loadTodoFromServer(targetUid);
+        return;
+      }
+
+      mapped.sort((a, b) {
+        final aName = (a["taskName"] ?? "").toString();
+        final bName = (b["taskName"] ?? "").toString();
+
+        final aIndex = _defaultSystemTasks.indexOf(aName);
+        final bIndex = _defaultSystemTasks.indexOf(bName);
+
+        final aIsDefault = aIndex != -1;
+        final bIsDefault = bIndex != -1;
+
+        if (aIsDefault && bIsDefault) return aIndex.compareTo(bIndex);
+        if (aIsDefault) return -1;
+        if (bIsDefault) return 1;
+        return 0;
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _todoTasks = mapped;
+      });
+    } catch (_) {}
+  }
+
+  void _toggleTodo(int index) async {
+    final taskId = _todoTasks[index]['id'];
+    if (taskId == 0) return;
+
+    setState(() {
+      _todoTasks[index]['completed'] = !_todoTasks[index]['completed'];
+    });
+
+    try {
+      await http.put(
+        Uri.parse('http://161.33.30.40:8080/api/todo/toggle/$taskId'),
+      );
+    } catch (_) {}
+  }
+
+  void _addTodo() async {
+    if (_todoController.text.trim().isEmpty) return;
+    final taskName = _todoController.text.trim();
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://161.33.30.40:8080/api/todo/add'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"kakaoId": _userUid, "taskName": taskName}),
+      );
+
+      if (response.statusCode == 200) {
+        _todoController.clear();
+        await _loadTodoFromServer();
+      }
+    } catch (_) {}
+  }
+
+  void _deleteTodo(int index) async {
+    final taskId = _todoTasks[index]['id'];
+    if (taskId == 0) return;
+
+    try {
+      final response = await http.delete(
+        Uri.parse('http://161.33.30.40:8080/api/todo/$taskId'),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          _todoTasks.removeAt(index);
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _handleSixAMReset() async {
+    await _loadTodoFromServer();
+  }
+
+  Future<void> _onRefreshData() async {
+    await _loadTodoFromServer();
+  }
+
+  Future<void> _onMenuSelect(int index) async {
+    if (_isDrawerOpen) {
+      await _closeDrawerSmooth();
     }
+
+    if (_isEndDrawerOpen) {
+      await _closeEndDrawerSmooth();
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedIndex = index;
+      _pendingSearchItem = null;
+      _searchResetSignal++;
+    });
   }
 
   void _handleGlobalSearchSelection(GlobalSearchItem item) {
-    _pendingSearchItem = item;
+    setState(() {
+      _pendingSearchItem = item;
+    });
 
     switch (item.screen) {
       case SearchTargetScreen.encyclopedia:
@@ -156,25 +320,12 @@ class _MainWrapperState extends State<MainWrapper> {
         break;
     }
 
-    setState(() {});
-  }
-
-  // --- [API] 할 일 체크 토글 ---
-  void _toggleTodo(int index) async {
-    final taskId = _todoTasks[index]['id'];
-    if (taskId == 0) return;
-
-    setState(() {
-      _todoTasks[index]['completed'] = !_todoTasks[index]['completed'];
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _pendingSearchItem = null;
+      });
     });
-
-    try {
-      await http.put(
-        Uri.parse('http://161.33.30.40:8080/api/todo/toggle/$taskId'),
-      );
-    } catch (e) {
-      debugPrint("토글 동기화 실패: $e");
-    }
   }
 
   void _showImageViewer({
@@ -251,149 +402,334 @@ class _MainWrapperState extends State<MainWrapper> {
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: animation,
-          child: child,
-        );
+        return FadeTransition(opacity: animation, child: child);
       },
     );
   }
 
-  // --- [API] 할 일 추가 ---
-  void _addTodo() async {
-    if (_todoController.text.trim().isEmpty) return;
-    final taskName = _todoController.text.trim();
-
-    try {
-      final response = await http.post(
-        Uri.parse('http://161.33.30.40:8080/api/todo/add'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"kakaoId": _userUid, "taskName": taskName}),
-      );
-
-      if (response.statusCode == 200) {
-        _todoController.clear();
-        _loadTodoFromServer();
-      }
-    } catch (e) {
-      debugPrint("추가 실패: $e");
-    }
-  }
-
-  // --- [API] 할 일 삭제 ---
-  void _deleteTodo(int index) async {
-    final taskId = _todoTasks[index]['id'];
-    if (taskId == 0) return;
-
-    try {
-      final response = await http.delete(
-        Uri.parse('http://161.33.30.40:8080/api/todo/$taskId'),
-      );
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _todoTasks.removeAt(index);
-        });
-      }
-    } catch (e) {
-      debugPrint("삭제 실패: $e");
-    }
-  }
-
-  void _handleSixAMReset() async {
-    await _loadTodoFromServer();
-  }
-
-  Future<void> _onRefreshData() async {
-    await _loadTodoFromServer();
-  }
-
-  void _onMenuSelect(int index) {
-    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) Navigator.pop(context);
-    setState(() => _selectedIndex = index);
+  Future<bool> _showExitConfirmationDialog(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x14000000),
+                  blurRadius: 16,
+                  offset: Offset(0, 6),
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '앱 종료',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '키퍼노트를 종료하시겠습니까?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF64748B),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop(false);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF475569),
+                          side: const BorderSide(color: Color(0xFFD7DEE7)),
+                          minimumSize: const Size.fromHeight(40),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          '취소',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop(true);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF8E7C),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(40),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          '종료',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ) ??
+        false;
   }
 
   @override
   Widget build(BuildContext context) {
-    // ★ 기기 하단 바 높이 계산
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
 
     final List<Widget> pages = [
       HomeScreen(
-        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-        openEndDrawer: () => _scaffoldKey.currentState?.openEndDrawer(),
+        openDrawer: _openDrawerSmooth,
+        openEndDrawer: _openEndDrawerSmooth,
         todoList: _todoTasks,
         onTodoToggle: (index) => _toggleTodo(index),
         onResetAll: _handleSixAMReset,
         onRefresh: _onRefreshData,
         onSearchItemSelected: _handleGlobalSearchSelection,
       ),
-
       EncyclopediaScreen(
-        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-        initialSearchItem: _pendingSearchItem, // 🔥 추가
+        openDrawer: _openDrawerSmooth,
+        initialSearchItem: _pendingSearchItem,
       ),
-
       CookingScreen(
-        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-        initialSearchItem: _pendingSearchItem, // 🔥 추가
+        openDrawer: _openDrawerSmooth,
+        initialSearchItem: _pendingSearchItem,
+        resetSearchSignal: _searchResetSignal,
       ),
-
       GatheringScreen(
-        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-        initialSearchItem: _pendingSearchItem, // 🔥 추가
+        openDrawer: _openDrawerSmooth,
+        initialSearchItem: _pendingSearchItem,
+        resetSearchSignal: _searchResetSignal,
       ),
-
       PetScreen(
-        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-        initialSearchItem: _pendingSearchItem, // 🔥 추가
+        openDrawer: _openDrawerSmooth,
+        initialSearchItem: _pendingSearchItem,
       ),
     ];
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
-          _scaffoldKey.currentState?.closeDrawer();
-        } else if (_scaffoldKey.currentState?.isEndDrawerOpen ?? false) {
-          _scaffoldKey.currentState?.closeEndDrawer();
-        } else {
-          if (_selectedIndex != 0) {
-            setState(() => _selectedIndex = 0);
-          } else {
-            Navigator.of(context).pop();
-          }
+
+        if (_isDrawerOpen) {
+          await _closeDrawerSmooth();
+          return;
+        }
+
+        if (_isEndDrawerOpen) {
+          await _closeEndDrawerSmooth();
+          return;
+        }
+
+        if (_selectedIndex != 0) {
+          setState(() {
+            _selectedIndex = 0;
+            _pendingSearchItem = null;
+            _searchResetSignal++;
+          });
+          return;
+        }
+
+        final shouldExit = await _showExitConfirmationDialog(context);
+        if (!mounted) return;
+
+        if (shouldExit) {
+          await SystemNavigator.pop();
         }
       },
       child: Scaffold(
-        key: _scaffoldKey,
         extendBody: true,
-        drawer: _buildCommonDrawer(bottomPadding),
-        endDrawer: _buildTodoDrawer(),
-        body: IndexedStack(index: _selectedIndex, children: pages),
-        bottomNavigationBar: _buildBottomNavigationBar(bottomPadding),
+        body: Stack(
+          children: [
+            IndexedStack(
+              index: _selectedIndex,
+              children: pages,
+            ),
+
+            AnimatedPositioned(
+              duration: _kPanelDuration,
+              curve: _kPanelCurve,
+              left: 0,
+              right: 0,
+              bottom: (_isDrawerOpen || _isEndDrawerOpen) ? -140 : 0,
+              child: IgnorePointer(
+                ignoring: _isDrawerOpen || _isEndDrawerOpen,
+                child: AnimatedOpacity(
+                  duration: _kPanelDuration,
+                  curve: _kPanelCurve,
+                  opacity: (_isDrawerOpen || _isEndDrawerOpen) ? 0.0 : 1.0,
+                  child: _buildBottomNavigationBar(bottomPadding),
+                ),
+              ),
+            ),
+
+            // 바깥 배경
+            IgnorePointer(
+              ignoring: !(_isDrawerOpen || _isEndDrawerOpen),
+              child: AnimatedOpacity(
+                duration: _kPanelDuration,
+                curve: _kPanelCurve,
+                opacity: (_isDrawerOpen || _isEndDrawerOpen) ? 1.0 : 0.0,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (_) {
+                    setState(() {
+                      _isScrimPressed = true;
+                    });
+                  },
+                  onTapCancel: () {
+                    setState(() {
+                      _isScrimPressed = false;
+                    });
+                  },
+                  onTapUp: (_) async {
+                    await Future.delayed(const Duration(milliseconds: 70));
+                    if (!mounted) return;
+
+                    setState(() {
+                      _isScrimPressed = false;
+                    });
+
+                    if (_isDrawerOpen) {
+                      await _closeDrawerSmooth();
+                    } else if (_isEndDrawerOpen) {
+                      await _closeEndDrawerSmooth();
+                    }
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 90),
+                    color: _isScrimPressed
+                        ? Colors.black.withOpacity(0.28)
+                        : Colors.black.withOpacity(0.22),
+                  ),
+                ),
+              ),
+            ),
+
+            _buildCustomLeftPanel(bottomPadding),
+            _buildCustomRightPanel(),
+          ],
+        ),
       ),
     );
   }
 
-  // --- [UI] 투두 드로워 ---
-  Widget _buildTodoDrawer() {
+  Widget _buildCustomLeftPanel(double bottomPadding) {
+    final double panelWidth = MediaQuery.of(context).size.width * 0.82;
+
+    return AnimatedPositioned(
+      duration: _kPanelDuration,
+      curve: _kPanelCurve,
+      left: _isDrawerOpen ? 0 : -panelWidth - 24,
+      top: 0,
+      bottom: 0,
+      child: AnimatedScale(
+        duration: _kPanelDuration,
+        curve: _kPanelCurve,
+        scale: _isDrawerOpen ? 1.0 : 0.985,
+        alignment: Alignment.centerLeft,
+        child: SizedBox(
+          width: panelWidth,
+          child: _buildCommonDrawerPanel(bottomPadding),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomRightPanel() {
+    final double panelWidth = MediaQuery.of(context).size.width * 0.85;
+
+    return AnimatedPositioned(
+      duration: _kPanelDuration,
+      curve: _kPanelCurve,
+      right: _isEndDrawerOpen ? 0 : -panelWidth - 24,
+      top: 0,
+      bottom: 0,
+      child: AnimatedScale(
+        duration: _kPanelDuration,
+        curve: _kPanelCurve,
+        scale: _isEndDrawerOpen ? 1.0 : 0.985,
+        alignment: Alignment.centerRight,
+        child: SizedBox(
+          width: panelWidth,
+          child: _buildTodoDrawerPanel(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTodoDrawerPanel() {
     int doneCount = _todoTasks.where((t) => t['completed'] == true).length;
     double progress = _todoTasks.isEmpty ? 0 : doneCount / _todoTasks.length;
 
-    return Drawer(
-      width: MediaQuery.of(context).size.width * 0.85,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.only(topLeft: Radius.circular(30), bottomLeft: Radius.circular(30))),
-      child: Container(
-        color: const Color(0xFFF9F9F9),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildTodoHeader(progress),
-              Expanded(child: _buildTodoListArea()),
-              _buildTodoInputArea(),
-            ],
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF9F9F9),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(30),
+                bottomLeft: Radius.circular(30),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x24000000),
+                  blurRadius: 28,
+                  offset: Offset(-6, 0),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                _buildTodoHeader(progress),
+                Expanded(child: _buildTodoListArea()),
+                _buildTodoInputArea(),
+              ],
+            ),
           ),
         ),
       ),
@@ -409,12 +745,27 @@ class _MainWrapperState extends State<MainWrapper> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("오늘의 할 일 🌿", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'SF Pro')),
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+              const Text(
+                "오늘의 할 일 🌿",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'SF Pro',
+                ),
+              ),
+              IconButton(
+                onPressed: () async {
+                  await _closeEndDrawerSmooth();
+                },
+                icon: const Icon(Icons.close),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          const Text("오전 06:00에 모든 항목이 초기화됩니다.", style: TextStyle(fontSize: 11, color: Colors.grey)),
+          const Text(
+            "오전 06:00에 모든 항목이 초기화됩니다.",
+            style: TextStyle(fontSize: 11, color: Colors.grey),
+          ),
           const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
@@ -526,8 +877,22 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Widget _buildTodoInputArea() {
     return Container(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 12, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
-      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -2))]),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 12,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           Expanded(
@@ -537,156 +902,190 @@ class _MainWrapperState extends State<MainWrapper> {
               decoration: InputDecoration(
                 hintText: "오늘 뭐 할까요?",
                 hintStyle: const TextStyle(fontSize: 14, color: Colors.grey),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
-                filled: true, fillColor: const Color(0xFFF5F5F5),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(25),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: const Color(0xFFF5F5F5),
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          GestureDetector(onTap: _addTodo, child: const CircleAvatar(backgroundColor: Color(0xFFFF8E7C), child: Icon(Icons.add, color: Colors.white))),
+          GestureDetector(
+            onTap: _addTodo,
+            child: const CircleAvatar(
+              backgroundColor: Color(0xFFFF8E7C),
+              child: Icon(Icons.add, color: Colors.white),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  // --- [UI] 공통 드로워 ---
-  Widget _buildCommonDrawer(double bottomPadding) {
-    return Drawer(
-      child: Column(
-        children: [
-          Stack(
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  final ImageProvider provider = _headerImageUrl != null
-                      ? NetworkImage(_headerImageUrl!)
-                      : const AssetImage('assets/images/profile_header_bg.png');
-
-                  _showImageViewer(
-                    imageProvider: provider,
-                    isProfile: false,
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.only(left: 20, top: 40, bottom: 20),
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: _headerImageUrl != null
-                          ? NetworkImage(_headerImageUrl!)
-                          : const AssetImage('assets/images/profile_header_bg.png')
-                      as ImageProvider,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          final ImageProvider provider = _profileImageUrl != null
-                              ? NetworkImage(_profileImageUrl!)
-                              : const AssetImage('assets/images/profile.png');
-
-                          _showImageViewer(
-                            imageProvider: provider,
-                            isProfile: true,
-                          );
-                        },
-                        child: Hero(
-                          tag: 'drawer_profile_image',
-                          child: Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                              image: DecorationImage(
-                                image: _profileImageUrl != null
-                                    ? NetworkImage(_profileImageUrl!) as ImageProvider
-                                    : const AssetImage('assets/images/profile.png'),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Text(
-                        "$_userName 님",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: Colors.white,
-                          fontFamily: 'SF Pro',
-                        ),
-                      ),
-                      Text(
-                        "UID: $_userUid",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.9),
-                          fontFamily: 'SF Pro',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 12,
-                right: 12,
-                child: GestureDetector(
-                  onTap: () async {
-                    Navigator.pop(context);
-
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsScreen(),
-                      ),
-                    );
-
-                    _fetchUserInfo();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.edit_rounded,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-                ),
+  Widget _buildCommonDrawerPanel(double bottomPadding) {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topRight: Radius.circular(28),
+              bottomRight: Radius.circular(28),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x24000000),
+                blurRadius: 24,
+                offset: Offset(4, 0),
               ),
             ],
           ),
-          _buildDrawerItem(Icons.home_rounded, '홈', () => _onMenuSelect(0)),
-          _buildDrawerItem(Icons.auto_stories_rounded, '아이템 도감', () => _onMenuSelect(1)),
-          _buildDrawerItem(Icons.restaurant_menu_rounded, '요리 레시피', () => _onMenuSelect(2)),
-          _buildDrawerItem(Icons.backpack_rounded, '채집 도감', () => _onMenuSelect(3)),
-          _buildDrawerItem(Icons.pets_rounded, '동물 도감', () => _onMenuSelect(4)),
-          const Spacer(),
-          const Divider(height: 1),
-          _buildDrawerItem(Icons.settings_rounded, '설정', () async {
-            Navigator.pop(context);
+          child: Column(
+            children: [
+              Stack(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      final ImageProvider provider = _headerImageUrl != null
+                          ? NetworkImage(_headerImageUrl!)
+                          : const AssetImage('assets/images/profile_header_bg.png');
 
-            await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SettingsScreen()),
-            );
+                      _showImageViewer(
+                        imageProvider: provider,
+                        isProfile: false,
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.only(left: 20, top: 40, bottom: 20),
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(28),
+                        ),
+                        image: DecorationImage(
+                          image: _headerImageUrl != null
+                              ? NetworkImage(_headerImageUrl!)
+                              : const AssetImage('assets/images/profile_header_bg.png')
+                          as ImageProvider,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              final ImageProvider provider = _profileImageUrl != null
+                                  ? NetworkImage(_profileImageUrl!)
+                                  : const AssetImage('assets/images/profile.png');
 
-            _fetchUserInfo();
-          }),
-          SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
-        ],
+                              _showImageViewer(
+                                imageProvider: provider,
+                                isProfile: true,
+                              );
+                            },
+                            child: Hero(
+                              tag: 'drawer_profile_image',
+                              child: Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                  image: DecorationImage(
+                                    image: _profileImageUrl != null
+                                        ? NetworkImage(_profileImageUrl!) as ImageProvider
+                                        : const AssetImage('assets/images/profile.png'),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+                          Text(
+                            "$_userName 님",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: Colors.white,
+                              fontFamily: 'SF Pro',
+                            ),
+                          ),
+                          Text(
+                            "UID: $_userUid",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.9),
+                              fontFamily: 'SF Pro',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: () async {
+                        await _closeDrawerSmooth();
+                        if (!mounted) return;
+
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SettingsScreen(),
+                          ),
+                        );
+
+                        _fetchUserInfo();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.edit_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              _buildDrawerItem(Icons.home_rounded, '홈', () => _onMenuSelect(0)),
+              _buildDrawerItem(Icons.auto_stories_rounded, '아이템 도감', () => _onMenuSelect(1)),
+              _buildDrawerItem(Icons.restaurant_menu_rounded, '요리 레시피', () => _onMenuSelect(2)),
+              _buildDrawerItem(Icons.backpack_rounded, '채집 도감', () => _onMenuSelect(3)),
+              _buildDrawerItem(Icons.pets_rounded, '동물 도감', () => _onMenuSelect(4)),
+              const Spacer(),
+              const Divider(height: 1),
+              _buildDrawerItem(Icons.settings_rounded, '설정', () async {
+                await _closeDrawerSmooth();
+                if (!mounted) return;
+
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                );
+
+                _fetchUserInfo();
+              }),
+              SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -694,19 +1093,40 @@ class _MainWrapperState extends State<MainWrapper> {
   Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
       leading: Icon(icon, color: const Color(0xFF636363), size: 22),
-      title: Text(title, style: const TextStyle(color: Color(0xFF636363), fontSize: 16, fontWeight: FontWeight.w500, fontFamily: 'SF Pro')),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Color(0xFF636363),
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          fontFamily: 'SF Pro',
+        ),
+      ),
       onTap: onTap,
     );
   }
 
-  // --- [UI] 하단 내비게이션 바 ---
   Widget _buildBottomNavigationBar(double bottomPadding) {
     return Container(
       width: double.infinity,
-      // 시스템 바 높이 반영하여 전체 높이 조절
       height: bottomPadding > 0 ? 85 + bottomPadding : 85,
       padding: EdgeInsets.only(bottom: bottomPadding > 0 ? bottomPadding : 10),
-      decoration: const ShapeDecoration(color: Color(0xEAFFFDF9), shape: RoundedRectangleBorder(borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))), shadows: [BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, -5))]),
+      decoration: const ShapeDecoration(
+        color: Color(0xEAFFFDF9),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        shadows: [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 10,
+            offset: Offset(0, -5),
+          ),
+        ],
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
@@ -722,20 +1142,52 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Widget _buildNavItem(int index, String fileName, String label) {
     bool isSelected = _selectedIndex == index;
-    String assetPath = isSelected ? 'assets/icons/ic_${fileName}_active.svg' : 'assets/icons/ic_$fileName.svg';
+    String assetPath = isSelected
+        ? 'assets/icons/ic_${fileName}_active.svg'
+        : 'assets/icons/ic_$fileName.svg';
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _selectedIndex = index),
+      onTap: () => setState(() {
+        _selectedIndex = index;
+        _pendingSearchItem = null;
+        _searchResetSignal++;
+      }),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: isSelected ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(40), border: isSelected ? Border.all(color: Colors.black.withOpacity(0.1), width: 0.8) : null),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(40),
+          border: isSelected
+              ? Border.all(
+            color: Colors.black.withOpacity(0.1),
+            width: 0.8,
+          )
+              : null,
+        ),
         child: Column(
-          mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SvgPicture.asset(assetPath, width: 24, height: 24, colorFilter: isSelected ? null : const ColorFilter.mode(Colors.black38, BlendMode.srcIn)),
+            SvgPicture.asset(
+              assetPath,
+              width: 24,
+              height: 24,
+              colorFilter: isSelected
+                  ? null
+                  : const ColorFilter.mode(Colors.black38, BlendMode.srcIn),
+            ),
             const SizedBox(height: 4),
-            Text(label, style: TextStyle(fontSize: 10, color: isSelected ? Colors.black : Colors.black38, fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, fontFamily: 'SF Pro')),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: isSelected ? Colors.black : Colors.black38,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontFamily: 'SF Pro',
+              ),
+            ),
           ],
         ),
       ),

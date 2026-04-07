@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'models/global_search_item.dart';
 import 'setting_screen.dart';
 
 class Gourmet {
@@ -82,7 +82,15 @@ class CookingMaterialItem {
 
 class CookingScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
-  const CookingScreen({super.key, this.openDrawer});
+  final GlobalSearchItem? initialSearchItem;
+  final int resetSearchSignal;
+
+  const CookingScreen({
+    super.key,
+    this.openDrawer,
+    this.initialSearchItem,
+    this.resetSearchSignal = 0,
+  });
 
   @override
   State<CookingScreen> createState() => _CookingScreenState();
@@ -94,6 +102,12 @@ class _CookingScreenState extends State<CookingScreen>
 
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+
+  final ScrollController _recipeScrollController = ScrollController();
+  final ScrollController _materialScrollController = ScrollController();
+
+  String? _highlightedId;
+  GlobalSearchItem? _pendingSearchItem;
 
   String _selectedFilter = '전체';
   String _searchQuery = '';
@@ -138,12 +152,37 @@ class _CookingScreenState extends State<CookingScreen>
     _loadFavorites();
     _fetchRecipeData();
     _loadTemporaryMaterialData();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.initialSearchItem != null) {
+        _pendingSearchItem = widget.initialSearchItem;
+        _applySearchItem(widget.initialSearchItem!);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant CookingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.initialSearchItem != null &&
+        widget.initialSearchItem != oldWidget.initialSearchItem) {
+      _pendingSearchItem = widget.initialSearchItem;
+      _applySearchItem(widget.initialSearchItem!);
+      return;
+    }
+
+    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
+      _clearSearchState();
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
+    _recipeScrollController.dispose();
+    _materialScrollController.dispose();
     super.dispose();
   }
 
@@ -185,10 +224,133 @@ class _CookingScreenState extends State<CookingScreen>
     }
     setState(() => _isRecipeLoading = false);
     _applyFilters();
+
+    if (_pendingSearchItem != null) {
+      _applySearchItem(_pendingSearchItem!);
+    }
   }
 
   Future<void> _refreshMaterialData() async {
     _loadTemporaryMaterialData();
+  }
+
+
+
+  String _normalizeSearchTargetId(String rawId) {
+    if (rawId.startsWith('gourmet_')) {
+      return rawId.replaceFirst('gourmet_', '');
+    }
+    if (rawId.startsWith('material_')) {
+      return rawId.replaceFirst('material_', '');
+    }
+    return rawId;
+  }
+
+  void _clearHighlightLater() {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() {
+        _highlightedId = null;
+      });
+    });
+  }
+
+  void _scrollToTopForCookingTab(CookingTabType tab) {
+    final controller = tab == CookingTabType.material
+        ? _materialScrollController
+        : _recipeScrollController;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !controller.hasClients) return;
+
+      controller.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  void _moveSelectedItemToTop(GlobalSearchItem item) {
+    if (item.cookingTab == null) return;
+
+    final normalizedId = _normalizeSearchTargetId(item.id);
+
+    void moveToTop<T>(List<T> list, bool Function(T e) match) {
+      final index = list.indexWhere(match);
+      if (index <= 0) return;
+      final selected = list.removeAt(index);
+      list.insert(0, selected);
+    }
+
+    switch (item.cookingTab!) {
+      case CookingTabType.recipe:
+        moveToTop<Gourmet>(
+          _visibleRecipeList,
+              (e) => e.id.toString() == normalizedId,
+        );
+        break;
+      case CookingTabType.material:
+        moveToTop<CookingMaterialItem>(
+          _visibleMaterialList,
+              (e) => e.id.toString() == normalizedId,
+        );
+        break;
+    }
+  }
+
+  void _applySearchItem(GlobalSearchItem item) {
+    _pendingSearchItem = item;
+
+    final normalizedId = _normalizeSearchTargetId(item.id);
+
+    // 🔥 검색 결과 클릭 시 검색창에는 아무 것도 넣지 않음
+    _searchController.clear();
+    _searchQuery = '';
+
+    if (item.cookingTab == CookingTabType.material) {
+      _tabController.animateTo(1);
+    } else {
+      _tabController.animateTo(0);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _applyFilters();
+      _moveSelectedItemToTop(item);
+
+      setState(() {
+        _highlightedId = normalizedId;
+      });
+
+      _scrollToTopForCookingTab(item.cookingTab ?? CookingTabType.recipe);
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        if (_highlightedId == normalizedId) {
+          setState(() {
+            _highlightedId = null;
+          });
+        }
+      });
+    });
+  }
+
+  void _clearSearchState() {
+    _pendingSearchItem = null;
+
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+    }
+
+    setState(() {
+      _searchQuery = '';
+      _highlightedId = null;
+      _selectedFilter = '전체';
+    });
+
+    _applyFilters();
   }
 
   void _loadTemporaryMaterialData() {
@@ -244,6 +406,10 @@ class _CookingScreenState extends State<CookingScreen>
     ];
     _isMaterialLoading = false;
     _applyFilters();
+
+    if (_pendingSearchItem != null) {
+      _applySearchItem(_pendingSearchItem!);
+    }
   }
 
   void _onSortSelected(String sort) {
@@ -254,15 +420,27 @@ class _CookingScreenState extends State<CookingScreen>
   }
 
   void _applyFilters() {
-    final query = _searchQuery;
+    final query = _searchQuery.trim().toLowerCase();
 
     if (_tabController.index == 0) {
       List<Gourmet> temp = List.from(_allRecipeList);
 
       if (query.isNotEmpty) {
-        temp = temp
-            .where((item) => item.nameKo.toLowerCase().contains(query))
+        final tokens = query
+            .replaceAll('_', ' ')
+            .split(RegExp(r'\s+'))
+            .map((e) => e.trim().toLowerCase())
+            .where((e) => e.isNotEmpty)
             .toList();
+
+        temp = temp.where((item) {
+          final nameKo = item.nameKo.trim().toLowerCase();
+          final id = item.id.trim().replaceAll('_', ' ').toLowerCase();
+
+          return tokens.any((token) {
+            return nameKo.contains(token) || id.contains(token);
+          });
+        }).toList();
       }
 
       if (_selectedFilter == '일반 레시피') {
@@ -275,14 +453,30 @@ class _CookingScreenState extends State<CookingScreen>
 
       setState(() {
         _visibleRecipeList = temp;
+
+        if (_pendingSearchItem != null) {
+          _moveSelectedItemToTop(_pendingSearchItem!);
+        }
       });
     } else {
       List<CookingMaterialItem> temp = List.from(_allMaterialList);
 
       if (query.isNotEmpty) {
-        temp = temp
-            .where((item) => item.nameKo.toLowerCase().contains(query))
+        final tokens = query
+            .replaceAll('_', ' ')
+            .split(RegExp(r'\s+'))
+            .map((e) => e.trim().toLowerCase())
+            .where((e) => e.isNotEmpty)
             .toList();
+
+        temp = temp.where((item) {
+          final nameKo = item.nameKo.trim().toLowerCase();
+          final id = item.id.trim().replaceAll('_', ' ').toLowerCase();
+
+          return tokens.any((token) {
+            return nameKo.contains(token) || id.contains(token);
+          });
+        }).toList();
       }
 
       if (_selectedFilter == '작물') {
@@ -295,6 +489,10 @@ class _CookingScreenState extends State<CookingScreen>
 
       setState(() {
         _visibleMaterialList = temp;
+
+        if (_pendingSearchItem != null) {
+          _moveSelectedItemToTop(_pendingSearchItem!);
+        }
       });
     }
   }
@@ -704,6 +902,7 @@ class _CookingScreenState extends State<CookingScreen>
     return RefreshIndicator(
       onRefresh: _fetchRecipeData,
       child: SingleChildScrollView(
+        controller: _recipeScrollController,
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
         ),
@@ -755,6 +954,7 @@ class _CookingScreenState extends State<CookingScreen>
     return RefreshIndicator(
       onRefresh: _refreshMaterialData,
       child: SingleChildScrollView(
+        controller: _materialScrollController,
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
         ),
@@ -779,290 +979,146 @@ class _CookingScreenState extends State<CookingScreen>
   Widget _buildRecipeCard(Gourmet item) {
     final isFavorite = _favoriteIds.contains(item.id);
     final priceText = _pricePreview(item.prices);
+    final isHighlighted = _highlightedId == item.id.toString();
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
       decoration: ShapeDecoration(
-        color: Colors.white.withOpacity(0.85),
+        color: isHighlighted
+            ? const Color(0xFFFFF4D8)
+            : Colors.white.withOpacity(0.85),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isHighlighted
+                ? const Color(0xFFFF9E58)
+                : Colors.transparent,
+            width: 1.6,
+          ),
         ),
         shadows: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: isHighlighted
+                ? const Color(0xFFFFC785).withOpacity(0.45)
+                : Colors.black.withOpacity(0.06),
             spreadRadius: 1.0,
-            blurRadius: 14,
+            blurRadius: isHighlighted ? 18 : 14,
             offset: const Offset(0, 0),
           ),
         ],
       ),
       child: SizedBox(
-        height: 138,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              alignment: Alignment.center,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.black.withOpacity(0.05)),
-                ),
-                child: item.image != null && item.image!.isNotEmpty
-                    ? ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: Image.asset(
-                    'assets/${item.image!}',
-                    fit: BoxFit.contain,
-                    errorBuilder: (c, e, s) =>
-                    const Icon(Icons.restaurant_menu, color: Colors.grey),
+        height: 148,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.center,
+                child: Container(
+                  width: 116,
+                  height: 116,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.black.withOpacity(0.05)),
                   ),
-                )
-                    : const Icon(Icons.restaurant_menu, color: Colors.grey),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                            Text(
-                              _displayRecipeName(item),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF333333),
-                                height: 1.1,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 4,
-                              runSpacing: 4,
-                              children: [
-                                _buildSmallTag('요리 ${item.level}레벨'),
-                                if (_isEventRecipe(item))
-                                  _buildSmallTag('이벤트', isEvent: true),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(30),
-                        onTap: () => _toggleFavorite(item.id),
-                        child: Padding(
-                          padding: const EdgeInsets.all(2),
-                          child: Icon(
-                            isFavorite ? Icons.favorite : Icons.favorite_border,
-                            size: 24,
-                            color: isFavorite
-                                ? const Color(0xFFFF8E7C)
-                                : const Color(0xFFD9D9D9),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _buildIngredientIcons(item.ingredients),
-                    ),
-                  ),
-                  const Spacer(),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: PopupMenuButton<String>(
-                      itemBuilder: (context) => _buildPriceMenuItems(item.prices),
-                      offset: const Offset(0, 28),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            constraints: const BoxConstraints(minWidth: 46),
-                            height: 20,
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: const Color(0xFFFF7A65).withOpacity(0.5),
-                              ),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text(
-                              '판매가',
-                              style: TextStyle(
-                                color: Color(0xFFFF7A65),
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                height: 1.0,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            priceText,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF333333),
-                              height: 1.0,
-                            ),
-                          ),
-                          const SizedBox(width: 2),
-                          const Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 16,
-                            color: Color(0xFF616161),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMaterialCard(CookingMaterialItem item) {
-    final isFavorite = _favoriteIds.contains(item.id);
-    final priceText = _pricePreview(item.prices);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: ShapeDecoration(
-        color: Colors.white.withOpacity(0.85),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        shadows: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            spreadRadius: 1.0,
-            blurRadius: 14,
-            offset: const Offset(0, 0),
-          ),
-        ],
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              alignment: Alignment.center,
-              child: Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.black.withOpacity(0.05)),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
                   child: item.image != null && item.image!.isNotEmpty
-                      ? Image.asset(
-                    item.image!,
-                    fit: BoxFit.contain,
-                    errorBuilder: (c, e, s) =>
-                    const Icon(Icons.spa_outlined, color: Colors.grey),
+                      ? ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.asset(
+                      'assets/${item.image!}',
+                      fit: BoxFit.contain,
+                      errorBuilder: (c, e, s) => const Icon(
+                        Icons.restaurant_menu,
+                        color: Colors.grey,
+                      ),
+                    ),
                   )
-                      : const Icon(Icons.spa_outlined, color: Colors.grey),
+                      : const Icon(
+                    Icons.restaurant_menu,
+                    color: Colors.grey,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.nameKo,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF333333),
-                                height: 1.1,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 4,
-                              runSpacing: 4,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildSmallTag('요리 ${item.level}레벨'),
-                                _buildSmallTag(
-                                  item.isCultivable ? '작물' : '상점구매',
-                                  isEvent: !item.isCultivable,
+                                Text(
+                                  _displayRecipeName(item),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF333333),
+                                    height: 1.1,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 4,
+                                  runSpacing: 4,
+                                  children: [
+                                    _buildSmallTag('요리 ${item.level}레벨'),
+                                    if (_isEventRecipe(item))
+                                      _buildSmallTag('이벤트', isEvent: true),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(30),
-                        onTap: () => _toggleFavorite(item.id),
-                        child: Padding(
-                          padding: const EdgeInsets.all(2),
-                          child: Icon(
-                            isFavorite ? Icons.favorite : Icons.favorite_border,
-                            size: 24,
-                            color: isFavorite
-                                ? const Color(0xFFFF8E7C)
-                                : const Color(0xFFD9D9D9),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      PopupMenuButton<String>(
-                        itemBuilder: (context) => _buildPriceMenuItems(item.prices),
-                        offset: const Offset(0, 28),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                        const SizedBox(width: 10),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(30),
+                          onTap: () => _toggleFavorite(item.id),
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Icon(
+                              isFavorite ? Icons.favorite : Icons.favorite_border,
+                              size: 24,
+                              color: isFavorite
+                                  ? const Color(0xFFFF8E7C)
+                                  : const Color(0xFFD9D9D9),
+                            ),
+                          ),
                         ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _buildIngredientIcons(item.ingredients),
+                      ),
+                    ),
+                    const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: PopupMenuButton<String>(
+                          itemBuilder: (context) =>
+                              _buildPriceMenuItems(item.prices),
+                          offset: const Offset(0, 28),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -1070,10 +1126,12 @@ class _CookingScreenState extends State<CookingScreen>
                                 constraints: const BoxConstraints(minWidth: 46),
                                 height: 20,
                                 alignment: Alignment.center,
-                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                padding:
+                                const EdgeInsets.symmetric(horizontal: 6),
                                 decoration: BoxDecoration(
                                   border: Border.all(
-                                    color: const Color(0xFFFF7A65).withOpacity(0.5),
+                                    color: const Color(0xFFFF7A65)
+                                        .withOpacity(0.5),
                                   ),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
@@ -1107,12 +1165,212 @@ class _CookingScreenState extends State<CookingScreen>
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaterialCard(CookingMaterialItem item) {
+    final isFavorite = _favoriteIds.contains(item.id);
+    final priceText = _pricePreview(item.prices);
+    final isHighlighted = _highlightedId == item.id.toString();
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: ShapeDecoration(
+        color: isHighlighted
+            ? const Color(0xFFFFF4D8)
+            : Colors.white.withOpacity(0.85),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isHighlighted
+                ? const Color(0xFFFF9E58)
+                : Colors.transparent,
+            width: 1.6,
+          ),
+        ),
+        shadows: [
+          BoxShadow(
+            color: isHighlighted
+                ? const Color(0xFFFFC785).withOpacity(0.45)
+                : Colors.black.withOpacity(0.06),
+            spreadRadius: 1.0,
+            blurRadius: isHighlighted ? 18 : 14,
+            offset: const Offset(0, 0),
+          ),
+        ],
+      ),
+      child: IntrinsicHeight(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.center,
+                child: Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.black.withOpacity(0.05)),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: item.image != null && item.image!.isNotEmpty
+                        ? Image.asset(
+                      item.image!,
+                      fit: BoxFit.contain,
+                      errorBuilder: (c, e, s) => const Icon(
+                        Icons.spa_outlined,
+                        color: Colors.grey,
+                      ),
+                    )
+                        : const Icon(
+                      Icons.spa_outlined,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.nameKo,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF333333),
+                                    height: 1.1,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 4,
+                                  runSpacing: 4,
+                                  children: [
+                                    _buildSmallTag('요리 ${item.level}레벨'),
+                                    _buildSmallTag(
+                                      item.isCultivable ? '작물' : '상점구매',
+                                      isEvent: !item.isCultivable,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(30),
+                          onTap: () => _toggleFavorite(item.id),
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Icon(
+                              isFavorite ? Icons.favorite : Icons.favorite_border,
+                              size: 24,
+                              color: isFavorite
+                                  ? const Color(0xFFFF8E7C)
+                                  : const Color(0xFFD9D9D9),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          PopupMenuButton<String>(
+                            itemBuilder: (context) =>
+                                _buildPriceMenuItems(item.prices),
+                            offset: const Offset(0, 28),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    constraints:
+                                    const BoxConstraints(minWidth: 46),
+                                    height: 20,
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: const Color(0xFFFF7A65)
+                                            .withOpacity(0.5),
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text(
+                                      '판매가',
+                                      style: TextStyle(
+                                        color: Color(0xFFFF7A65),
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        height: 1.0,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    priceText,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF333333),
+                                      height: 1.0,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  const Icon(
+                                    Icons.keyboard_arrow_down,
+                                    size: 16,
+                                    color: Color(0xFF616161),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

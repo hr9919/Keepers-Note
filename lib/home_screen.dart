@@ -5,7 +5,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter/services.dart';
 import 'data/place_labels.dart';
 import 'models/place_label.dart';
 import 'models/resource_model.dart';
@@ -22,6 +21,7 @@ class HomeScreen extends StatefulWidget {
   final Function(int)? onTodoToggle;
   final VoidCallback? onResetAll;
   final Future<void> Function()? onRefresh;
+  final void Function(GlobalSearchItem item)? onSearchItemSelected;
 
   const HomeScreen({
     super.key,
@@ -31,7 +31,7 @@ class HomeScreen extends StatefulWidget {
     this.onTodoToggle,
     this.onResetAll,
     this.onRefresh,
-    final void Function(GlobalSearchItem item)? onSearchItemSelected;
+    this.onSearchItemSelected,
   });
 
   @override
@@ -58,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  final void Function(GlobalSearchItem item)? onSearchItemSelected;
 
   List<GlobalSearchItem> _allSearchItems = [];
   List<GlobalSearchItem> _searchSuggestions = [];
@@ -92,7 +91,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _voterId = "";
 
+  int? _pressedEventIndex;
+  bool _isPreviewFilterBarPressed = false;
   bool _isTodoCardPressed = false;
+  bool _isInnerTap = false;
+  int? _pressedTodoIndex;
 
   final TransformationController _previewTransformController =
   TransformationController();
@@ -280,6 +283,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _handleTodoCardTap() async {
+    if (_isInnerTap) return;
+
+    setState(() {
+      _isTodoCardPressed = true;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 85));
+
+    if (!mounted) return;
+
+    setState(() {
+      _isTodoCardPressed = false;
+    });
+
+    widget.openEndDrawer?.call();
+  }
+
   Future<void> _loadGlobalSearchItems() async {
     setState(() => _isSearchLoading = true);
     _allSearchItems = await GlobalSearchService.loadAllItems();
@@ -396,111 +417,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       setState(() {});
     }
-  }
-
-  Future<bool> _showExitConfirmationDialog(BuildContext context) async {
-    return await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              boxShadow: _kCommonShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ❌ 상단 핸들 제거됨
-
-                const Text(
-                  '앱 종료',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  '키퍼노트를 종료하시겠습니까?',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: Color(0xFF64748B),
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop(false);
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF475569),
-                          side: const BorderSide(
-                            color: Color(0xFFD7DEE7),
-                          ),
-                          minimumSize: const Size.fromHeight(40),
-                          // 🔥 줄임
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: const Text(
-                          '취소',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop(true);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF8E7C),
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size.fromHeight(40),
-                          // 🔥 줄임
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          '종료',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    ) ??
-        false;
   }
 
   Future<void> _loadMapPreviewResources() async {
@@ -1185,68 +1101,57 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        final shouldExit = await _showExitConfirmationDialog(context);
-
-        if (shouldExit) {
-          await SystemNavigator.pop();
-        }
-
-        return false;
-      },
-      child: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/bg_gradient.png'),
-            fit: BoxFit.cover,
-          ),
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        image: DecorationImage(
+          image: AssetImage('assets/images/bg_gradient.png'),
+          fit: BoxFit.cover,
         ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildCustomAppBar(context),
-              _buildSearchBar(),
-              Expanded(
-                child: RefreshIndicator(
-                  color: const Color(0xFFFF8E7C),
-                  backgroundColor: Colors.white,
-                  onRefresh: () async {
-                    if (widget.onRefresh != null) {
-                      await widget.onRefresh!();
-                    }
-                    await _loadMapPreviewResources();
-                  },
-                  child: SingleChildScrollView(
-                    physics: _shouldLockHomeScroll
-                        ? const NeverScrollableScrollPhysics()
-                        : const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics(),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(0, 14, 0, 120),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 16),
-                        _buildSectionTitle('날씨 정보'),
-                        const SizedBox(height: 8),
-                        _buildWeatherCard(),
-                        const SizedBox(height: 24),
-                        _buildTodoSection(),
-                        const SizedBox(height: 24),
-                        _buildMapSection(context),
-                        const SizedBox(height: 24),
-                        _buildEventSection(context),
-                        const SizedBox(height: 70),
-                      ],
-                    ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            _buildCustomAppBar(context),
+            _buildSearchBar(),
+            Expanded(
+              child: RefreshIndicator(
+                color: const Color(0xFFFF8E7C),
+                backgroundColor: Colors.white,
+                onRefresh: () async {
+                  if (widget.onRefresh != null) {
+                    await widget.onRefresh!();
+                  }
+                  await _loadMapPreviewResources();
+                },
+                child: SingleChildScrollView(
+                  physics: _shouldLockHomeScroll
+                      ? const NeverScrollableScrollPhysics()
+                      : const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(0, 14, 0, 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+                      _buildSectionTitle('날씨 정보'),
+                      const SizedBox(height: 8),
+                      _buildWeatherCard(),
+                      const SizedBox(height: 24),
+                      _buildTodoSection(),
+                      const SizedBox(height: 24),
+                      _buildMapSection(context),
+                      const SizedBox(height: 24),
+                      _buildEventSection(context),
+                      const SizedBox(height: 70),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1417,102 +1322,128 @@ class _HomeScreenState extends State<HomeScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
+            behavior: HitTestBehavior.deferToChild,
             onTapDown: (_) {
+              if (_isInnerTap) return;
               setState(() {
                 _isTodoCardPressed = true;
               });
             },
             onTapCancel: () {
+              if (!mounted) return;
               setState(() {
                 _isTodoCardPressed = false;
               });
             },
             onTapUp: (_) async {
+              if (_isInnerTap) return;
+
+              // 손을 뗀 뒤에도 잠깐 눌림 유지
+              await Future.delayed(const Duration(milliseconds: 95));
+              if (!mounted) return;
+
               setState(() {
                 _isTodoCardPressed = false;
               });
 
-              await Future.delayed(const Duration(milliseconds: 70));
+              // 끊기지 않게 아주 조금 더 텀
+              await Future.delayed(const Duration(milliseconds: 35));
+              if (!mounted) return;
+
               widget.openEndDrawer?.call();
             },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 90),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: _kCommonShadow,
-                color: _isTodoCardPressed
-                    ? const Color(0xFFF3F4F6)
-                    : Colors.white,
-              ),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Stack(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(right: 28),
-                      child: widget.todoList.isEmpty
-                          ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 4),
-                        child: Text(
-                          "오늘의 할 일을 등록해보세요! 🌿",
-                          style: TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+            child: Stack(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 70),
+                  padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+                  decoration: ShapeDecoration(
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    shadows: _kCommonShadow,
+                  ),
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 28),
+                        child: widget.todoList.isEmpty
+                            ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            "오늘의 할 일을 등록해보세요! 🌿",
+                            style: TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      )
-                          : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ...List.generate(displayCount, (index) {
-                            final todo = widget.todoList[index];
-
-                            return Padding(
-                              padding: EdgeInsets.only(
-                                bottom: index == displayCount - 1 ? 0 : 10,
-                              ),
-                              child: _buildTodoRow(
-                                text: todo['taskName'] ?? "",
-                                isDone: todo['completed'] ?? false,
-                                onCheckTap: () => widget.onTodoToggle?.call(index),
-                              ),
-                            );
-                          }),
-                          if (widget.todoList.length > displayLimit)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4, bottom: 2),
-                              child: Text(
-                                "+ ${widget.todoList.length - displayLimit}개 더보기",
-                                style: const TextStyle(
-                                  fontSize: 11.5,
-                                  color: Color(0xFFFF8E7C),
-                                  fontWeight: FontWeight.w700,
+                        )
+                            : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ...List.generate(displayCount, (index) {
+                              final todo = widget.todoList[index];
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: index == displayCount - 1 ? 0 : 10,
+                                ),
+                                child: _buildTodoRow(
+                                  index: index,
+                                  text: todo['taskName'] ?? "",
+                                  isDone: todo['completed'] ?? false,
+                                  onCheckTap: () =>
+                                      widget.onTodoToggle?.call(index),
+                                ),
+                              );
+                            }),
+                            if (widget.todoList.length > displayLimit)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4, bottom: 2),
+                                child: Text(
+                                  "+ ${widget.todoList.length - displayLimit}개 더보기",
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    color: Color(0xFFFF8E7C),
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Padding(
-                        padding: EdgeInsets.all(2),
-                        child: Icon(
-                          Icons.chevron_right_rounded,
-                          size: 20,
-                          color: Color(0xFFCBD5E1),
+                      const Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Padding(
+                          padding: EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: Color(0xFFCBD5E1),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 90),
+                      opacity: _isTodoCardPressed ? 1.0 : 0.0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF334155).withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(18),
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
@@ -1520,164 +1451,118 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  double _getTextWidth(String text) {
-    final TextPainter textPainter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: const TextStyle(
-          fontSize: 13.5,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      maxLines: 1,
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    return textPainter.width;
-  }
-
   Widget _buildTodoRow({
+    required int index,
     required String text,
     required bool isDone,
     required VoidCallback onCheckTap,
   }) {
-    return Row(
-      children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onCheckTap,
-          child: Padding(
-            padding: const EdgeInsets.only(right: 10, top: 6, bottom: 6),
-            child: Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: isDone
-                    ? const Color(0xFFFF8E7C)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: isDone
-                      ? const Color(0xFFFF8E7C)
-                      : const Color(0xFFE2E8F0),
-                ),
-              ),
-              child: isDone
-                  ? const Icon(
-                Icons.check,
-                size: 12,
-                color: Colors.white,
-              )
-                  : null,
-            ),
-          ),
-        ),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            splashColor: Colors.black.withOpacity(0.06),
-            highlightColor: Colors.black.withOpacity(0.03),
-            onTap: onCheckTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Stack(
-                alignment: Alignment.centerLeft,
-                children: [
-                  Text(
-                    text,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: isDone
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF111827),
-                    ),
-                  ),
-                  if (isDone)
-                    Positioned.fill(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          height: 1.2,
-                          width: _getTextWidth(text),
-                          color: const Color(0xFF94A3B8).withOpacity(0.6),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+    final bool isPressed = _pressedTodoIndex == index;
 
-  Widget _buildTodoItemSummary(
-      String text,
-      bool isDone,
-      VoidCallback onTap,
-      ) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            children: [
-              Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: isDone
-                      ? const Color(0xFFFF8E7C)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) {
+          _isInnerTap = true;
+          setState(() {
+            _pressedTodoIndex = index;
+            _isTodoCardPressed = false;
+          });
+        },
+        onTapCancel: () {
+          setState(() {
+            if (_pressedTodoIndex == index) {
+              _pressedTodoIndex = null;
+            }
+          });
+          Future.microtask(() {
+            _isInnerTap = false;
+          });
+        },
+        onTapUp: (_) async {
+          await Future.delayed(const Duration(milliseconds: 45));
+
+          if (!mounted) return;
+
+          setState(() {
+            if (_pressedTodoIndex == index) {
+              _pressedTodoIndex = null;
+            }
+          });
+
+          onCheckTap();
+
+          Future.microtask(() {
+            _isInnerTap = false;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: isPressed ? const Color(0xFFF8FAFC) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IntrinsicWidth(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 18,
+                  height: 18,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
                     color: isDone
                         ? const Color(0xFFFF8E7C)
-                        : const Color(0xFFE2E8F0),
-                  ),
-                ),
-                child: isDone
-                    ? const Icon(
-                  Icons.check,
-                  size: 12,
-                  color: Colors.white,
-                )
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Text(
-                      text,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: isDone
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF111827),
-                      ),
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isDone
+                          ? const Color(0xFFFF8E7C)
+                          : const Color(0xFFE2E8F0),
                     ),
-                    if (isDone)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          height: 1.2,
-                          color: const Color(0xFF94A3B8).withOpacity(0.6),
+                  ),
+                  child: isDone
+                      ? const Icon(
+                    Icons.check,
+                    size: 12,
+                    color: Colors.white,
+                  )
+                      : null,
+                ),
+                const SizedBox(width: 10),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 1),
+                  child: Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          height: 1.0,
+                          fontWeight: FontWeight.w500,
+                          color: isDone
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF111827),
                         ),
                       ),
-                  ],
+                      if (isDone)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            height: 1.1,
+                            color: const Color(0xFF94A3B8).withOpacity(0.7),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1839,48 +1724,89 @@ class _HomeScreenState extends State<HomeScreen> {
                         bottom: 10,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: _showPreviewFilterPopup,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: const Color(0xFFEAECEF),
-                              ),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x10000000),
-                                  blurRadius: 8,
-                                  offset: Offset(0, 3),
+                          onTapDown: (_) {
+                            setState(() {
+                              _isPreviewFilterBarPressed = true;
+                            });
+                          },
+                          onTapCancel: () {
+                            setState(() {
+                              _isPreviewFilterBarPressed = false;
+                            });
+                          },
+                          onTapUp: (_) async {
+                            await Future.delayed(const Duration(milliseconds: 70));
+                            if (!mounted) return;
+
+                            setState(() {
+                              _isPreviewFilterBarPressed = false;
+                            });
+
+                            await Future.delayed(const Duration(milliseconds: 20));
+                            if (!mounted) return;
+
+                            _showPreviewFilterPopup();
+                          },
+                          child: Stack(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
                                 ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    _buildPreviewCaption(),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF0F172A),
-                                      height: 1.25,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFFEAECEF),
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Color(0x10000000),
+                                      blurRadius: 8,
+                                      offset: Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _buildPreviewCaption(),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF0F172A),
+                                          height: 1.25,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Icon(
+                                      Icons.tune_rounded,
+                                      size: 18,
+                                      color: Color(0xFFFF8E7C),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 80),
+                                    opacity: _isPreviewFilterBarPressed ? 1.0 : 0.0,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF334155).withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                const Icon(
-                                  Icons.tune_rounded,
-                                  size: 18,
-                                  color: Color(0xFFFF8E7C),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -2006,17 +1932,20 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 _buildEventCard(
                   context,
+                  0,
                   'https://scontent-icn2-1.xx.fbcdn.net/v/t39.30808-6/653560105_122127351237021391_2534542623193999458_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=13d280&_nc_ohc=GJ6gMkapj0EQ7kNvwGe2VZj&_nc_oc=AdoiTg1t670K8-kTotsOj-LbC134Aq6plrE5HNZuqP7TmI07StiCU9mt_MJCAlh2YlE&_nc_zt=23&_nc_ht=scontent-icn2-1.xx&_nc_gid=cd7roSdfW4Yhunct6S5Ghg&_nc_ss=7a32e&oh=00_AfwXPj2QZt7wKp-poD2VpNQkENY9kC40PFj5WJa_DwUSZA&oe=69CE102B',
                   'https://www.facebook.com/HeartopiaKR/photos/122127351225021391/',
                   isNetworkImage: true,
                 ),
                 _buildEventCard(
                   context,
+                  1,
                   'assets/images/event_2.png',
                   'https://www.leagueoflegends.com',
                 ),
                 _buildEventCard(
                   context,
+                  2,
                   'assets/images/event_3.png',
                   'https://github.com',
                 ),
@@ -2030,20 +1959,50 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildEventCard(
       BuildContext context,
+      int index,
       String path,
       String url, {
         bool isNetworkImage = false,
       }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () async {
-          final Uri uri = Uri.parse(url);
-          if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-            debugPrint('Could not launch $url');
+    final bool isPressed = _pressedEventIndex == index;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) {
+        setState(() {
+          _pressedEventIndex = index;
+        });
+      },
+      onTapCancel: () {
+        setState(() {
+          if (_pressedEventIndex == index) {
+            _pressedEventIndex = null;
           }
-        },
+        });
+      },
+      onTapUp: (_) async {
+        await Future.delayed(const Duration(milliseconds: 80));
+
+        if (!mounted) return;
+
+        setState(() {
+          if (_pressedEventIndex == index) {
+            _pressedEventIndex = null;
+          }
+        });
+
+        await Future.delayed(const Duration(milliseconds: 20));
+
+        if (!mounted) return;
+
+        final Uri uri = Uri.parse(url);
+        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+          debugPrint('Could not launch $url');
+        }
+      },
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 90),
+        scale: isPressed ? 0.985 : 1.0,
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -2054,32 +2013,47 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(14),
-            child: isNetworkImage
-                ? Image.network(
-              path,
-              fit: BoxFit.cover,
-              errorBuilder: (c, e, s) => Container(
-                color: const Color(0xFFF8FAFC),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.broken_image_outlined,
-                  color: Color(0xFF94A3B8),
-                  size: 22,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                isNetworkImage
+                    ? Image.network(
+                  path,
+                  fit: BoxFit.cover,
+                  errorBuilder: (c, e, s) => Container(
+                    color: const Color(0xFFF8FAFC),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.broken_image_outlined,
+                      color: Color(0xFF94A3B8),
+                      size: 22,
+                    ),
+                  ),
+                )
+                    : Image.asset(
+                  path,
+                  fit: BoxFit.cover,
+                  errorBuilder: (c, e, s) => Container(
+                    color: const Color(0xFFF8FAFC),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.image_outlined,
+                      color: Color(0xFF94A3B8),
+                      size: 22,
+                    ),
+                  ),
                 ),
-              ),
-            )
-                : Image.asset(
-              path,
-              fit: BoxFit.cover,
-              errorBuilder: (c, e, s) => Container(
-                color: const Color(0xFFF8FAFC),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.image_outlined,
-                  color: Color(0xFF94A3B8),
-                  size: 22,
+
+                IgnorePointer(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 90),
+                    opacity: isPressed ? 1.0 : 0.0,
+                    child: Container(
+                      color: const Color(0xFF334155).withOpacity(0.08),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
@@ -2131,6 +2105,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSearchBar() {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -2151,8 +2126,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             child: TextField(
-              controller: _searchController, // 🔥 추가
-              focusNode: _searchFocusNode,   // 🔥 추가
+              controller: _searchController,
+              focusNode: _searchFocusNode,
               textAlignVertical: TextAlignVertical.center,
               decoration: InputDecoration(
                 isDense: true,
@@ -2174,8 +2149,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontFamily: 'SF Pro',
                 ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
-
-                // 🔥 X 버튼 (검색 지우기)
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
                   icon: const Icon(Icons.close, size: 18),
@@ -2190,7 +2163,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // 🔥 자동완성 리스트
         if (_searchSuggestions.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -2200,64 +2172,71 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: _kCommonShadow,
               ),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _searchSuggestions.length,
-                separatorBuilder: (_, __) => const Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: Color(0xFFF1F5F9),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.35,
                 ),
-                itemBuilder: (context, index) {
-                  final item = _searchSuggestions[index];
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const BouncingScrollPhysics(),
+                  keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+                  itemCount: _searchSuggestions.length,
+                  separatorBuilder: (_, __) => const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Color(0xFFF1F5F9),
+                  ),
+                  itemBuilder: (context, index) {
+                    final item = _searchSuggestions[index];
 
-                  return InkWell(
-                    onTap: () {
-                      _searchController.clear();
-                      setState(() => _searchSuggestions = []);
+                    return InkWell(
+                      onTap: () {
+                        _searchController.clear();
+                        setState(() => _searchSuggestions = []);
 
-                      widget.onSearchItemSelected?.call(item); // 🔥 핵심
-                    },
-                    child: Padding(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.asset(
-                              item.iconPath,
-                              width: 32,
-                              height: 32,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.inventory_2_outlined),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-
-                          Expanded(
-                            child: Text(
-                              item.title,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF111827),
+                        widget.onSearchItemSelected?.call(item);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.asset(
+                                item.iconPath,
+                                width: 32,
+                                height: 32,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.inventory_2_outlined),
                               ),
                             ),
-                          ),
-
-                          const Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 14,
-                            color: Color(0xFFCBD5E1),
-                          )
-                        ],
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF111827),
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 14,
+                              color: Color(0xFFCBD5E1),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ),

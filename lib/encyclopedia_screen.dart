@@ -1,24 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'setting_screen.dart';
+import 'models/global_search_item.dart';
 
 class EncyclopediaScreen extends StatefulWidget {
-  // ★ 부모(MainWrapper)가 넘겨주는 메뉴 열기 함수
   final VoidCallback? openDrawer;
-  const EncyclopediaScreen({super.key, this.openDrawer});
+  final GlobalSearchItem? initialSearchItem;
+
+  const EncyclopediaScreen({
+    super.key,
+    this.openDrawer,
+    this.initialSearchItem,
+  });
 
   @override
   State<EncyclopediaScreen> createState() => _EncyclopediaScreenState();
 }
 
-class _EncyclopediaScreenState extends State<EncyclopediaScreen> with SingleTickerProviderStateMixin {
+class _EncyclopediaScreenState extends State<EncyclopediaScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _selectedFilter = '금토리 전시회';
+  GlobalSearchItem? _pendingSearchItem;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+
+    _tabController = TabController(length: 3, vsync: this); // 기존 탭 개수로 맞춰
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.initialSearchItem != null) {
+        _pendingSearchItem = widget.initialSearchItem;
+        _applySearchItem(widget.initialSearchItem!);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant EncyclopediaScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.initialSearchItem != null &&
+        widget.initialSearchItem != oldWidget.initialSearchItem) {
+      _pendingSearchItem = widget.initialSearchItem;
+      _applySearchItem(widget.initialSearchItem!);
+    }
   }
 
   @override
@@ -279,6 +306,33 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen> with SingleTick
     );
   }
 
+  void _applySearchItem(GlobalSearchItem item) {
+    // 🔥 기본: 검색 결과 저장
+    _pendingSearchItem = item;
+
+    // 🔥 1. 탭 이동 (item 이름 기준으로 분기)
+    final title = item.title.toLowerCase();
+
+    if (title.contains('옷') || title.contains('코디')) {
+      _tabController.animateTo(0);
+    } else if (title.contains('가구')) {
+      _tabController.animateTo(1);
+    } else if (title.contains('업적')) {
+      _tabController.animateTo(2);
+    }
+
+    // 🔥 2. 필터 적용 (현재 구조에서 가능한 방식)
+    setState(() {
+      _selectedFilter = item.title;
+    });
+
+    // 🔥 3. 나중 확장용 (지금은 UI만이라 비워둠)
+    // TODO:
+    // - 실제 데이터 연결되면 여기서 리스트 필터링
+    // - 또는 특정 카드 맨 위 이동
+    // - 또는 상세 페이지 push
+  }
+
   Widget _buildFurnitureContent() => const Center(child: Text("가구 도감 준비 중"));
   Widget _buildAchievementContent() => const Center(child: Text("업적 도감 준비 중"));
 
@@ -293,3 +347,4 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen> with SingleTick
     );
   }
 }
+

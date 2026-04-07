@@ -1367,120 +1367,126 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: seaColor,
-      endDrawer: _buildFilterDrawer(),
-      body: _isLoading
-          ? const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      )
-          : LayoutBuilder(
-        builder: (context, constraints) {
-          final double mapSize = constraints.maxWidth * _baseMapWidthFactor;
-          _applyInitialTransform(constraints, mapSize);
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context);
+        return false;
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: seaColor,
+        endDrawer: _buildFilterDrawer(),
+        body: _isLoading
+            ? const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        )
+            : LayoutBuilder(
+          builder: (context, constraints) {
+            final double mapSize = constraints.maxWidth * _baseMapWidthFactor;
+            _applyInitialTransform(constraints, mapSize);
 
-          final visibleResources = _resources.where((res) {
-            final hidden = _shouldHideOtherSameTypePins(res);
+            final visibleResources = _resources.where((res) {
+              final hidden = _shouldHideOtherSameTypePins(res);
 
-            if (hidden) {
-              debugPrint('❌ HIDE ${res.id} ${res.resourceName}');
-              return false;
-            }
+              if (hidden) {
+                debugPrint('❌ HIDE ${res.id} ${res.resourceName}');
+                return false;
+              }
 
-            final visible = _isVisibleOnMap(res);
+              final visible = _isVisibleOnMap(res);
 
-            debugPrint(
-              '✅ CHECK ${res.id} ${res.resourceName} '
-                  'visible=$visible '
-                  'sameType=${res.alreadyVotedSameType} '
-                  'votedByMe=${res.votedByMe}',
-            );
+              debugPrint(
+                '✅ CHECK ${res.id} ${res.resourceName} '
+                    'visible=$visible '
+                    'sameType=${res.alreadyVotedSameType} '
+                    'votedByMe=${res.votedByMe}',
+              );
 
-            return visible;
-          }).toList();
+              return visible;
+            }).toList();
 
-          visibleResources.sort((a, b) {
-            final int aPriority = a.id == _selectedResourceId ? 1 : 0;
-            final int bPriority = b.id == _selectedResourceId ? 1 : 0;
-            return aPriority.compareTo(bPriority);
-          });
+            visibleResources.sort((a, b) {
+              final int aPriority = a.id == _selectedResourceId ? 1 : 0;
+              final int bPriority = b.id == _selectedResourceId ? 1 : 0;
+              return aPriority.compareTo(bPriority);
+            });
 
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: ClipRect(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onDoubleTapDown: (details) {
-                      _doubleTapDetails = details;
-                    },
-                    onDoubleTap: () => _handleDoubleTap(constraints, mapSize),
-                    child: InteractiveViewer(
-                      transformationController: _transformationController,
-                      minScale: _minMapScale,
-                      maxScale: _maxMapScale,
-                      panEnabled: _currentScale > _minMapScale + 0.001,
-                      constrained: false,
-                      boundaryMargin: const EdgeInsets.all(400),
-                      clipBehavior: Clip.none,
-                      onInteractionUpdate: (_) {
-                        final matrix = _transformationController.value;
-                        final newScale =
-                        _clampScale(matrix.getMaxScaleOnAxis());
-
-                        if ((newScale - _minMapScale).abs() < 0.001) {
-                          _forceCenterAtMinimumScale(constraints, mapSize);
-                          return;
-                        }
-
-                        if (newScale != _currentScale) {
-                          setState(() {
-                            _currentScale = newScale;
-                          });
-                        }
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: ClipRect(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onDoubleTapDown: (details) {
+                        _doubleTapDetails = details;
                       },
-                      onInteractionEnd: (_) {
-                        if ((_currentScale - _minMapScale).abs() < 0.001) {
-                          _forceCenterAtMinimumScale(constraints, mapSize);
-                        }
-                      },
-                      child: SizedBox(
-                        width: mapSize,
-                        height: mapSize,
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Positioned.fill(
-                              child: Image.asset(
-                                'assets/images/map_background.png',
-                                fit: BoxFit.cover,
+                      onDoubleTap: () => _handleDoubleTap(constraints, mapSize),
+                      child: InteractiveViewer(
+                        transformationController: _transformationController,
+                        minScale: _minMapScale,
+                        maxScale: _maxMapScale,
+                        panEnabled: _currentScale > _minMapScale + 0.001,
+                        constrained: false,
+                        boundaryMargin: const EdgeInsets.all(400),
+                        clipBehavior: Clip.none,
+                        onInteractionUpdate: (_) {
+                          final matrix = _transformationController.value;
+                          final newScale =
+                          _clampScale(matrix.getMaxScaleOnAxis());
+
+                          if ((newScale - _minMapScale).abs() < 0.001) {
+                            _forceCenterAtMinimumScale(constraints, mapSize);
+                            return;
+                          }
+
+                          if (newScale != _currentScale) {
+                            setState(() {
+                              _currentScale = newScale;
+                            });
+                          }
+                        },
+                        onInteractionEnd: (_) {
+                          if ((_currentScale - _minMapScale).abs() < 0.001) {
+                            _forceCenterAtMinimumScale(constraints, mapSize);
+                          }
+                        },
+                        child: SizedBox(
+                          width: mapSize,
+                          height: mapSize,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned.fill(
+                                child: Image.asset(
+                                  'assets/images/map_background.png',
+                                  fit: BoxFit.cover,
+                                ),
                               ),
-                            ),
-                            _buildPlaceLabels(mapSize),
-                            ...visibleResources
-                                .map((res) => _buildMapMarker(res, mapSize)),
-                          ],
+                              _buildPlaceLabels(mapSize),
+                              ...visibleResources
+                                  .map((res) => _buildMapMarker(res, mapSize)),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                left: 16,
-                right: 16,
-                top: MediaQuery.of(context).padding.top + 12,
-                child: _buildFloatingMapHeader(),
-              ),
-              Positioned(
-                right: 16,
-                bottom: 24,
-                child: _buildZoomButtons(constraints, mapSize),
-              ),
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  top: MediaQuery.of(context).padding.top + 12,
+                  child: _buildFloatingMapHeader(),
+                ),
+            Positioned(
+            right: 16,
+            bottom: 24,
+            child: _buildZoomButtons(constraints, mapSize),
+            ),
             ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
