@@ -22,7 +22,6 @@ class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _todoController = TextEditingController();
-
   // --- 유저 및 투두 데이터 ---
   String _userName = "로그인 중...";
   String _userUid = "";
@@ -124,7 +123,9 @@ class _MainWrapperState extends State<MainWrapper> {
                   (task['isCompleted'] == true ||
                       task['isCompleted'] == 1 ||
                       task['isCompleted'].toString().contains('1')),
-              "isSystem": task['isSystem'] ?? false
+              "isSystem": (task['isSystem'] == true ||
+                  task['isSystem'] == 1 ||
+                  task['isSystem'].toString().contains('1')),
             }).toList();
           });
           debugPrint("서버 동기화 완료");
@@ -401,17 +402,38 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Widget _buildTodoTile(Map<String, dynamic> todo, int index) {
     bool isDone = todo['completed'];
+
+    final bool isDefaultTask = [
+      "가게 판매 품목 확인",
+      "그자리 참나무 파밍",
+      "완벽한 형광석 채집",
+      "작물에 물 주기",
+    ].contains(todo['taskName']);
+
     return GestureDetector(
       onTap: () => _toggleTodo(index),
       behavior: HitTestBehavior.opaque,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 5),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+            ),
+          ],
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              Icon(isDone ? Icons.check_circle : Icons.circle_outlined, color: isDone ? const Color(0xFFFF8E7C) : Colors.grey[300], size: 22),
+              Icon(
+                isDone ? Icons.check_circle : Icons.circle_outlined,
+                color: isDone ? const Color(0xFFFF8E7C) : Colors.grey[300],
+                size: 22,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Align(
@@ -420,22 +442,39 @@ class _MainWrapperState extends State<MainWrapper> {
                     child: Stack(
                       alignment: Alignment.centerLeft,
                       children: [
-                        Text(todo['taskName'], style: TextStyle(fontSize: 14, fontFamily: 'SF Pro', color: isDone ? Colors.grey.withOpacity(0.6) : Colors.black87)),
+                        Text(
+                          todo['taskName'],
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontFamily: 'SF Pro',
+                            color: isDone
+                                ? Colors.grey.withOpacity(0.6)
+                                : Colors.black87,
+                          ),
+                        ),
                         if (isDone)
                           Positioned(
-                            left: 0, right: 0,
-                            child: Container(height: 1.2, color: Colors.grey.withOpacity(0.5)),
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              height: 1.2,
+                              color: Colors.grey.withOpacity(0.5),
+                            ),
                           ),
                       ],
                     ),
                   ),
                 ),
               ),
-              if (todo['isSystem'] == false)
+              if (todo['isSystem'] != true && !isDefaultTask)
                 IconButton(
                   constraints: const BoxConstraints(),
                   padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                  icon: const Icon(
+                    Icons.close,
+                    size: 18,
+                    color: Colors.grey,
+                  ),
                   onPressed: () => _deleteTodo(index),
                 ),
             ],

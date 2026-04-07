@@ -38,7 +38,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Timer? _sixAMTimer;
 
-  List<String> _getDistinctPreviewResourceKeysByCategory(List<String> categories) {
+  List<String> _getDistinctPreviewResourceKeysByCategory(
+      List<String> categories) {
     return _allPreviewCandidates
         .where((res) => categories.contains(res.category))
         .where((res) => res.category != 'npc' && res.category != 'animal')
@@ -69,7 +70,8 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         _previewEnabledResources.add(resourceName);
       }
-      _mapPreviewResources = _getFilteredPreviewResources(_allPreviewCandidates);
+      _mapPreviewResources =
+          _getFilteredPreviewResources(_allPreviewCandidates);
     });
   }
 
@@ -78,6 +80,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isMapPreviewLoading = true;
 
   String _voterId = "";
+
+  bool _isTodoCardPressed = false;
 
   final TransformationController _previewTransformController =
   TransformationController();
@@ -129,10 +133,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const List<BoxShadow> _kCommonShadow = [
     BoxShadow(
-      color: Color(0x0D000000),
-      blurRadius: 20,
-      offset: Offset(0, 0),
-      spreadRadius: 1,
+      color: Color(0x14000000),
+      blurRadius: 16,
+      offset: Offset(0, 6),
+      spreadRadius: 0,
     ),
   ];
 
@@ -296,7 +300,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
 
-
   Future<void> _loadVoterId() async {
     try {
       final user = await UserApi.instance.me();
@@ -323,7 +326,8 @@ class _HomeScreenState extends State<HomeScreen> {
         : resetThreshold;
 
     final currentResetStr =
-        "${currentResetDate.year}-${currentResetDate.month}-${currentResetDate.day}";
+        "${currentResetDate.year}-${currentResetDate.month}-${currentResetDate
+        .day}";
 
     if (lastResetDate != currentResetStr) {
       _executeReset(currentResetStr);
@@ -415,10 +419,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           side: const BorderSide(
                             color: Color(0xFFD7DEE7),
                           ),
-                          minimumSize: const Size.fromHeight(40), // 🔥 줄임
+                          minimumSize: const Size.fromHeight(40),
+                          // 🔥 줄임
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
                         child: const Text(
@@ -439,7 +444,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFF8E7C),
                           foregroundColor: Colors.white,
-                          minimumSize: const Size.fromHeight(40), // 🔥 줄임
+                          minimumSize: const Size.fromHeight(40),
+                          // 🔥 줄임
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           elevation: 0,
                           shape: RoundedRectangleBorder(
@@ -527,7 +533,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _previewEnabledResources = resources;
       _previewShowNpcs = showNpcs;
       _previewShowAnimals = showAnimals;
-      _mapPreviewResources = _getFilteredPreviewResources(_allPreviewCandidates);
+      _mapPreviewResources =
+          _getFilteredPreviewResources(_allPreviewCandidates);
     });
   }
 
@@ -608,7 +615,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             : Image.asset(
                           sample.iconPath,
                           fit: BoxFit.contain,
-                          errorBuilder: (c, e, s) => const Icon(
+                          errorBuilder: (c, e, s) =>
+                          const Icon(
                             Icons.inventory_2_outlined,
                             size: 12,
                             color: Colors.grey,
@@ -811,127 +819,130 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-    void _showPreviewResourceDetail(ResourceModel res) {
-      final bool isActuallyVerified = _isPreviewVoteCompleted(res);
-      final bool isVoteTarget = _isPreviewVotableResource(res);
-      final bool isAlreadyVoted = res.alreadyVotedSameType;
+  void _showPreviewResourceDetail(ResourceModel res) {
+    final bool isActuallyVerified = _isPreviewVoteCompleted(res);
+    final bool isVoteTarget = _isPreviewVotableResource(res);
+    final bool isAlreadyVoted = res.alreadyVotedSameType;
 
-      final bool showVoteButton = isVoteTarget && !isActuallyVerified;
-      final bool canVote = showVoteButton && !isAlreadyVoted;
+    final bool showVoteButton = isVoteTarget && !isActuallyVerified;
+    final bool canVote = showVoteButton && !isAlreadyVoted;
 
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.transparent,
-        builder: (context) => Container(
-          padding: const EdgeInsets.all(20),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 18),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Image.asset(
-                      res.iconPath,
-                      fit: BoxFit.contain,
-                      errorBuilder: (c, e, s) => const Icon(
-                        Icons.inventory_2_outlined,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      res.koName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  (res.description != null && res.description!.trim().isNotEmpty)
-                      ? res.description!
-                      : '설명 정보가 없습니다.',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.45,
-                    color: Color(0xFF475569),
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) =>
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  if (showVoteButton) ...[
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Image.asset(
+                        res.iconPath,
+                        fit: BoxFit.contain,
+                        errorBuilder: (c, e, s) =>
+                        const Icon(
+                          Icons.inventory_2_outlined,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _handlePreviewVote(res),
-                        icon: const Icon(Icons.thumb_up_outlined),
-                        label: Text(
-                          canVote
-                              ? "여기 있어요! (${res.voteCount})"
-                              : "이미 투표했어요",
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor:
-                          canVote ? const Color(0xFFFF8E7C) : Colors.grey,
-                          side: BorderSide(
-                            color: canVote
-                                ? const Color(0xFFFF8E7C)
-                                : Colors.grey.shade400,
-                          ),
-                          minimumSize: const Size.fromHeight(48),
+                      child: Text(
+                        res.koName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF111827),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
                   ],
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF8E7C),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(48),
-                        elevation: 0,
-                      ),
-                      child: const Text('확인'),
+                ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    (res.description != null &&
+                        res.description!.trim().isNotEmpty)
+                        ? res.description!
+                        : '설명 정보가 없습니다.',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: Color(0xFF475569),
                     ),
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    if (showVoteButton) ...[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _handlePreviewVote(res),
+                          icon: const Icon(Icons.thumb_up_outlined),
+                          label: Text(
+                            canVote
+                                ? "여기 있어요! (${res.voteCount})"
+                                : "이미 투표했어요",
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor:
+                            canVote ? const Color(0xFFFF8E7C) : Colors.grey,
+                            side: BorderSide(
+                              color: canVote
+                                  ? const Color(0xFFFF8E7C)
+                                  : Colors.grey.shade400,
+                            ),
+                            minimumSize: const Size.fromHeight(48),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF8E7C),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(48),
+                          elevation: 0,
+                        ),
+                        child: const Text('확인'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-    }
+    );
+  }
 
   void _openMap({bool openFilter = false}) {
     Navigator.push(
@@ -1014,7 +1025,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   : Image.asset(
                 sample.iconPath,
                 fit: BoxFit.contain,
-                errorBuilder: (c, e, s) => const Icon(
+                errorBuilder: (c, e, s) =>
+                const Icon(
                   Icons.inventory_2_outlined,
                   size: 12,
                   color: Colors.grey,
@@ -1182,21 +1194,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         : const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
-                    padding: EdgeInsets.zero,
+                    padding: const EdgeInsets.fromLTRB(0, 14, 0, 120),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         _buildSectionTitle('날씨 정보'),
                         const SizedBox(height: 8),
                         _buildWeatherCard(),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
                         _buildTodoSection(),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
                         _buildMapSection(context),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
                         _buildEventSection(context),
-                        const SizedBox(height: 120),
+                        const SizedBox(height: 70),
                       ],
                     ),
                   ),
@@ -1211,39 +1223,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildWeatherCard() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       width: double.infinity,
-      height: 120,
+      height: 128,
       decoration: ShapeDecoration(
-        color: Colors.white.withOpacity(0.9),
+        color: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
         ),
         shadows: _kCommonShadow,
       ),
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: _buildWeatherTimeline(),
-                ),
-                const Center(
-                  child: Text(
-                    '현재 날씨에는 특별한 이벤트가 없습니다.',
-                    style: TextStyle(fontSize: 11, fontFamily: 'SF Pro'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _buildWeatherTimeline(),
                   ),
-                ),
-              ],
+                  const Center(
+                    child: Text(
+                      '현재 날씨에는 특별한 이벤트가 없습니다.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xFF64748B),
+                        fontFamily: 'SF Pro',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 20),
-          _buildWeeklyColumn(),
-        ],
+            const SizedBox(width: 18),
+            _buildWeeklyColumn(),
+          ],
+        ),
       ),
     );
   }
@@ -1266,31 +1284,44 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildTimeItem(String label, bool isCurrent) {
     return Container(
-      width: 50,
-      margin: const EdgeInsets.only(right: 6),
+      width: 54,
+      margin: const EdgeInsets.only(right: 8),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 9,
-              fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
+              fontSize: 9.5,
+              fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+              color: isCurrent
+                  ? const Color(0xFF111827)
+                  : const Color(0xFF64748B),
               fontFamily: 'SF Pro',
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
           Container(
-            width: 26,
-            height: 26,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
+              color: isCurrent
+                  ? const Color(0xFFFFF4F1)
+                  : const Color(0xFFF8FAFC),
               shape: BoxShape.circle,
+              border: Border.all(
+                color: isCurrent
+                    ? const Color(0xFFFFD4CC)
+                    : const Color(0xFFE5E7EB),
+              ),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.wb_sunny_rounded,
-              size: 16,
-              color: Colors.orange,
+              size: 17,
+              color: isCurrent
+                  ? const Color(0xFFFF8E7C)
+                  : const Color(0xFF94A3B8),
             ),
           ),
         ],
@@ -1309,28 +1340,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: days
           .map(
-            (data) => Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                data['day'] as String,
-                style: const TextStyle(fontSize: 9, fontFamily: 'SF Pro'),
+            (data) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              data['day'] as String,
+              style: const TextStyle(
+                fontSize: 10,
+                color: Color(0xFF475569),
+                fontFamily: 'SF Pro',
+                fontWeight: FontWeight.w600,
               ),
-              const SizedBox(width: 6),
-              Icon(
-                Icons.circle,
-                size: 8,
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
                 color: (data['icon'] as bool)
-                    ? Colors.black26
+                    ? const Color(0xFFCBD5E1)
                     : Colors.transparent,
+                shape: BoxShape.circle,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       )
           .toList(),
@@ -1350,64 +1386,194 @@ class _HomeScreenState extends State<HomeScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: GestureDetector(
-            onTap: widget.openEndDrawer,
             behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(25, 20, 15, 20),
-              decoration: ShapeDecoration(
-                color: Colors.white.withOpacity(0.85),
-                shape: RoundedRectangleBorder(
+            onTapDown: (_) {
+              setState(() {
+                _isTodoCardPressed = true;
+              });
+            },
+            onTapCancel: () {
+              setState(() {
+                _isTodoCardPressed = false;
+              });
+            },
+            onTapUp: (_) async {
+              setState(() {
+                _isTodoCardPressed = false;
+              });
+
+              await Future.delayed(const Duration(milliseconds: 70));
+              widget.openEndDrawer?.call();
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 90),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: _kCommonShadow,
+                color: _isTodoCardPressed
+                    ? const Color(0xFFF3F4F6)
+                    : Colors.white,
+              ),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+                decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
                 ),
-                shadows: _kCommonShadow,
-              ),
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 30),
-                    child: widget.todoList.isEmpty
-                        ? const Text(
-                      "오늘의 할 일을 등록해보세요! 🌿",
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
-                    )
-                        : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ...List.generate(displayCount, (index) {
-                          final todo = widget.todoList[index];
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10.0),
-                            child: _buildTodoItemSummary(
-                              todo['taskName'] ?? "",
-                              todo['completed'] ?? false,
-                                  () => widget.onTodoToggle?.call(index),
-                            ),
-                          );
-                        }),
-                        if (widget.todoList.length > displayLimit)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              "+ ${widget.todoList.length - displayLimit}개 더보기",
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFFFF8E7C),
-                                fontWeight: FontWeight.w600,
+                child: Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 28),
+                      child: widget.todoList.isEmpty
+                          ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          "오늘의 할 일을 등록해보세요! 🌿",
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )
+                          : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ...List.generate(displayCount, (index) {
+                            final todo = widget.todoList[index];
+
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                bottom: index == displayCount - 1 ? 0 : 10,
+                              ),
+                              child: _buildTodoRow(
+                                text: todo['taskName'] ?? "",
+                                isDone: todo['completed'] ?? false,
+                                onCheckTap: () => widget.onTodoToggle?.call(index),
+                              ),
+                            );
+                          }),
+                          if (widget.todoList.length > displayLimit)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4, bottom: 2),
+                              child: Text(
+                                "+ ${widget.todoList.length - displayLimit}개 더보기",
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFFFF8E7C),
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
+                    ),
+                    const Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Padding(
+                        padding: EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: Color(0xFFCBD5E1),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  double _getTextWidth(String text) {
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    return textPainter.width;
+  }
+
+  Widget _buildTodoRow({
+    required String text,
+    required bool isDone,
+    required VoidCallback onCheckTap,
+  }) {
+    return Row(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onCheckTap,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 10, top: 6, bottom: 6),
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: isDone
+                    ? const Color(0xFFFF8E7C)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isDone
+                      ? const Color(0xFFFF8E7C)
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: isDone
+                  ? const Icon(
+                Icons.check,
+                size: 12,
+                color: Colors.white,
+              )
+                  : null,
+            ),
+          ),
+        ),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            splashColor: Colors.black.withOpacity(0.06),
+            highlightColor: Colors.black.withOpacity(0.03),
+            onTap: onCheckTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: isDone
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF111827),
                     ),
                   ),
-                  const Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Icon(
-                      Icons.chevron_right,
-                      size: 20,
-                      color: Colors.black26,
+                  if (isDone)
+                    Positioned.fill(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          height: 1.2,
+                          width: _getTextWidth(text),
+                          color: const Color(0xFF94A3B8).withOpacity(0.6),
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -1418,58 +1584,54 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTodoItemSummary(
-      String task,
+      String text,
       bool isDone,
-      VoidCallback onToggle,
+      VoidCallback onTap,
       ) {
-    return GestureDetector(
-      onTap: onToggle,
-      behavior: HitTestBehavior.opaque,
-      child: Row(
-        children: [
-          Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              color: isDone ? const Color(0x2890CDFF) : Colors.transparent,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                width: 1,
-                color: const Color(0xFF90CDFF),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            children: [
+              Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: isDone
+                      ? const Color(0xFFFF8E7C)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: isDone
+                        ? const Color(0xFFFF8E7C)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: isDone
+                    ? const Icon(
+                  Icons.check,
+                  size: 12,
+                  color: Colors.white,
+                )
+                    : null,
               ),
-            ),
-            child: isDone
-                ? const Icon(
-              Icons.check,
-              size: 10,
-              color: Color(0xFF90CDFF),
-            )
-                : null,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: IntrinsicWidth(
+              const SizedBox(width: 10),
+              Expanded(
                 child: Stack(
                   alignment: Alignment.centerLeft,
                   children: [
                     Text(
-                      task,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      strutStyle: const StrutStyle(
-                        fontSize: 14,
-                        height: 1.25,
-                        forceStrutHeight: true,
-                      ),
+                      text,
                       style: TextStyle(
-                        fontSize: 14,
-                        height: 1.25,
-                        fontFamily: 'SF Pro',
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
                         color: isDone
-                            ? Colors.grey.withOpacity(0.6)
-                            : Colors.black87,
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF111827),
                       ),
                     ),
                     if (isDone)
@@ -1478,21 +1640,24 @@ class _HomeScreenState extends State<HomeScreen> {
                         right: 0,
                         child: Container(
                           height: 1.2,
-                          color: Colors.grey.withOpacity(0.45),
+                          color: const Color(0xFF94A3B8).withOpacity(0.6),
                         ),
                       ),
                   ],
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildMapSection(BuildContext context) {
-    final double previewWidth = MediaQuery.of(context).size.width - 32;
+    final double previewWidth = MediaQuery
+        .of(context)
+        .size
+        .width - 32;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1571,13 +1736,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                     child: Image.asset(
                                       'assets/images/map_background.png',
                                       fit: BoxFit.cover,
-                                      errorBuilder: (c, e, s) => Container(
-                                        color: Colors.grey[200],
-                                        child: const Icon(
-                                          Icons.map_outlined,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
+                                      errorBuilder: (c, e, s) =>
+                                          Container(
+                                            color: Colors.grey[200],
+                                            child: const Icon(
+                                              Icons.map_outlined,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
                                     ),
                                   ),
                                   _buildPreviewPlaceLabels(
@@ -1596,11 +1762,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                     )
                                   else
                                     ..._mapPreviewResources.map(
-                                          (res) => _buildHomeMapPreviewMarker(
-                                        res,
-                                        constraints.maxWidth,
-                                        constraints.maxHeight,
-                                      ),
+                                          (res) =>
+                                          _buildHomeMapPreviewMarker(
+                                            res,
+                                            constraints.maxWidth,
+                                            constraints.maxHeight,
+                                          ),
                                     ),
                                 ],
                               ),
@@ -1648,16 +1815,15 @@ class _HomeScreenState extends State<HomeScreen> {
                               vertical: 10,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.84),
-                              borderRadius: BorderRadius.circular(14),
+                              color: Colors.white,                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: const Color(0xFFEAECEF),
                               ),
                               boxShadow: const [
                                 BoxShadow(
-                                  color: Color(0x12000000),
-                                  blurRadius: 10,
-                                  offset: Offset(0, 4),
+                                  color: Color(0x10000000),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 3),
                                 ),
                               ],
                             ),
@@ -1698,11 +1864,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHomeMapPreviewMarker(
-      ResourceModel res,
+  Widget _buildHomeMapPreviewMarker(ResourceModel res,
       double width,
-      double height,
-      ) {
+      double height,) {
     final double currentScale =
     _previewTransformController.value.getMaxScaleOnAxis();
 
@@ -1750,7 +1914,8 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Image.asset(
         res.iconPath,
         fit: BoxFit.contain,
-        errorBuilder: (c, e, s) => const Icon(
+        errorBuilder: (c, e, s) =>
+        const Icon(
           Icons.circle,
           size: 10,
           color: Colors.grey,
@@ -1784,39 +1949,48 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildEventSection(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final double itemWidth = (screenWidth - (16 * 2) - (12 * 2)) / 3;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionTitle('진행중인 이벤트'),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildEventCard(
-                context,
-                'https://scontent-icn2-1.xx.fbcdn.net/v/t39.30808-6/653560105_122127351237021391_2534542623193999458_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=13d280&_nc_ohc=GJ6gMkapj0EQ7kNvwGe2VZj&_nc_oc=AdoiTg1t670K8-kTotsOj-LbC134Aq6plrE5HNZuqP7TmI07StiCU9mt_MJCAlh2YlE&_nc_zt=23&_nc_ht=scontent-icn2-1.xx&_nc_gid=cd7roSdfW4Yhunct6S5Ghg&_nc_ss=7a32e&oh=00_AfwXPj2QZt7wKp-poD2VpNQkENY9kC40PFj5WJa_DwUSZA&oe=69CE102B',
-                itemWidth,
-                'https://www.facebook.com/HeartopiaKR/photos/122127351225021391/',
-                isNetworkImage: true,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: ShapeDecoration(
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
               ),
-              _buildEventCard(
-                context,
-                'assets/images/event_2.png',
-                itemWidth,
-                'https://www.leagueoflegends.com',
-              ),
-              _buildEventCard(
-                context,
-                'assets/images/event_3.png',
-                itemWidth,
-                'https://github.com',
-              ),
-            ],
+              shadows: _kCommonShadow,
+            ),
+            child: GridView.count(
+              crossAxisCount: 3, // 👉 항상 3개
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1, // 정사각형
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _buildEventCard(
+                  context,
+                  'https://scontent-icn2-1.xx.fbcdn.net/v/t39.30808-6/653560105_122127351237021391_2534542623193999458_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=13d280&_nc_ohc=GJ6gMkapj0EQ7kNvwGe2VZj&_nc_oc=AdoiTg1t670K8-kTotsOj-LbC134Aq6plrE5HNZuqP7TmI07StiCU9mt_MJCAlh2YlE&_nc_zt=23&_nc_ht=scontent-icn2-1.xx&_nc_gid=cd7roSdfW4Yhunct6S5Ghg&_nc_ss=7a32e&oh=00_AfwXPj2QZt7wKp-poD2VpNQkENY9kC40PFj5WJa_DwUSZA&oe=69CE102B',
+                  'https://www.facebook.com/HeartopiaKR/photos/122127351225021391/',
+                  isNetworkImage: true,
+                ),
+                _buildEventCard(
+                  context,
+                  'assets/images/event_2.png',
+                  'https://www.leagueoflegends.com',
+                ),
+                _buildEventCard(
+                  context,
+                  'assets/images/event_3.png',
+                  'https://github.com',
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -1826,53 +2000,54 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildEventCard(
       BuildContext context,
       String path,
-      double width,
       String url, {
         bool isNetworkImage = false,
       }) {
-    return GestureDetector(
-      onTap: () async {
-        final Uri uri = Uri.parse(url);
-        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-          debugPrint('Could not launch $url');
-        }
-      },
-      child: Container(
-        width: width,
-        height: width,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0D000000),
-              blurRadius: 15,
-              offset: Offset(0, 0),
-              spreadRadius: 1,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () async {
+          final Uri uri = Uri.parse(url);
+          if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+            debugPrint('Could not launch $url');
+          }
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color(0xFFF1F5F9),
             ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: isNetworkImage
-              ? Image.network(
-            path,
-            fit: BoxFit.cover,
-            errorBuilder: (c, e, s) => Container(
-              color: Colors.grey[200],
-              child: const Icon(
-                Icons.broken_image,
-                color: Colors.grey,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: isNetworkImage
+                ? Image.network(
+              path,
+              fit: BoxFit.cover,
+              errorBuilder: (c, e, s) => Container(
+                color: const Color(0xFFF8FAFC),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.broken_image_outlined,
+                  color: Color(0xFF94A3B8),
+                  size: 22,
+                ),
               ),
-            ),
-          )
-              : Image.asset(
-            path,
-            fit: BoxFit.cover,
-            errorBuilder: (c, e, s) => Container(
-              color: Colors.grey[200],
-              child: const Icon(
-                Icons.image,
-                color: Colors.grey,
+            )
+                : Image.asset(
+              path,
+              fit: BoxFit.cover,
+              errorBuilder: (c, e, s) => Container(
+                color: const Color(0xFFF8FAFC),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.image_outlined,
+                  color: Color(0xFF94A3B8),
+                  size: 22,
+                ),
               ),
             ),
           ),
@@ -1905,12 +2080,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           IconButton(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const SettingsScreen(),
-              ),
-            ),
+            onPressed: () =>
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                ),
             icon: SvgPicture.asset(
               'assets/icons/ic_settings.svg',
               width: 24,
@@ -1971,16 +2147,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.black,
-          fontSize: 16,
-          fontFamily: 'SF Pro',
-          fontWeight: FontWeight.w600,
-          height: 1.0,
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 16,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF8E7C),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF111827),
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
