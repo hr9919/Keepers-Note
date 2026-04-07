@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
+import 'dart:io';
+import 'package:image_cropper/image_cropper.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -18,6 +20,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isPushEnabled = true;
   bool _isLoading = true;
+  bool _didUserInfoChange = false;
 
   String _userUid = "";
   String _displayUid = "UID를 입력해보세요";
@@ -110,30 +113,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _pickAndUploadImage(bool isProfile) async {
     final XFile? image =
-    await _picker.pickImage(source: ImageSource.gallery, maxWidth: 1024);
+    await _picker.pickImage(source: ImageSource.gallery, maxWidth: 2048);
+
     if (image == null) return;
+
+    final CroppedFile? croppedFile = await ImageCropper().cropImage(
+      sourcePath: image.path,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 92,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: isProfile ? '프로필 사진 편집' : '배경 사진 편집',
+          toolbarColor: const Color(0xFFFF8E7C),
+          toolbarWidgetColor: Colors.white,
+          backgroundColor: Colors.black,
+          activeControlsWidgetColor: const Color(0xFFFF8E7C),
+          lockAspectRatio: false,
+          hideBottomControls: false,
+          initAspectRatio: isProfile
+              ? CropAspectRatioPreset.square
+              : CropAspectRatioPreset.ratio16x9,
+          aspectRatioPresets: isProfile
+              ? [
+            CropAspectRatioPreset.square,
+            CropAspectRatioPreset.original,
+          ]
+              : [
+            CropAspectRatioPreset.original,
+            CropAspectRatioPreset.ratio16x9,
+            CropAspectRatioPreset.ratio4x3,
+          ],
+        ),
+        IOSUiSettings(
+          title: isProfile ? '프로필 사진 편집' : '배경 사진 편집',
+          aspectRatioLockEnabled: false,
+          resetAspectRatioEnabled: true,
+          rotateButtonsHidden: false,
+          rotateClockwiseButtonHidden: false,
+          aspectRatioPickerButtonHidden: false,
+          aspectRatioPresets: isProfile
+              ? [
+            CropAspectRatioPreset.square,
+            CropAspectRatioPreset.original,
+          ]
+              : [
+            CropAspectRatioPreset.original,
+            CropAspectRatioPreset.ratio16x9,
+            CropAspectRatioPreset.ratio4x3,
+          ],
+        ),
+      ],
+    );
+
+    if (croppedFile == null) return;
 
     try {
       if (mounted) setState(() => _isLoading = true);
 
-      var request = http.MultipartRequest(
+      final request = http.MultipartRequest(
         'POST',
         Uri.parse('http://161.33.30.40:8080/api/user/upload-image'),
       );
 
       request.fields['kakaoId'] = _userUid;
       request.fields['type'] = isProfile ? "PROFILE" : "HEADER";
-      request.files.add(await http.MultipartFile.fromPath('file', image.path));
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          croppedFile.path,
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
 
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        String newUrl =
-            "http://161.33.30.40:8080${data['url']}?t=${DateTime
-            .now()
-            .millisecondsSinceEpoch}";
+        final newUrl =
+            "http://161.33.30.40:8080${data['url']}?t=${DateTime.now().millisecondsSinceEpoch}";
 
         setState(() {
           if (isProfile) {
@@ -141,9 +199,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           } else {
             _headerImageUrl = newUrl;
           }
+          _didUserInfoChange = true;
         });
 
         _showSnackBar("이미지가 변경되었습니다! ✨");
+      } else {
+        _showSnackBar("업로드 실패");
       }
     } catch (e) {
       _showSnackBar("업로드 중 오류 발생");
@@ -248,7 +309,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: _goBackToHome,
+      onWillPop: () async {
+        Navigator.pop(context, _didUserInfoChange);
+        return false;
+      },
       child: Scaffold(
         backgroundColor: const Color(0xFFF9F9F9),
         appBar: _buildAppBar(context),
@@ -771,6 +835,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // 5. 설정창 데이터를 서버에서 다시 불러와 화면 갱신
       await _loadUserInfo();
 
+      _didUserInfoChange = true;
+
       // 6. 성공 메시지 출력
       _showSnackBar("정보가 수정되었습니다! ✨");
 
@@ -933,8 +999,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             size: 20,
           ),
           // ★ Navigator.pop 시 true를 전달하여 메인 화면의 갱신을 유도합니다.
-          onPressed: () => Navigator.pop(context, true),
-        ),
+          onPressed: () => Navigator.pop(context, _didUserInfoChange),        ),
         title: const Text(
           '설정',
           style: TextStyle(

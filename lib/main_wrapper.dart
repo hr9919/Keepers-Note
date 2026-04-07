@@ -27,6 +27,7 @@ class _MainWrapperState extends State<MainWrapper> {
   String _userName = "로그인 중...";
   String _userUid = "";
   String? _profileImageUrl;
+  String? _headerImageUrl;
 
   // 기본 투두 리스트 (서버 로드 전 초기값)
   List<Map<String, dynamic>> _todoTasks = [
@@ -65,11 +66,17 @@ class _MainWrapperState extends State<MainWrapper> {
           _userName = data['nickname'] ?? "사용자";
 
           if (data['profileImageUrl'] != null) {
-            // ★ URL 뒤에 타임스탬프(?t=...)를 붙여서 이미지가 즉시 바뀌게 합니다.
-            _profileImageUrl = "http://161.33.30.40:8080${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
+            _profileImageUrl =
+            "http://161.33.30.40:8080${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
           } else {
-            // 서버에 이미지가 없다면 카카오 이미지를 사용
             _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
+          }
+
+          if (data['headerImageUrl'] != null) {
+            _headerImageUrl =
+            "http://161.33.30.40:8080${data['headerImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
+          } else {
+            _headerImageUrl = null;
           }
         });
       }
@@ -392,7 +399,15 @@ class _MainWrapperState extends State<MainWrapper> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.only(left: 20, top: 40, bottom: 20),
-                decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/images/profile_header_bg.png'), fit: BoxFit.cover)),
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: _headerImageUrl != null
+                        ? NetworkImage(_headerImageUrl!)
+                        : const AssetImage('assets/images/profile_header_bg.png')
+                    as ImageProvider,
+                    fit: BoxFit.cover,
+                  ),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -413,9 +428,15 @@ class _MainWrapperState extends State<MainWrapper> {
               Positioned(
                 bottom: 12, right: 12,
                 child: GestureDetector(
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())).then((_) => _fetchUserInfo());
+
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                    );
+
+                    _fetchUserInfo();
                   },
                   child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), shape: BoxShape.circle), child: const Icon(Icons.edit_rounded, color: Colors.white, size: 16)),
                 ),
@@ -434,15 +455,12 @@ class _MainWrapperState extends State<MainWrapper> {
             Navigator.pop(context);
 
             // 2. 설정 화면 이동 후 결과(true/false)를 기다림
-            final bool? isUpdated = await Navigator.push(
+            await Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const SettingsScreen()),
             );
 
-            // 3. 만약 저장 버튼을 눌러서 true가 넘어왔다면 데이터 다시 불러오기
-            if (isUpdated == true) {
-              _fetchUserInfo(); // 이 함수가 실행되면서 드로워의 이름과 UID가 갱신됩니다.
-            }
+            _fetchUserInfo();
           }),
           // ★ 시스템 바만큼 하단 여백 추가
           SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
