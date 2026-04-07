@@ -79,6 +79,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
+                  physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
                   children: [
                     _buildOutfitContent(),
                     _buildFurnitureContent(),
@@ -144,32 +145,32 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   }
 
   Widget _buildOutfitContent() {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: ShaderMask(
-                    shaderCallback: (Rect rect) {
-                      return const LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [Colors.black, Colors.transparent],
-                        stops: [0.90, 1.0],
-                      ).createShader(rect);
-                    },
-                    blendMode: BlendMode.dstIn,
-                    child: SizedBox(
-                      height: 48,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.only(left: 16, right: 20),
-                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+    return Column(
+      children: [
+        // ✅ 고정 필터바
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: ShaderMask(
+                  shaderCallback: (Rect rect) {
+                    return const LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [Colors.black, Colors.transparent],
+                      stops: [0.90, 1.0],
+                    ).createShader(rect);
+                  },
+                  blendMode: BlendMode.dstIn,
+                  child: SizedBox(
+                    height: 48,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      primary: false,
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.only(left: 16, right: 20),
+                      child: Row(
                         children: [
                           _buildFilterChip('몰린 옷가게'),
                           _buildFilterChip('금토리 전시회'),
@@ -181,40 +182,66 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 16, left: 8),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 16, left: 8),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () {},
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
                         alignment: const Alignment(0, -0.07),
                         height: 48,
-                        child: const Text('고가순', style: TextStyle(color: Color(0xFF616161), fontSize: 12, fontFamily: 'SF Pro', fontWeight: FontWeight.w500, height: 1.0)),
+                        child: const Text(
+                          '고가순',
+                          style: TextStyle(
+                            color: Color(0xFF616161),
+                            fontSize: 12,
+                            fontFamily: 'SF Pro',
+                            fontWeight: FontWeight.w500,
+                            height: 1.0,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 2),
-                      const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF616161)),
+                      const Icon(
+                        Icons.keyboard_arrow_down,
+                        size: 16,
+                        color: Color(0xFF616161),
+                      ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
+        ),
+        const SizedBox(height: 1),
+        // ✅ 리스트만 스크롤
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {},
+            color: const Color(0xFFFF8E7C),
+            backgroundColor: Colors.white,
+            child: ListView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
                 _buildSeriesCard('숲의 주문 (1)'),
                 const SizedBox(height: 16),
                 _buildSeriesCard('숲의 주문 (2)'),
                 const SizedBox(height: 16),
                 _buildSeriesCard('숲의 주문 (3)'),
+                const SizedBox(height: 120),
               ],
             ),
           ),
-          const SizedBox(height: 120),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

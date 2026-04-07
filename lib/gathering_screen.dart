@@ -958,6 +958,9 @@ class _GatheringScreenState extends State<GatheringScreen>
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
+                  physics: const PageScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
                   children: [
                     _buildFishingTabContent(), // 낚시
                     _buildBirdTabContent(), // 새 관찰 (추가/수정)
@@ -1053,9 +1056,9 @@ class _GatheringScreenState extends State<GatheringScreen>
   Widget _buildBirdTabContent() {
     return Column(
       children: [
-        _buildFilterBarArea(), // 필터링 칩과 정렬 버튼 표시
+        _buildFilterBarArea(),
         Expanded(
-          child: _buildDynamicTabContent(
+          child: _buildDynamicTabContent<BirdItem>(
             _isBirdLoading,
             _visibleBirdList,
             _buildBirdCard,
@@ -1067,15 +1070,18 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   // 공통 리스트 빌더 함수 (새, 원예 등에서 사용)
-  // 공통 리스트 빌더 함수 수정
-Widget _buildDynamicTabContent<T>(
-    bool isLoading,
-    List<T> list,
-    Widget Function(T) buildCard, {
-      ScrollController? controller,
-    }) {
+  Widget _buildDynamicTabContent<T>(
+      bool isLoading,
+      List<T> list,
+      Widget Function(T) buildCard, {
+        ScrollController? controller,
+      }) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFFFF8E7C),
+        ),
+      );
     }
 
     if (list.isEmpty) {
@@ -1083,19 +1089,25 @@ Widget _buildDynamicTabContent<T>(
         onRefresh: () async {
           _fetchAllData();
         },
+        color: const Color(0xFFFF8E7C),
+        backgroundColor: Colors.white,
         child: ListView(
           controller: controller,
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
           ),
           children: const [
             SizedBox(height: 180),
             Center(
               child: Text(
                 '검색 결과가 없어요.',
-                style: TextStyle(fontSize: 14, color: Color(0xFF666666)),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF666666),
+                ),
               ),
             ),
+            SizedBox(height: 120),
           ],
         ),
       );
@@ -1105,14 +1117,18 @@ Widget _buildDynamicTabContent<T>(
       onRefresh: () async {
         _fetchAllData();
       },
+      color: const Color(0xFFFF8E7C),
+      backgroundColor: Colors.white,
       child: ListView.builder(
         controller: controller,
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: list.length + 1, // ★ 마지막에 여백 공간을 위해 +1 해줍니다.
+        itemCount: list.length + 1,
         itemBuilder: (context, index) {
-          // ★ 마지막 인덱스일 때 하단 메뉴바만큼의 여백(SizedBox)을 반환합니다.
           if (index == list.length) {
-            return const SizedBox(height: 120); // 물고기 탭과 동일한 높이의 여백
+            return const SizedBox(height: 120);
           }
           return buildCard(list[index]);
         },
@@ -1124,9 +1140,9 @@ Widget _buildDynamicTabContent<T>(
   Widget _buildPlantTabContent() {
     return Column(
       children: [
-        _buildFilterBarArea(), // 필터링 칩과 정렬 버튼 표시
+        _buildFilterBarArea(),
         Expanded(
-          child: _buildDynamicTabContent(
+          child: _buildDynamicTabContent<PlantItem>(
             _isPlantLoading,
             _visiblePlantList,
             _buildPlantCard,
@@ -1141,7 +1157,14 @@ Widget _buildDynamicTabContent<T>(
     return Column(
       children: [
         _buildFilterBarArea(),
-        Expanded(child: _buildFishingListArea()),
+        Expanded(
+          child: _buildDynamicTabContent<FishItem>(
+            _isFishLoading,
+            _visibleFishList,
+                (fish) => _buildGatheringCard(fish: fish),
+            controller: _fishScrollController,
+          ),
+        ),
       ],
     );
   }
@@ -1232,29 +1255,45 @@ Widget _buildDynamicTabContent<T>(
         _buildFilterBarArea(),
         Expanded(
           child: _isInsectLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFFFF8E7C),
+            ),
+          )
               : RefreshIndicator(
             onRefresh: _fetchInsects,
+            color: const Color(0xFFFF8E7C),
+            backgroundColor: Colors.white,
             child: _visibleInsectList.isEmpty
                 ? ListView(
               controller: _insectScrollController,
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
               children: const [
                 SizedBox(height: 180),
                 Center(
                   child: Text(
                     '검색 결과가 없어요.',
-                    style: TextStyle(color: Color(0xFF666666)),
+                    style: TextStyle(
+                      color: Color(0xFF666666),
+                    ),
                   ),
                 ),
+                SizedBox(height: 120),
               ],
             )
                 : ListView.builder(
               controller: _insectScrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              // ★ 수정: 하단 여백을 위해 1개를 더 추가합니다.
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
               itemCount: _visibleInsectList.length + 1,
               itemBuilder: (context, index) {
-                // ★ 수정: 마지막 인덱스일 때 투명한 여백 박스를 반환합니다.
                 if (index == _visibleInsectList.length) {
                   return const SizedBox(height: 120);
                 }

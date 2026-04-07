@@ -245,10 +245,11 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
+                  physics: const PageScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
                   children: [
-                    // 1. 고양이 탭
                     _buildTabContent(isCat: true),
-                    // 2. 강아지 탭
                     _buildTabContent(isCat: false),
                   ],
                 ),
@@ -263,37 +264,35 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
   Widget _buildTabContent({required bool isCat}) {
     return RefreshIndicator(
       onRefresh: () async {
-        // 당겼을 때 서버 데이터를 다시 불러옵니다.
         await _fetchFishData();
         await _fetchPetData();
       },
       color: const Color(0xFFFF8E7C),
       backgroundColor: Colors.white,
       child: SingleChildScrollView(
-        // 리스트가 짧아도 항상 당겨지도록 설정 (AlwaysScrollableScrollPhysics)
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 상단 프로필 요약 (현재 탭에 맞는 것만 표시됨)
             _buildPetSummaryList(),
             const SizedBox(height: 10),
 
-            // 필터 및 그리드 영역
             if (isCat)
               _buildPetGridContent()
             else
               const Padding(
                 padding: EdgeInsets.only(top: 100),
                 child: Center(
-                  child: Text("강아지 리스트 준비 중",
-                      style: TextStyle(color: Colors.grey)
+                  child: Text(
+                    "강아지 리스트 준비 중",
+                    style: TextStyle(color: Colors.grey),
                   ),
                 ),
               ),
 
-            const SizedBox(height: 120), // 하단 여백
+            const SizedBox(height: 120),
           ],
         ),
       ),

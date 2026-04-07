@@ -859,6 +859,7 @@ class _CookingScreenState extends State<CookingScreen>
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
+                  physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
                   children: [
                     _buildRecipeTabContent(),
                     _buildMaterialTabContent(),
@@ -873,106 +874,118 @@ class _CookingScreenState extends State<CookingScreen>
   }
 
   Widget _buildRecipeTabContent() {
-    if (_isRecipeLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFFF8E7C)),
-      );
-    }
-
-    if (_visibleRecipeList.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _fetchRecipeData,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
+    return Column(
+      children: [
+        _buildFilterBarArea(),
+        Expanded(
+          child: _isRecipeLoading
+              ? const Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFFFF8E7C),
+            ),
+          )
+              : RefreshIndicator(
+            onRefresh: _fetchRecipeData,
+            color: const Color(0xFFFF8E7C),
+            backgroundColor: Colors.white,
+            child: _visibleRecipeList.isEmpty
+                ? ListView(
+              controller: _recipeScrollController,
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              children: const [
+                SizedBox(height: 180),
+                Center(
+                  child: Text(
+                    '검색 결과가 없어요.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF666666),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 120),
+              ],
+            )
+                : ListView.builder(
+              controller: _recipeScrollController,
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              itemCount: _visibleRecipeList.length + 1,
+              itemBuilder: (context, index) {
+                if (index == _visibleRecipeList.length) {
+                  return const SizedBox(height: 120);
+                }
+                return _buildRecipeCard(_visibleRecipeList[index]);
+              },
+            ),
           ),
-          children: const [
-            SizedBox(height: 180),
-            Center(
-              child: Text(
-                '검색 결과가 없어요.',
-                style: TextStyle(fontSize: 14, color: Color(0xFF666666)),
-              ),
-            ),
-          ],
         ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _fetchRecipeData,
-      child: SingleChildScrollView(
-        controller: _recipeScrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        child: Column(
-          children: [
-            _buildFilterBarArea(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                children: [
-                  ..._visibleRecipeList.map((item) => _buildRecipeCard(item)),
-                  const SizedBox(height: 120),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 
   Widget _buildMaterialTabContent() {
-    if (_isMaterialLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFFF8E7C)),
-      );
-    }
-
-    if (_visibleMaterialList.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _refreshMaterialData,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
+    return Column(
+      children: [
+        _buildFilterBarArea(),
+        Expanded(
+          child: _isMaterialLoading
+              ? const Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFFFF8E7C),
+            ),
+          )
+              : RefreshIndicator(
+            onRefresh: _refreshMaterialData,
+            color: const Color(0xFFFF8E7C),
+            backgroundColor: Colors.white,
+            child: _visibleMaterialList.isEmpty
+                ? ListView(
+              controller: _materialScrollController,
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              children: const [
+                SizedBox(height: 180),
+                Center(
+                  child: Text(
+                    '검색 결과가 없어요.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF666666),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 120),
+              ],
+            )
+                : ListView.builder(
+              controller: _materialScrollController,
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              itemCount: _visibleMaterialList.length + 1,
+              itemBuilder: (context, index) {
+                if (index == _visibleMaterialList.length) {
+                  return const SizedBox(height: 120);
+                }
+                return _buildMaterialCard(_visibleMaterialList[index]);
+              },
+            ),
           ),
-          children: const [
-            SizedBox(height: 180),
-            Center(
-              child: Text(
-                '검색 결과가 없어요.',
-                style: TextStyle(fontSize: 14, color: Color(0xFF666666)),
-              ),
-            ),
-          ],
         ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _refreshMaterialData,
-      child: SingleChildScrollView(
-        controller: _materialScrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        child: Column(
-          children: [
-            _buildFilterBarArea(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                children: [
-                  ..._visibleMaterialList.map((item) => _buildMaterialCard(item)),
-                  const SizedBox(height: 120),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 
