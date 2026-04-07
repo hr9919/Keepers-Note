@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'home_screen.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -88,6 +89,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // 혹시 모를 로딩 상태를 확실히 종료합니다.
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<bool> _goBackToHome() async {
+    if (!mounted) return false;
+
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true);
+      return false;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const HomeScreen(),
+      ),
+          (route) => false,
+    );
+    return false;
   }
 
   Future<void> _pickAndUploadImage(bool isProfile) async {
@@ -229,179 +247,178 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9F9F9),
-      appBar: _buildAppBar(context),
-      // ★ Stack을 사용하여 본문 위에 로딩 인디케이터를 얹습니다.
-      body: Stack(
-        children: [
-          // 1. 실제 화면 본문 (언제나 보입니다)
-          SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Column(
-                  children: [
-                    _buildProfileHeaderBackgroundSection(),
-                    Transform.translate(
-                      offset: const Offset(0, -60),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildInfoCard(
-                              child: Stack(
-                                children: [
-                                  Column(
-                                    children: [
-                                      const SizedBox(height: 28),
-                                      _buildInfoRow(
-                                        label: '이름',
-                                        value: _nickname,
-                                      ),
-                                      const Divider(
-                                        height: 1,
-                                        color: Color(0xFFEEEEEE),
-                                        indent: 20,
-                                        endIndent: 20,
-                                      ),
-                                      _buildUidRow(),
-                                      const Divider(
-                                        height: 1,
-                                        color: Color(0xFFEEEEEE),
-                                        indent: 20,
-                                        endIndent: 20,
-                                      ),
-                                      _buildRowItem(
-                                        label: '푸시 알림 받기',
-                                        trailing: _buildCustomSwitch(_isPushEnabled),
-                                      ),
-                                    ],
-                                  ),
-                                  Positioned(
-                                    top: 10,
-                                    right: 8,
-                                    child: GestureDetector(
-                                      onTap: _showIntegratedEditDialog,
-                                      child: _buildIconButton(
-                                        'assets/icons/ic_edit.png',
+    return WillPopScope(
+      onWillPop: _goBackToHome,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF9F9F9),
+        appBar: _buildAppBar(context),
+        body: Stack(
+          children: [
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Column(
+                    children: [
+                      _buildProfileHeaderBackgroundSection(),
+                      Transform.translate(
+                        offset: const Offset(0, -60),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildInfoCard(
+                                child: Stack(
+                                  children: [
+                                    Column(
+                                      children: [
+                                        const SizedBox(height: 28),
+                                        _buildInfoRow(
+                                          label: '이름',
+                                          value: _nickname,
+                                        ),
+                                        const Divider(
+                                          height: 1,
+                                          color: Color(0xFFEEEEEE),
+                                          indent: 20,
+                                          endIndent: 20,
+                                        ),
+                                        _buildUidRow(),
+                                        const Divider(
+                                          height: 1,
+                                          color: Color(0xFFEEEEEE),
+                                          indent: 20,
+                                          endIndent: 20,
+                                        ),
+                                        _buildRowItem(
+                                          label: '푸시 알림 받기',
+                                          trailing: _buildCustomSwitch(_isPushEnabled),
+                                        ),
+                                      ],
+                                    ),
+                                    Positioned(
+                                      top: 10,
+                                      right: 8,
+                                      child: GestureDetector(
+                                        onTap: _showIntegratedEditDialog,
+                                        child: _buildIconButton(
+                                          'assets/icons/ic_edit.png',
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 24),
-                            _buildSectionTitle('공식 커뮤니티 링크'),
-                            _buildInfoCard(
-                              child: Column(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => _launchURL('https://cafe.naver.com/heartopia'),
-                                    child: _buildLinkItem(
-                                      '두근두근 타운 네이버 공식 카페',
-                                      'assets/icons/ic_naver_cafe.png',
+                              const SizedBox(height: 24),
+                              _buildSectionTitle('공식 커뮤니티 링크'),
+                              _buildInfoCard(
+                                child: Column(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => _launchURL('https://cafe.naver.com/heartopia'),
+                                      child: _buildLinkItem(
+                                        '두근두근 타운 네이버 공식 카페',
+                                        'assets/icons/ic_naver_cafe.png',
+                                      ),
                                     ),
-                                  ),
-                                  const Divider(
-                                    height: 1,
-                                    color: Color(0xFFEEEEEE),
-                                    indent: 20,
-                                    endIndent: 20,
-                                  ),
-                                  GestureDetector(
-                                    onTap: () => _launchURL('https://www.youtube.com/@Heartopia-KR'),
-                                    child: _buildLinkItem(
-                                      '두근두근 타운 한국 공식 유튜브',
-                                      'assets/icons/ic_youtube.png',
+                                    const Divider(
+                                      height: 1,
+                                      color: Color(0xFFEEEEEE),
+                                      indent: 20,
+                                      endIndent: 20,
                                     ),
-                                  ),
-                                ],
+                                    GestureDetector(
+                                      onTap: () => _launchURL('https://www.youtube.com/@Heartopia-KR'),
+                                      child: _buildLinkItem(
+                                        '두근두근 타운 한국 공식 유튜브',
+                                        'assets/icons/ic_youtube.png',
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 24),
-                            _buildSectionTitle('이용 안내'),
-                            _buildInfoCard(
-                              child: Column(
-                                children: [
-                                  _buildRowItem(
-                                    label: '앱 버전',
-                                    trailingText: '1.0.0',
-                                  ),
-                                  const Divider(
-                                    height: 1,
-                                    color: Color(0xFFEEEEEE),
-                                    indent: 20,
-                                    endIndent: 20,
-                                  ),
-                                  _buildBugReportRow(),
-                                  const Divider(
-                                    height: 1,
-                                    color: Color(0xFFEEEEEE),
-                                    indent: 20,
-                                    endIndent: 20,
-                                  ),
-                                  _buildRowItem(
-                                    label: '저작권 안내',
-                                    isTitleOnly: true,
-                                  ),
-                                  _buildCopyrightText(),
-                                  const SizedBox(height: 24),
-                                ],
+                              const SizedBox(height: 24),
+                              _buildSectionTitle('이용 안내'),
+                              _buildInfoCard(
+                                child: Column(
+                                  children: [
+                                    _buildRowItem(
+                                      label: '앱 버전',
+                                      trailingText: '1.0.0',
+                                    ),
+                                    const Divider(
+                                      height: 1,
+                                      color: Color(0xFFEEEEEE),
+                                      indent: 20,
+                                      endIndent: 20,
+                                    ),
+                                    _buildBugReportRow(),
+                                    const Divider(
+                                      height: 1,
+                                      color: Color(0xFFEEEEEE),
+                                      indent: 20,
+                                      endIndent: 20,
+                                    ),
+                                    _buildRowItem(
+                                      label: '저작권 안내',
+                                      isTitleOnly: true,
+                                    ),
+                                    _buildCopyrightText(),
+                                    const SizedBox(height: 24),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 50),
-                          ],
+                              const SizedBox(height: 50),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                Positioned(
-                  top: 160,
-                  left: 32,
-                  child: GestureDetector(
-                    onTap: () => _pickAndUploadImage(true),
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.12),
-                            blurRadius: 12,
-                            offset: const Offset(0, 6),
+                    ],
+                  ),
+                  Positioned(
+                    top: 160,
+                    left: 32,
+                    child: GestureDetector(
+                      onTap: () => _pickAndUploadImage(true),
+                      child: Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 4),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.12),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                          image: DecorationImage(
+                            image: _profileImageUrl != null
+                                ? NetworkImage(_profileImageUrl!)
+                                : const AssetImage('assets/images/profile.png') as ImageProvider,
+                            fit: BoxFit.cover,
                           ),
-                        ],
-                        image: DecorationImage(
-                          image: _profileImageUrl != null
-                              ? NetworkImage(_profileImageUrl!)
-                              : const AssetImage('assets/images/profile.png') as ImageProvider,
-                          fit: BoxFit.cover,
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          // 2. 로딩 오버레이 (저장 중일 때만 화면 위에 덧씌웁니다)
-          if (_isLoading)
-            Container(
-              color: Colors.white.withOpacity(0.5), // 뒤에 내용이 비치도록 투명도 조절
-              child: const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFFF8E7C),
-                ),
+                ],
               ),
             ),
-        ],
+            if (_isLoading)
+              Container(
+                color: Colors.white.withOpacity(0.5),
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFFF8E7C),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -655,8 +672,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: OutlinedButton.styleFrom(
+                          onPressed: () => _goBackToHome(),                          style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: Color(0xFFE7E7E7)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),

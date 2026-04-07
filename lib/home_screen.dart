@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
 import 'data/place_labels.dart';
 import 'models/place_label.dart';
 import 'models/resource_model.dart';
@@ -360,6 +361,109 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  Future<bool> _showExitConfirmationDialog(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: _kCommonShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ❌ 상단 핸들 제거됨
+
+                const Text(
+                  '앱 종료',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '키퍼노트를 종료하시겠습니까?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF64748B),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop(false);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF475569),
+                          side: const BorderSide(
+                            color: Color(0xFFD7DEE7),
+                          ),
+                          minimumSize: const Size.fromHeight(40), // 🔥 줄임
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          '취소',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop(true);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF8E7C),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(40), // 🔥 줄임
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          '종료',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ) ??
+        false;
   }
 
   Future<void> _loadMapPreviewResources() async {
@@ -1038,57 +1142,68 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: const BoxDecoration(
-        image: DecorationImage(
-          image: AssetImage('assets/images/bg_gradient.png'),
-          fit: BoxFit.cover,
+    return WillPopScope(
+      onWillPop: () async {
+        final shouldExit = await _showExitConfirmationDialog(context);
+
+        if (shouldExit) {
+          await SystemNavigator.pop();
+        }
+
+        return false;
+      },
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/bg_gradient.png'),
+            fit: BoxFit.cover,
+          ),
         ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            _buildCustomAppBar(context),
-            _buildSearchBar(),
-            Expanded(
-              child: RefreshIndicator(
-                color: const Color(0xFFFF8E7C),
-                backgroundColor: Colors.white,
-                onRefresh: () async {
-                  if (widget.onRefresh != null) {
-                    await widget.onRefresh!();
-                  }
-                  await _loadMapPreviewResources();
-                },
-                child: SingleChildScrollView(
-                  physics: _shouldLockHomeScroll
-                      ? const NeverScrollableScrollPhysics()
-                      : const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 20),
-                      _buildSectionTitle('날씨 정보'),
-                      const SizedBox(height: 8),
-                      _buildWeatherCard(),
-                      const SizedBox(height: 32),
-                      _buildTodoSection(),
-                      const SizedBox(height: 32),
-                      _buildMapSection(context),
-                      const SizedBox(height: 32),
-                      _buildEventSection(context),
-                      const SizedBox(height: 120),
-                    ],
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildCustomAppBar(context),
+              _buildSearchBar(),
+              Expanded(
+                child: RefreshIndicator(
+                  color: const Color(0xFFFF8E7C),
+                  backgroundColor: Colors.white,
+                  onRefresh: () async {
+                    if (widget.onRefresh != null) {
+                      await widget.onRefresh!();
+                    }
+                    await _loadMapPreviewResources();
+                  },
+                  child: SingleChildScrollView(
+                    physics: _shouldLockHomeScroll
+                        ? const NeverScrollableScrollPhysics()
+                        : const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 20),
+                        _buildSectionTitle('날씨 정보'),
+                        const SizedBox(height: 8),
+                        _buildWeatherCard(),
+                        const SizedBox(height: 32),
+                        _buildTodoSection(),
+                        const SizedBox(height: 32),
+                        _buildMapSection(context),
+                        const SizedBox(height: 32),
+                        _buildEventSection(context),
+                        const SizedBox(height: 120),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
