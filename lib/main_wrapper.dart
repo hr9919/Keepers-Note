@@ -28,6 +28,8 @@ class _MainWrapperState extends State<MainWrapper> {
   String? _profileImageUrl;
   String? _headerImageUrl;
 
+  GlobalSearchItem? _pendingSearchItem;
+
   // 기본 투두 리스트 (서버 로드 전 초기값)
   List<Map<String, dynamic>> _todoTasks = [
     {"id": 0, "taskName": "가게 판매 품목 확인", "completed": false, "isSystem": true},
@@ -134,6 +136,27 @@ class _MainWrapperState extends State<MainWrapper> {
     } catch (e) {
       debugPrint("로드 에러: $e");
     }
+  }
+
+  void _handleGlobalSearchSelection(GlobalSearchItem item) {
+    _pendingSearchItem = item;
+
+    switch (item.screen) {
+      case SearchTargetScreen.encyclopedia:
+        _selectedIndex = 1;
+        break;
+      case SearchTargetScreen.cooking:
+        _selectedIndex = 2;
+        break;
+      case SearchTargetScreen.gathering:
+        _selectedIndex = 3;
+        break;
+      case SearchTargetScreen.pet:
+        _selectedIndex = 4;
+        break;
+    }
+
+    setState(() {});
   }
 
   // --- [API] 할 일 체크 토글 ---
@@ -303,11 +326,28 @@ class _MainWrapperState extends State<MainWrapper> {
         onTodoToggle: (index) => _toggleTodo(index),
         onResetAll: _handleSixAMReset,
         onRefresh: _onRefreshData,
+        onSearchItemSelected: _handleGlobalSearchSelection,
       ),
-      EncyclopediaScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
-      CookingScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
-      GatheringScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
-      PetScreen(openDrawer: () => _scaffoldKey.currentState?.openDrawer()),
+
+      EncyclopediaScreen(
+        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        initialSearchItem: _pendingSearchItem, // 🔥 추가
+      ),
+
+      CookingScreen(
+        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        initialSearchItem: _pendingSearchItem, // 🔥 추가
+      ),
+
+      GatheringScreen(
+        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        initialSearchItem: _pendingSearchItem, // 🔥 추가
+      ),
+
+      PetScreen(
+        openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        initialSearchItem: _pendingSearchItem, // 🔥 추가
+      ),
     ];
 
     return PopScope(

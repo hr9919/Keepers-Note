@@ -12,6 +12,8 @@ import 'models/resource_model.dart';
 import 'services/api_service.dart';
 import 'setting_screen.dart';
 import 'map_screen.dart';
+import 'models/global_search_item.dart';
+import 'services/global_search_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
@@ -29,6 +31,7 @@ class HomeScreen extends StatefulWidget {
     this.onTodoToggle,
     this.onResetAll,
     this.onRefresh,
+    final void Function(GlobalSearchItem item)? onSearchItemSelected;
   });
 
   @override
@@ -52,6 +55,14 @@ class _HomeScreenState extends State<HomeScreen> {
         return aName.compareTo(bName);
       });
   }
+
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final void Function(GlobalSearchItem item)? onSearchItemSelected;
+
+  List<GlobalSearchItem> _allSearchItems = [];
+  List<GlobalSearchItem> _searchSuggestions = [];
+  bool _isSearchLoading = false;
 
   ResourceModel? _getPreviewRepresentativeByResourceName(String resourceName) {
     try {
@@ -204,6 +215,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _checkAndResetAtStart();
     _scheduleSixAMTimer();
     _initializePreview();
+    _loadGlobalSearchItems();
+    _searchController.addListener(_handleSearchChanged);
   }
 
   Future<void> _handlePreviewVote(ResourceModel res) async {
@@ -265,6 +278,24 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(content: Text('오류: $e')),
       );
     }
+  }
+
+  Future<void> _loadGlobalSearchItems() async {
+    setState(() => _isSearchLoading = true);
+    _allSearchItems = await GlobalSearchService.loadAllItems();
+    if (mounted) {
+      setState(() => _isSearchLoading = false);
+    }
+  }
+
+  void _handleSearchChanged() {
+    final results = GlobalSearchService.filter(
+      _allSearchItems,
+      _searchController.text,
+    );
+    setState(() {
+      _searchSuggestions = results;
+    });
   }
 
   Future<void> _initializePreview() async {
@@ -2099,49 +2130,138 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Container(
-        height: 40,
-        decoration: ShapeDecoration(
-          color: const Color(0xFFFFFDFD),
-          shape: RoundedRectangleBorder(
-            side: const BorderSide(width: 1, color: Color(0x30FF7A65)),
-            borderRadius: BorderRadius.circular(36),
-          ),
-          shadows: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: TextField(
-          textAlignVertical: TextAlignVertical.center,
-          decoration: InputDecoration(
-            isDense: true,
-            border: InputBorder.none,
-            prefixIcon: Padding(
-              padding: const EdgeInsets.all(10.0),
-              child: SvgPicture.asset(
-                'assets/icons/ic_search.svg',
-                colorFilter: const ColorFilter.mode(
-                  Color(0xFF898989),
-                  BlendMode.srcIn,
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Container(
+            height: 40,
+            decoration: ShapeDecoration(
+              color: const Color(0xFFFFFDFD),
+              shape: RoundedRectangleBorder(
+                side: const BorderSide(width: 1, color: Color(0x30FF7A65)),
+                borderRadius: BorderRadius.circular(36),
+              ),
+              shadows: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
+              ],
+            ),
+            child: TextField(
+              controller: _searchController, // 🔥 추가
+              focusNode: _searchFocusNode,   // 🔥 추가
+              textAlignVertical: TextAlignVertical.center,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.all(10.0),
+                  child: SvgPicture.asset(
+                    'assets/icons/ic_search.svg',
+                    colorFilter: const ColorFilter.mode(
+                      Color(0xFF898989),
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ),
+                hintText: '아이템을 검색해보세요.',
+                hintStyle: const TextStyle(
+                  color: Color(0xFF898989),
+                  fontSize: 14,
+                  fontFamily: 'SF Pro',
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+
+                // 🔥 X 버튼 (검색 지우기)
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchSuggestions = []);
+                  },
+                )
+                    : null,
               ),
             ),
-            hintText: '아이템을 검색해보세요.',
-            hintStyle: const TextStyle(
-              color: Color(0xFF898989),
-              fontSize: 14,
-              fontFamily: 'SF Pro',
-            ),
-            contentPadding: const EdgeInsets.symmetric(vertical: 10),
           ),
         ),
-      ),
+
+        // 🔥 자동완성 리스트
+        if (_searchSuggestions.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: _kCommonShadow,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _searchSuggestions.length,
+                separatorBuilder: (_, __) => const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Color(0xFFF1F5F9),
+                ),
+                itemBuilder: (context, index) {
+                  final item = _searchSuggestions[index];
+
+                  return InkWell(
+                    onTap: () {
+                      _searchController.clear();
+                      setState(() => _searchSuggestions = []);
+
+                      widget.onSearchItemSelected?.call(item); // 🔥 핵심
+                    },
+                    child: Padding(
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.asset(
+                              item.iconPath,
+                              width: 32,
+                              height: 32,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.inventory_2_outlined),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                          ),
+
+                          const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 14,
+                            color: Color(0xFFCBD5E1),
+                          )
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
     );
   }
 

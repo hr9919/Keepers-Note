@@ -192,8 +192,9 @@ class FishItem {
 
 class GatheringScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
+  final GlobalSearchItem? initialSearchItem;
 
-  const GatheringScreen({super.key, this.openDrawer});
+  const GatheringScreen({super.key, this.openDrawer, this.initialSearchItem});
 
   @override
   State<GatheringScreen> createState() => _GatheringScreenState();
@@ -209,6 +210,8 @@ class _GatheringScreenState extends State<GatheringScreen>
   String _selectedFilter = '전체';
   String _searchQuery = '';
   String _selectedSort = '이름순';
+
+  String? _highlightedId;
 
   String _formatPrice(int? price) {
     if (price == null) return '';
