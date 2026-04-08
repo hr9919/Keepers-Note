@@ -13,6 +13,9 @@ import 'pet_screen.dart';
 import 'setting_screen.dart';
 import 'models/global_search_item.dart';
 import 'event_screen.dart';
+import 'models/event_item.dart';
+import 'services/event_api_service.dart';
+
 
 class MainWrapper extends StatefulWidget {
   const MainWrapper({super.key});
@@ -46,6 +49,8 @@ class _MainWrapperState extends State<MainWrapper> {
     {"id": 0, "taskName": "작물에 물 주기", "completed": false, "isSystem": true},
   ];
 
+  List<EventItem> _eventList = [];
+
   static const List<String> _defaultSystemTasks = [
     "가게 판매 품목 확인",
     "그자리 참나무 파밍",
@@ -64,12 +69,28 @@ class _MainWrapperState extends State<MainWrapper> {
   void initState() {
     super.initState();
     _fetchUserInfo();
+    _loadEvents();
   }
 
   @override
   void dispose() {
     _todoController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadEvents() async {
+    try {
+      final events = await EventApiService.fetchActiveEvents();
+
+      if (!mounted) return;
+      setState(() {
+        _eventList = events;
+      });
+
+      debugPrint('MainWrapper events loaded: ${events.length}');
+    } catch (e) {
+      debugPrint('이벤트 불러오기 실패: $e');
+    }
   }
 
   Future<void> _openDrawerSmooth() async {
@@ -580,8 +601,12 @@ class _MainWrapperState extends State<MainWrapper> {
         todoList: _todoTasks,
         onTodoToggle: (index) => _toggleTodo(index),
         onResetAll: _handleSixAMReset,
-        onRefresh: _onRefreshData,
+        onRefresh: () async {
+          await _onRefreshData();
+          await _loadEvents(); // 같이 갱신
+        },
         onSearchItemSelected: _handleGlobalSearchSelection,
+        eventList: _eventList, // 🔥 이거 추가
       ),
       EncyclopediaScreen(
         openDrawer: _openDrawerSmooth,
@@ -1138,6 +1163,8 @@ class _MainWrapperState extends State<MainWrapper> {
                     ),
                   ),
                 );
+
+                await _loadEvents(); // 🔥 돌아오면 다시 불러오기
               }),
               const Spacer(),
               const Divider(height: 1),

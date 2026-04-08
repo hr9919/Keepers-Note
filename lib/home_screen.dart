@@ -13,6 +13,7 @@ import 'setting_screen.dart';
 import 'map_screen.dart';
 import 'models/global_search_item.dart';
 import 'services/global_search_service.dart';
+import 'models/event_item.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
@@ -21,6 +22,7 @@ class HomeScreen extends StatefulWidget {
   final Function(int)? onTodoToggle;
   final VoidCallback? onResetAll;
   final Future<void> Function()? onRefresh;
+  final List<EventItem> eventList;
   final void Function(GlobalSearchItem item)? onSearchItemSelected;
 
   const HomeScreen({
@@ -32,6 +34,7 @@ class HomeScreen extends StatefulWidget {
     this.onResetAll,
     this.onRefresh,
     this.onSearchItemSelected,
+    this.eventList = const [],
   });
 
   @override
@@ -40,6 +43,31 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Timer? _sixAMTimer;
+  PageController _eventPageController = PageController();
+  Timer? _eventBannerTimer;
+  int _currentEventIndex = 0;
+
+  List<EventItem> get _activeEvents {
+    final now = DateTime.now();
+
+    debugPrint('Home eventList length: ${widget.eventList.length}');
+    for (final e in widget.eventList) {
+      debugPrint(
+        'id=${e.id}, title=${e.title}, active=${e.isActive}, '
+            'start=${e.startAt}, end=${e.endAt}, image=${e.imageUrl}',
+      );
+    }
+
+    final items = widget.eventList.where((e) {
+      return e.isActive &&
+          !now.isBefore(e.startAt) &&
+          !now.isAfter(e.endAt);
+    }).toList();
+
+    debugPrint('Home activeEvents length: ${items.length}');
+    items.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return items;
+  }
 
   List<String> _getDistinctPreviewResourceKeysByCategory(
       List<String> categories) {
@@ -177,6 +205,58 @@ class _HomeScreenState extends State<HomeScreen> {
         return 1.0;
     }
   }
+  void _startEventBannerAutoScroll() {
+    _eventBannerTimer?.cancel();
+
+    final events = _activeEvents;
+    if (events.length <= 1) return;
+
+    _eventBannerTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_eventPageController.hasClients) return;
+
+      final nextIndex = (_currentEventIndex + 1) % events.length;
+
+      _eventPageController.animateToPage(
+        nextIndex,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  String _resolveEventImageUrl(String raw) {
+    if (raw.isEmpty) return '';
+
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return raw;
+    }
+
+    return 'http://161.33.30.40:8080$raw';
+  }
+
+  Future<void> _openEventLink(String rawUrl, int eventId) async {
+    final link = rawUrl.trim();
+
+    if (link.isEmpty) {
+      debugPrint('이벤트 링크가 없습니다. id=$eventId');
+      return;
+    }
+
+    final uri = Uri.tryParse(link);
+    if (uri == null) {
+      debugPrint('잘못된 이벤트 링크: $link');
+      return;
+    }
+
+    final ok = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!ok) {
+      debugPrint('Could not launch $link');
+    }
+  }
 
   bool get _isPreviewAtMinScale {
     final double currentScale =
@@ -220,6 +300,21 @@ class _HomeScreenState extends State<HomeScreen> {
     _initializePreview();
     _loadGlobalSearchItems();
     _searchController.addListener(_handleSearchChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _startEventBannerAutoScroll();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.eventList != widget.eventList) {
+      _currentEventIndex = 0;
+      _startEventBannerAutoScroll();
+    }
   }
 
   Future<void> _handlePreviewVote(ResourceModel res) async {
@@ -327,8 +422,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _sixAMTimer?.cancel();
+    _eventBannerTimer?.cancel();
+    _eventPageController.dispose();
     _previewTransformController.removeListener(_onPreviewTransformChanged);
     _previewTransformController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -1136,16 +1235,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 16),
+                      _buildEventSection(context),
+                      const SizedBox(height: 24),
+
+                      _buildTodoSection(),
+                      const SizedBox(height: 24),
+
+                      _buildMapSection(context),
+                      const SizedBox(height: 24),
+
                       _buildSectionTitle('날씨 정보'),
                       const SizedBox(height: 8),
                       _buildWeatherCard(),
-                      const SizedBox(height: 24),
-                      _buildTodoSection(),
-                      const SizedBox(height: 24),
-                      _buildMapSection(context),
-                      const SizedBox(height: 24),
-                      _buildEventSection(context),
-                      const SizedBox(height: 70),
                     ],
                   ),
                 ),
@@ -1906,158 +2007,197 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildEventSection(BuildContext context) {
+    final events = _activeEvents;
+
+    if (events.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('진행중 이벤트'),
+          const SizedBox(height: 8),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            width: double.infinity,
+            height: 170,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: _kCommonShadow,
+            ),
+            child: const Center(
+              child: Text(
+                '진행 중인 이벤트가 없습니다.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('진행중인 이벤트'),
+        _buildSectionTitle('진행중 이벤트'),
         const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: ShapeDecoration(
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-              shadows: _kCommonShadow,
-            ),
-            child: GridView.count(
-              crossAxisCount: 3, // 👉 항상 3개
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1, // 정사각형
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _buildEventCard(
-                  context,
-                  0,
-                  'https://scontent-icn2-1.xx.fbcdn.net/v/t39.30808-6/653560105_122127351237021391_2534542623193999458_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=13d280&_nc_ohc=GJ6gMkapj0EQ7kNvwGe2VZj&_nc_oc=AdoiTg1t670K8-kTotsOj-LbC134Aq6plrE5HNZuqP7TmI07StiCU9mt_MJCAlh2YlE&_nc_zt=23&_nc_ht=scontent-icn2-1.xx&_nc_gid=cd7roSdfW4Yhunct6S5Ghg&_nc_ss=7a32e&oh=00_AfwXPj2QZt7wKp-poD2VpNQkENY9kC40PFj5WJa_DwUSZA&oe=69CE102B',
-                  'https://www.facebook.com/HeartopiaKR/photos/122127351225021391/',
-                  isNetworkImage: true,
+        SizedBox(
+          height: 170,
+          child: PageView.builder(
+            controller: _eventPageController,
+            itemCount: events.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentEventIndex = index;
+              });
+            },
+            itemBuilder: (context, index) {
+              final event = events[index];
+              final imageUrl = _resolveEventImageUrl(event.imageUrl);
+
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () async {
+                  await _openEventLink(event.linkUrl, event.id);
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: _kCommonShadow,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      imageUrl.isEmpty
+                          ? Container(
+                        color: const Color(0xFFF8FAFC),
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_not_supported_outlined,
+                            size: 34,
+                            color: Color(0xFFCBD5E1),
+                          ),
+                        ),
+                      )
+                          : Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return Container(
+                            color: const Color(0xFFF8FAFC),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFFFF8E7C),
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: const Color(0xFFF8FAFC),
+                            child: const Center(
+                              child: Icon(
+                                Icons.broken_image_rounded,
+                                size: 34,
+                                color: Color(0xFFCBD5E1),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Color(0x18000000),
+                              Color(0x88000000),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 16,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              event.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (event.subtitle.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                event.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(999),
+                            onTap: () {
+                              widget.openEndDrawer?.call();
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0x88000000),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '${index + 1}/${events.length} 전체보기',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                _buildEventCard(
-                  context,
-                  1,
-                  'assets/images/event_2.png',
-                  'https://www.leagueoflegends.com',
-                ),
-                _buildEventCard(
-                  context,
-                  2,
-                  'assets/images/event_3.png',
-                  'https://github.com',
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildEventCard(
-      BuildContext context,
-      int index,
-      String path,
-      String url, {
-        bool isNetworkImage = false,
-      }) {
-    final bool isPressed = _pressedEventIndex == index;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) {
-        setState(() {
-          _pressedEventIndex = index;
-        });
-      },
-      onTapCancel: () {
-        setState(() {
-          if (_pressedEventIndex == index) {
-            _pressedEventIndex = null;
-          }
-        });
-      },
-      onTapUp: (_) async {
-        await Future.delayed(const Duration(milliseconds: 80));
-
-        if (!mounted) return;
-
-        setState(() {
-          if (_pressedEventIndex == index) {
-            _pressedEventIndex = null;
-          }
-        });
-
-        await Future.delayed(const Duration(milliseconds: 20));
-
-        if (!mounted) return;
-
-        final Uri uri = Uri.parse(url);
-        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-          debugPrint('Could not launch $url');
-        }
-      },
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 90),
-        scale: isPressed ? 0.985 : 1.0,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: const Color(0xFFF1F5F9),
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                isNetworkImage
-                    ? Image.network(
-                  path,
-                  fit: BoxFit.cover,
-                  errorBuilder: (c, e, s) => Container(
-                    color: const Color(0xFFF8FAFC),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.broken_image_outlined,
-                      color: Color(0xFF94A3B8),
-                      size: 22,
-                    ),
-                  ),
-                )
-                    : Image.asset(
-                  path,
-                  fit: BoxFit.cover,
-                  errorBuilder: (c, e, s) => Container(
-                    color: const Color(0xFFF8FAFC),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.image_outlined,
-                      color: Color(0xFF94A3B8),
-                      size: 22,
-                    ),
-                  ),
-                ),
-
-                IgnorePointer(
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 90),
-                    opacity: isPressed ? 1.0 : 0.0,
-                    child: Container(
-                      color: const Color(0xFF334155).withOpacity(0.08),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
