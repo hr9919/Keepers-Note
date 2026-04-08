@@ -485,6 +485,30 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
+  Future<void> _openEventScreen() async {
+    if (_isDrawerOpen) {
+      await _closeDrawerSmooth();
+    }
+
+    if (_isEndDrawerOpen) {
+      await _closeEndDrawerSmooth();
+    }
+
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventScreen(
+          isAdmin: false,
+          canManage: _isAdmin,
+        ),
+      )
+    );
+
+    await _loadEvents();
+  }
+
   Future<bool> _showExitConfirmationDialog(BuildContext context) async {
     return await showDialog<bool>(
       context: context,
@@ -598,15 +622,16 @@ class _MainWrapperState extends State<MainWrapper> {
       HomeScreen(
         openDrawer: _openDrawerSmooth,
         openEndDrawer: _openEndDrawerSmooth,
+        openEventScreen: _openEventScreen,
         todoList: _todoTasks,
         onTodoToggle: (index) => _toggleTodo(index),
         onResetAll: _handleSixAMReset,
         onRefresh: () async {
           await _onRefreshData();
-          await _loadEvents(); // 같이 갱신
+          await _loadEvents();
         },
         onSearchItemSelected: _handleGlobalSearchSelection,
-        eventList: _eventList, // 🔥 이거 추가
+        eventList: _eventList,
       ),
       EncyclopediaScreen(
         openDrawer: _openDrawerSmooth,
@@ -1152,19 +1177,7 @@ class _MainWrapperState extends State<MainWrapper> {
               _buildDrawerItem(Icons.backpack_rounded, '채집 도감', () => _onMenuSelect(3)),
               _buildDrawerItem(Icons.pets_rounded, '동물 도감', () => _onMenuSelect(4)),
               _buildDrawerItem(Icons.celebration_rounded, '이벤트', () async {
-                await _closeDrawerSmooth();
-                if (!mounted) return;
-
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EventScreen(
-                      isAdmin: _isAdmin,
-                    ),
-                  ),
-                );
-
-                await _loadEvents(); // 🔥 돌아오면 다시 불러오기
+                await _openEventScreen();
               }),
               const Spacer(),
               const Divider(height: 1),
