@@ -71,6 +71,8 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isUserInteracting = false;
   int _currentEventIndex = 0;
 
+  String _currentWeather = '맑음';
+
   late final AnimationController _weatherController;
 
   final PageController _eventPageController = PageController();
@@ -227,7 +229,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _startEventBannerAutoScroll({bool initialDelay = false}) {
     _eventBannerTimer?.cancel();
-
     final events = _activeEvents;
     if (events.length <= 1) return;
 
@@ -237,15 +238,11 @@ class _HomeScreenState extends State<HomeScreen>
         if (!mounted || _isUserInteracting) return;
 
         _eventBannerTimer = Timer.periodic(const Duration(seconds: 7), (_) {
-          if (!mounted ||
-              !_eventPageController.hasClients ||
-              _isUserInteracting) return;
+          if (!mounted || !_eventPageController.hasClients || _isUserInteracting) return;
 
-          final nextIndex =
-              (_currentEventIndex + 1) % events.length;
-
-          _eventPageController.animateToPage(
-            nextIndex,
+          // 단순히 다음 페이지로 넘깁니다.
+          // 큰 itemCount 덕분에 1번으로 되감기지 않고 다음 배너(순환된 1번)가 나옵니다.
+          _eventPageController.nextPage(
             duration: const Duration(milliseconds: 550),
             curve: Curves.easeOutCubic,
           );
@@ -338,21 +335,49 @@ class _HomeScreenState extends State<HomeScreen>
     _loadGlobalSearchItems();
     _searchController.addListener(_handleSearchChanged);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToCenterPage());
+  }
+
+  // 데이터 유무를 확인하고 중앙으로 보내주는 헬퍼 함수
+  void _jumpToCenterPage() {
+    final events = _activeEvents;
+    if (events.isNotEmpty && _eventPageController.hasClients) {
+      // 10000개 중 딱 중간이면서 0번 인덱스인 곳 계산
+      int centerPage = (10000 ~/ 2) - ((10000 ~/ 2) % events.length);
+      _eventPageController.jumpToPage(centerPage);
+      setState(() {
+        _currentEventIndex = centerPage % events.length;
+      });
       _startEventBannerAutoScroll(initialDelay: true);
-    });
+    }
   }
 
   @override
   void didUpdateWidget(covariant HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    // 이벤트 리스트가 변경되었을 때만 실행
     if (oldWidget.eventList != widget.eventList) {
-      _currentEventIndex = 0;
       _eventResumeTimer?.cancel();
       _eventBannerTimer?.cancel();
-      _startEventBannerAutoScroll();
+
+      // 1. 새로운 리스트 기준으로 다시 중앙 위치(양방향 무한 스크롤 가능 지점) 계산 후 점프
+      if (widget.eventList.isNotEmpty && _eventPageController.hasClients) {
+        final events = _activeEvents;
+        if (events.isNotEmpty) {
+          int centerPage = (10000 ~/ 2) - ((10000 ~/ 2) % events.length);
+
+          // 애니메이션 없이 즉시 새로운 중앙점으로 이동
+          _eventPageController.jumpToPage(centerPage);
+
+          setState(() {
+            _currentEventIndex = centerPage % events.length;
+          });
+        }
+      }
+
+      // 2. 자동 스크롤 재시작
+      _startEventBannerAutoScroll(initialDelay: true);
     }
   }
 
@@ -458,7 +483,7 @@ class _HomeScreenState extends State<HomeScreen>
       case '맑음':
         return const Color(0xFFFFB703);
       case '흐림':
-        return const Color(0xFFE2E8F0);
+        return const Color(0xFF94A3B8);
       case '비':
         return const Color(0xFF7DD3FC);
       case '무지개':
@@ -472,8 +497,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   Color _getWeatherTextColor(String weather) {
     switch (weather) {
+      case '맑음':
       case '눈':
-        return const Color(0xFF0F172A);
+      case '무지개':
+      // 생검정 대신 배경색과 조화로운 짙은 블루-그레이 사용
+        return const Color(0xFF334155).withOpacity(0.9);
       default:
         return Colors.white;
     }
@@ -481,8 +509,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   Color _getWeatherSubTextColor(String weather) {
     switch (weather) {
+      case '맑음':
       case '눈':
-        return const Color(0xFF475569);
+      case '무지개':
+      // 메인 글자보다 약간 연한 톤
+        return const Color(0xFF475569).withOpacity(0.8);
       default:
         return Colors.white.withOpacity(0.9);
     }
@@ -553,14 +584,15 @@ class _HomeScreenState extends State<HomeScreen>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFFEAF7FF),
-              Color(0xFFF7FBFF),
-              Color(0xFFDCEFFF),
+              Color(0xFFA9D0E7), // 개선된 깊은 서리색
+              Color(0xFF8BB7D9),
+              Color(0xFF6A9CC9),
             ],
           ),
           borderRadius: BorderRadius.circular(22),
           boxShadow: _kCommonShadow,
         );
+    // 🔥 에러 해결 핵심: 어떤 조건에도 맞지 않을 때 반환할 기본값을 설정합니다.
       default:
         return BoxDecoration(
           color: Colors.white,
@@ -1437,7 +1469,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 children: [
                                   _buildCompactSectionTitle('날씨'), // 별도 함수 사용
                                   const SizedBox(height: 8),
-                                  _buildWeatherCard('맑음'),
+                                  _buildWeatherCard(_currentWeather),
                                 ],
                               ),
                             ),
@@ -1730,27 +1762,21 @@ class _HomeScreenState extends State<HomeScreen>
                       GestureDetector(
                         onTap: _showWeeklyWeatherPopup,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(
-                              weather == '눈' ? 0.65 : 0.18,
-                            ),
+                            // 배경색에 따라 버튼 색상을 다르게 (유리창 느낌)
+                            color: (weather == '맑음' || weather == '눈')
+                                ? Colors.black.withOpacity(0.06) // 밝은 배경에선 살짝 어두운 유리
+                                : Colors.white.withOpacity(0.2), // 어두운 배경에선 밝은 유리
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.18),
-                            ),
                           ),
                           child: Text(
                             '주간',
                             style: TextStyle(
                               fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: weather == '눈'
-                                  ? const Color(0xFF475569)
-                                  : Colors.white,
+                              fontWeight: FontWeight.w800,
+                              // 글자색을 헤더 색상과 맞춤
+                              color: _getWeatherTextColor(weather),
                             ),
                           ),
                         ),
@@ -1773,20 +1799,22 @@ class _HomeScreenState extends State<HomeScreen>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 27,
-                                height: 1.0,
-                                fontWeight: FontWeight.w800,
+                                fontSize: 23, // 크기를 27 -> 23으로 축소
+                                height: 1.2,
+                                fontWeight: FontWeight.w700, // 굵기를 w800 -> w700으로 소폭 하향
                                 color: _getWeatherTextColor(weather),
+                                letterSpacing: -0.5, // 자간을 살짝 좁혀서 더 단정한 느낌 추가
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4), // 간격도 살짝 조정
                             Text(
                               _getWeatherDescription(weather),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 12,
-                                height: 1.25,
+                                height: 1.3,
+                                fontWeight: FontWeight.w500, // 설명 글자도 살짝 얇게 조정
                                 color: _getWeatherSubTextColor(weather),
                               ),
                             ),
@@ -1808,6 +1836,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildHourlyWeatherStrip(String currentWeather) {
+    // 밝은 배경색인지 확인 (맑음, 눈, 무지개)
+    final bool isLightBg = ['맑음', '눈', '무지개'].contains(currentWeather);
+
     final hourly = [
       {'time': '12시', 'weather': '맑음'},
       {'time': '15시', 'weather': '흐림'},
@@ -1822,6 +1853,7 @@ class _HomeScreenState extends State<HomeScreen>
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemCount: hourly.length,
+        // 🔥 에러 해결: 아이템 사이의 간격을 정의합니다.
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final item = hourly[index];
@@ -1830,11 +1862,13 @@ class _HomeScreenState extends State<HomeScreen>
           return Container(
             width: 58,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(
-                  currentWeather == '눈' ? 0.55 : 0.16),
+              // 🎨 개선된 디자인: 회색 대신 반투명 화이트(유리 효과) 적용
+              color: isLightBg
+                  ? Colors.white.withOpacity(0.45) // 밝은 배경에선 조금 더 불투명하게
+                  : Colors.white.withOpacity(0.12), // 어두운 배경에선 투명하게
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: Colors.white.withOpacity(0.16),
+                color: Colors.white.withOpacity(0.2), // 미세한 테두리 추가
               ),
             ),
             padding: const EdgeInsets.symmetric(vertical: 7),
@@ -1845,17 +1879,26 @@ class _HomeScreenState extends State<HomeScreen>
                   item['time']!,
                   style: TextStyle(
                     fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: currentWeather == '눈'
-                        ? const Color(0xFF475569)
-                        : Colors.white,
+                    fontWeight: FontWeight.w800,
+                    // 글자색을 배경색 톤에 맞춘 네이비 그레이로 설정
+                    color: _getWeatherTextColor(currentWeather),
                   ),
                 ),
                 const SizedBox(height: 5),
                 Icon(
                   _getWeatherIcon(weather),
                   size: 16,
-                  color: _getWeatherIconColor(weather),
+                  color: _getWeatherIconColor(weather).withOpacity(0.9),
+                  // 🔥 아이콘 가독성을 위한 그림자 추가
+                  shadows: [
+                    Shadow(
+                      color: isLightBg
+                          ? Colors.black.withOpacity(0.12) // 밝은 배경에선 아주 미세하게
+                          : Colors.black.withOpacity(0.3),  // 어두운 배경에선 조금 더 선명하게
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1888,7 +1931,6 @@ class _HomeScreenState extends State<HomeScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 상단 핸들러
               Container(
                 width: 40,
                 height: 4,
@@ -1898,13 +1940,12 @@ class _HomeScreenState extends State<HomeScreen>
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
-              // 타이틀: 과한 배경색을 빼고 차분한 아이콘으로 변경
               const Row(
                 children: [
                   Icon(Icons.calendar_month_rounded, size: 22, color: Color(0xFF64748B)),
                   SizedBox(width: 10),
                   Text(
-                    '주간 날씨 예보',
+                    '주간 날씨 예보 (클릭 시 변경)', // 안내 텍스트 살짝 수정
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -1915,57 +1956,65 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
               const SizedBox(height: 20),
-              // 날씨 리스트: 균일한 디자인으로 변경
               Column(
                 children: weekly.map((item) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC), // 모든 카드를 동일한 연회색 배경으로
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    // 🔥 클릭 가능하도록 InkWell 추가
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _currentWeather = item['weather']!; // 클릭한 날씨로 변경
+                        });
+                        Navigator.pop(context); // 팝업 닫기
+                      },
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: const Color(0xFFF1F5F9), // 아주 연한 테두리
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        // 요일
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            item['day']!,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF64748B),
-                            ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFF1F5F9),
                           ),
                         ),
-                        // 아이콘 + 날씨 설명
-                        Expanded(
-                          flex: 3,
-                          child: Row(
-                            children: [
-                              Icon(
-                                _getWeatherIcon(item['weather']!),
-                                size: 24,
-                                color: _getWeatherIconColor(item['weather']!),
-                              ),
-                              const SizedBox(width: 14),
-                              Text(
-                                item['weather']!,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                item['day']!,
                                 style: const TextStyle(
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF111827),
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF64748B),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _getWeatherIcon(item['weather']!),
+                                    size: 24,
+                                    color: _getWeatherIconColor(item['weather']!),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Text(
+                                    item['weather']!,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF111827),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        // 화살표가 있던 자리를 비워두어 비대화형임을 암시
-                      ],
+                      ),
                     ),
                   );
                 }).toList(),
@@ -2412,6 +2461,12 @@ class _HomeScreenState extends State<HomeScreen>
   }) {
     final bool isPressed = _pressedTodoIndex == index;
 
+    const TextStyle todoTextStyle = TextStyle(
+      fontSize: 12.5,
+      height: 1.15,
+      fontWeight: FontWeight.w600,
+    );
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) {
@@ -2483,27 +2538,75 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  height: 1.15,
-                  fontWeight: FontWeight.w600,
-                  color: isDone
-                      ? const Color(0xFF94A3B8)
-                      : const Color(0xFF111827),
-                  decoration:
-                  isDone ? TextDecoration.lineThrough : TextDecoration.none,
-                  decorationColor: const Color(0xFF94A3B8),
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final visibleWidth = _measureTodoTextWidth(
+                    text: text,
+                    style: todoTextStyle,
+                    maxWidth: constraints.maxWidth,
+                  );
+
+                  return Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      Text(
+                        text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        strutStyle: const StrutStyle(
+                          forceStrutHeight: true,
+                          height: 1.15,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        style: todoTextStyle.copyWith(
+                          color: isDone
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF111827),
+                        ),
+                      ),
+
+                      if (isDone)
+                        Positioned.fill(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Transform.translate(
+                              offset: const Offset(0, 0.5),
+                              child: Container(
+                                width: visibleWidth,
+                                height: 0.8,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF94A3B8).withOpacity(0.9),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  double _measureTodoTextWidth({
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+  }) {
+    final textPainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      ellipsis: '…',
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxWidth);
+
+    return textPainter.size.width;
   }
 
   Widget _buildMapSection(BuildContext context) {
@@ -2850,7 +2953,6 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildEventSection(BuildContext context) {
     final events = _activeEvents;
 
-    /// 🔥 이벤트 없을 때
     if (events.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2865,71 +2967,42 @@ class _HomeScreenState extends State<HomeScreen>
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Center(
-              child: Text(
-                '진행 중인 이벤트가 없습니다.',
-                style: TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: Text('진행 중인 이벤트가 없습니다.',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
       );
     }
 
-    /// 🔥 이벤트 있을 때 (기존 코드)
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionTitle('진행중 이벤트'),
         const SizedBox(height: 8),
-        Column(
-          children: [
-            SizedBox(
-              height: 170,
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (notification) {
-                  if (notification is ScrollStartNotification) {
-                    _isUserInteracting = true;
-                    _eventBannerTimer?.cancel();
-                  }
+        SizedBox(
+          height: 170,
+          child: PageView.builder(
+            controller: _eventPageController,
+            // 10000개로 설정하면 왼쪽으로 약 5000번 넘길 수 있습니다.
+            itemCount: 10000,
+            onPageChanged: (index) {
+              setState(() {
+                _currentEventIndex = index % events.length;
+              });
+            },
+            itemBuilder: (context, index) {
+              final event = events[index % events.length];
+              final imageUrl = _resolveEventImageUrl(event.imageUrl);
 
-                  if (notification is ScrollEndNotification) {
-                    _isUserInteracting = false;
-
-                    _eventResumeTimer?.cancel();
-                    _eventResumeTimer =
-                        Timer(const Duration(seconds: 3), () {
-                          _startEventBannerAutoScroll();
-                        });
-                  }
-
-                  return false;
-                },
-                child: PageView.builder(
-                  controller: _eventPageController,
-                  itemCount: events.length,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _currentEventIndex = index;
-                    });
-                  },
-                  itemBuilder: (context, index) {
-                    final event = events[index];
-                    final imageUrl =
-                    _resolveEventImageUrl(event.imageUrl);
-
-                    return GestureDetector(
+              return Stack(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () async {
-                        await _openEventLink(
-                            event.linkUrl, event.id);
-                      },
+                      onTap: () async => await _openEventLink(event.linkUrl, event.id),
                       child: Container(
-                        margin:
-                        const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: _kCommonShadow,
@@ -2940,177 +3013,101 @@ class _HomeScreenState extends State<HomeScreen>
                           children: [
                             imageUrl.isEmpty
                                 ? Container(
-                              color: const Color(0xFFF8FAFC),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.image_not_supported_outlined,
-                                  size: 34,
-                                  color: Color(0xFFCBD5E1),
-                                ),
-                              ),
-                            )
-                                : Image.network(
-                              imageUrl,
-                              fit: BoxFit.cover,
-                              loadingBuilder:
-                                  (context, child, progress) {
-                                if (progress == null)
-                                  return child;
-                                return Container(
-                                  color: const Color(0xFFF8FAFC),
-                                  child: const Center(
-                                    child:
-                                    CircularProgressIndicator(
-                                      color:
-                                      Color(0xFFFF8E7C),
-                                    ),
-                                  ),
-                                );
-                              },
-                              errorBuilder:
-                                  (context, error, stackTrace) {
-                                return Container(
-                                  color: const Color(0xFFF8FAFC),
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.broken_image_rounded,
-                                      size: 34,
-                                      color: Color(0xFFCBD5E1),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-
+                                color: const Color(0xFFF8FAFC),
+                                child: const Icon(Icons.image_not_supported_outlined, color: Color(0xFFCBD5E1)))
+                                : Image.network(imageUrl, fit: BoxFit.cover),
                             Positioned(
                               left: 0,
                               right: 0,
                               bottom: 0,
                               child: Container(
-                                padding:
-                                const EdgeInsets.fromLTRB(
-                                    16, 10, 12, 12),
+                                padding: const EdgeInsets.fromLTRB(16, 24, 110, 14),
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
-                                    begin:
-                                    Alignment.bottomCenter,
+                                    begin: Alignment.bottomCenter,
                                     end: Alignment.topCenter,
-                                    colors: [
-                                      Color(0x66000000),
-                                      Color(0x00000000),
-                                    ],
+                                    colors: [Color(0x77000000), Color(0x00000000)],
                                   ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        event.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 15.5,
-                                          fontWeight: FontWeight.w700,
-                                          shadows: [
-                                            Shadow(
-                                              color: Color(0x99000000),
-                                              blurRadius: 6,
-                                              offset: Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 5,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.16),
-                                        borderRadius: BorderRadius.circular(
-                                            999),
-                                      ),
-                                      child: Text(
-                                        formatDdayLabel(event.endAt),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    GestureDetector(
-                                      onTap: () {
-                                        widget.openEventScreen?.call();
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 5,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(
-                                              999),
-                                        ),
-                                        child: Text(
-                                          '${index + 1}/${events.length}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                child: Text(
+                                  event.title,
+                                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-            ),
-
-            if (events.length > 1) ...[
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment:
-                MainAxisAlignment.center,
-                children:
-                List.generate(events.length, (index) {
-                  final selected =
-                      index == _currentEventIndex;
-                  return AnimatedContainer(
-                    duration: const Duration(
-                        milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    margin:
-                    const EdgeInsets.symmetric(
-                        horizontal: 3),
-                    width: selected ? 16 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? const Color(0xFFFF8E7C)
-                          : const Color(0xFFD7DEE7),
-                      borderRadius:
-                      BorderRadius.circular(999),
                     ),
-                  );
-                }),
-              ),
-            ],
-          ],
+                  ),
+                  Positioned(
+                    top: 12,
+                    right: 28,
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.38),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          formatDdayLabel(event.endAt),
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 8,
+                    right: 24,
+                    child: GestureDetector(
+                      onTap: () => widget.openEventScreen?.call(),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.grid_view_rounded, size: 13, color: Colors.white),
+                            const SizedBox(width: 6),
+                            Text(
+                              '전체보기 ${_currentEventIndex + 1}/${events.length}',
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
+        if (events.length > 1) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(events.length, (index) {
+              final selected = index == _currentEventIndex;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: selected ? 16 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: selected ? const Color(0xFFFF8E7C) : const Color(0xFFD7DEE7),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              );
+            }),
+          ),
+        ],
       ],
     );
   }
@@ -3333,30 +3330,46 @@ class _HomeScreenState extends State<HomeScreen>
 
 class _RainPainter extends CustomPainter {
   final double progress;
+  // 생성자에서 prompt를 삭제하고 progress만 남겼습니다.
   _RainPainter({required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0x99D6F0FF)
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.round;
+      ..color = const Color(0xBBD6F0FF) // 맑고 투명한 빗방울 색상
+      ..style = PaintingStyle.fill;
 
-    for (int i = 0; i < 22; i++) {
-      final x = (size.width / 22) * i + ((i % 2) * 6);
-      final y = ((size.height + 30) * progress + i * 18) % (size.height + 30) - 20;
-      canvas.drawLine(
-        Offset(x, y),
-        Offset(x - 6, y + 14),
-        paint,
+    for (int i = 0; i < 18; i++) {
+      // i를 활용해 불규칙한 가로 위치 생성
+      double factor = (i * 19.3) % 1.0;
+      double x = (size.width * factor);
+
+      // 속도 차이 부여 (1.0배 ~ 2.5배 속도)
+      double speed = 1.0 + (i % 4) * 0.5;
+      double y = ((size.height + 40) * (progress * speed) + (i * 25)) % (size.height + 40) - 20;
+
+      // 빗방울 크기를 동글동글한 비율로 설정 (너비 2.5~3.3, 높이 6~10)
+      double dropWidth = 2.5 + (i % 3) * 0.8;
+      double dropHeight = 6.0 + (i % 5) * 4.0;
+
+      // 둥근 빗방울(RRect) 그리기
+      RRect drop = RRect.fromLTRBR(
+        x,
+        y,
+        x + dropWidth,
+        y + dropHeight,
+        Radius.circular(dropWidth / 2), // 모서리를 완전히 둥글게 하여 방울 모양 구현
       );
+
+      // 개별 투명도 랜덤화로 입체감 부여
+      paint.color = const Color(0xBBD6F0FF).withOpacity(0.4 + (i % 5) * 0.1);
+
+      canvas.drawRRect(drop, paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _RainPainter oldDelegate) {
-    return oldDelegate.progress != progress;
-  }
+  bool shouldRepaint(covariant _RainPainter oldDelegate) => oldDelegate.progress != progress;
 }
 
 class _SnowPainter extends CustomPainter {
@@ -3367,18 +3380,32 @@ class _SnowPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = const Color(0xCCFFFFFF);
 
-    for (int i = 0; i < 18; i++) {
-      final baseX = (size.width / 18) * i;
-      final dx = baseX + 8 * sin((progress * 2 * 3.141592) + i);
-      final dy = ((size.height + 24) * progress + i * 14) % (size.height + 24) - 12;
-      canvas.drawCircle(Offset(dx, dy), i % 3 == 0 ? 2.8 : 2.0, paint);
+    for (int i = 0; i < 25; i++) {
+      // 불규칙한 가로 위치
+      double factor = (i * 13.3) % 1.0;
+      double baseX = size.width * factor;
+
+      // 각 눈송이마다 흔들리는 타이밍(Phase)과 폭을 다르게 설정
+      double swayPhase = i * 0.5;
+      double swayWidth = 10.0 + (i % 3) * 5.0;
+      double x = baseX + sin((progress * 2 * pi) + swayPhase) * swayWidth;
+
+      // 속도 차이 (큰 눈송이는 살짝 더 무겁게)
+      double speed = 0.5 + (i % 5) * 0.2;
+      double y = ((size.height + 20) * (progress * speed) + (i * 15)) % (size.height + 20) - 10;
+
+      // 눈송이 크기 다양화
+      double radius = 1.5 + (i % 4) * 0.8;
+
+      // 살짝 번지는 느낌을 위해 투명도 조절
+      paint.color = Colors.white.withOpacity(0.4 + (i % 5) * 0.12);
+
+      canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _SnowPainter oldDelegate) {
-    return oldDelegate.progress != progress;
-  }
+  bool shouldRepaint(covariant _SnowPainter oldDelegate) => oldDelegate.progress != progress;
 }
 
 class _RainbowPainter extends CustomPainter {

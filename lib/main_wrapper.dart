@@ -899,7 +899,7 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Widget _buildTodoTile(Map<String, dynamic> todo, int index) {
-    bool isDone = todo['completed'];
+    final bool isDone = todo['completed'] == true;
 
     final String displayTaskName = (todo['taskName'] ?? '')
         .toString()
@@ -907,12 +907,18 @@ class _MainWrapperState extends State<MainWrapper> {
         .replaceAll('\r', ' ')
         .trim();
 
-    final bool isDefaultTask = [
+    final bool isDefaultTask = const [
       "가게 판매 품목 확인",
       "그자리 참나무 파밍",
       "완벽한 형광석 채집",
       "작물에 물 주기",
     ].contains(displayTaskName);
+
+    const TextStyle todoTextStyle = TextStyle(
+      fontSize: 14,
+      fontFamily: 'SF Pro',
+      height: 1.35,
+    );
 
     return GestureDetector(
       onTap: () => _toggleTodo(index),
@@ -941,21 +947,53 @@ class _MainWrapperState extends State<MainWrapper> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  displayTaskName,
-                  softWrap: true,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontFamily: 'SF Pro',
-                    color: isDone
-                        ? Colors.grey.withOpacity(0.6)
-                        : Colors.black87,
-                    decoration:
-                    isDone ? TextDecoration.lineThrough : TextDecoration.none,
-                    decorationColor: Colors.grey.withOpacity(0.5),
-                    decorationThickness: 1.2,
-                    height: 1.35,
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final textWidth = _measureTodoTextWidth(
+                      text: displayTaskName,
+                      style: todoTextStyle,
+                      maxWidth: constraints.maxWidth,
+                    );
+
+                    return Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        Text(
+                          displayTaskName,
+                          softWrap: true,
+                          strutStyle: const StrutStyle(
+                            forceStrutHeight: true,
+                            fontSize: 14,
+                            height: 1.35,
+                          ),
+                          style: todoTextStyle.copyWith(
+                            color: isDone
+                                ? Colors.grey.withOpacity(0.6)
+                                : Colors.black87,
+                          ),
+                        ),
+                        if (isDone)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Transform.translate(
+                                  offset: const Offset(0, 0.5),
+                                  child: Container(
+                                    width: textWidth,
+                                    height: 0.8,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.withOpacity(0.6),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
               SizedBox(
@@ -980,6 +1018,19 @@ class _MainWrapperState extends State<MainWrapper> {
         ),
       ),
     );
+  }
+
+  double _measureTodoTextWidth({
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+  }) {
+    final textPainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxWidth);
+
+    return textPainter.size.width;
   }
 
   Widget _buildTodoInputArea() {
