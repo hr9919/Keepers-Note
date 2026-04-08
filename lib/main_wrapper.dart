@@ -12,6 +12,7 @@ import 'gathering_screen.dart';
 import 'pet_screen.dart';
 import 'setting_screen.dart';
 import 'models/global_search_item.dart';
+import 'event_screen.dart';
 
 class MainWrapper extends StatefulWidget {
   const MainWrapper({super.key});
@@ -28,6 +29,7 @@ class _MainWrapperState extends State<MainWrapper> {
   bool _isScrimPressed = false;
   bool _isDrawerOpen = false;
   bool _isEndDrawerOpen = false;
+  bool _isAdmin = false;
 
   String _userName = "로그인 중...";
   String _userUid = "";
@@ -124,6 +126,7 @@ class _MainWrapperState extends State<MainWrapper> {
         setState(() {
           _userUid = data['gameUid'] ?? kakaoId;
           _userName = data['nickname'] ?? "사용자";
+          _isAdmin = data['isAdmin'] ?? false;
 
           if (data['profileImageUrl'] != null) {
             _profileImageUrl =
@@ -1123,6 +1126,19 @@ class _MainWrapperState extends State<MainWrapper> {
               _buildDrawerItem(Icons.restaurant_menu_rounded, '요리 레시피', () => _onMenuSelect(2)),
               _buildDrawerItem(Icons.backpack_rounded, '채집 도감', () => _onMenuSelect(3)),
               _buildDrawerItem(Icons.pets_rounded, '동물 도감', () => _onMenuSelect(4)),
+              _buildDrawerItem(Icons.celebration_rounded, '이벤트', () async {
+                await _closeDrawerSmooth();
+                if (!mounted) return;
+
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EventScreen(
+                      isAdmin: _isAdmin,
+                    ),
+                  ),
+                );
+              }),
               const Spacer(),
               const Divider(height: 1),
               _buildDrawerItem(Icons.settings_rounded, '설정', () async {
