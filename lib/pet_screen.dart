@@ -68,6 +68,13 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
   bool _isMenuOpen = false;
   bool _isSubmitting = false;
 
+  final TextEditingController _snackSearchController = TextEditingController();
+  final ScrollController _snackFishScrollController = ScrollController();
+
+  String _snackSearchQuery = '';
+  String? _submittedSnackQuery;
+  String? _highlightedSnackFishId;
+
   List<Pet> _allPets = [];
   List<FishItem> _fishList = [];
   bool _isLoading = true;
@@ -80,7 +87,9 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() { if (!_tabController.indexIsChanging) setState(() {}); });
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) setState(() {});
+    });
     _initData();
   }
 
@@ -217,8 +226,252 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
     return fullPath;
   }
 
+  String _displayFishName(FishItem fish) {
+    final ko = fish.nameKo?.trim();
+    if (ko != null && ko.isNotEmpty) return ko;
+    return fish.name.trim();
+  }
+
+  List<FishItem> _sortedFishListByName() {
+    final list = List<FishItem>.from(_fishList);
+    list.sort((a, b) => _displayFishName(a).compareTo(_displayFishName(b)));
+    return list;
+  }
+
+  List<String> _snackSearchTokens(String query) {
+    return query
+        .trim()
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .split(RegExp(r'\s+'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
+
+  int _snackMatchScore(FishItem fish, String query) {
+    final tokens = _snackSearchTokens(query);
+    if (tokens.isEmpty) return 0;
+
+    final displayName = _displayFishName(fish).toLowerCase();
+    final nameKo = (fish.nameKo ?? '').trim().toLowerCase();
+    final name = fish.name.trim().toLowerCase();
+    final id = fish.id.trim().toLowerCase().replaceAll('_', ' ');
+
+    int score = 0;
+
+    for (final token in tokens) {
+      if (displayName == token) score += 120;
+      if (nameKo == token) score += 110;
+      if (name == token) score += 100;
+      if (id == token) score += 95;
+
+      if (displayName.startsWith(token)) score += 60;
+      if (nameKo.startsWith(token)) score += 55;
+      if (name.startsWith(token)) score += 50;
+      if (id.startsWith(token)) score += 45;
+
+      if (displayName.contains(token)) score += 24;
+      if (nameKo.contains(token)) score += 22;
+      if (name.contains(token)) score += 20;
+      if (id.contains(token)) score += 18;
+    }
+
+    return score;
+  }
+
+  List<FishItem> _buildVisibleSnackFishList() {
+    final query = _snackSearchQuery.trim();
+
+    if (query.isEmpty) {
+      return _sortedFishListByName();
+    }
+
+    final filtered = _fishList.where((fish) {
+      return _snackMatchScore(fish, query) > 0;
+    }).toList();
+
+    filtered.sort((a, b) {
+      final scoreCompare =
+      _snackMatchScore(b, query).compareTo(_snackMatchScore(a, query));
+      if (scoreCompare != 0) return scoreCompare;
+
+      return _displayFishName(a).compareTo(_displayFishName(b));
+    });
+
+    return filtered;
+  }
+
+  void _clearSnackHighlightLater(String fishId) {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      if (_highlightedSnackFishId == fishId) {
+        setState(() {
+          _highlightedSnackFishId = null;
+        });
+      }
+    });
+  }
+
+  void _scrollSnackFishToTop(String fishId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_snackFishScrollController.hasClients) return;
+
+      final visibleFishList = _buildVisibleSnackFishList();
+      final index = visibleFishList.indexWhere((fish) => fish.id == fishId);
+      if (index < 0) return;
+
+      const double itemExtent = 104.0;
+      final targetOffset = index * itemExtent;
+
+      _snackFishScrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  void _submitSnackSearch(StateSetter setSheetState) {
+    final query = _snackSearchController.text.trim();
+
+    setSheetState(() {
+      _snackSearchQuery = query;
+      _submittedSnackQuery = query;
+    });
+
+    final visibleFishList = _buildVisibleSnackFishList();
+    if (visibleFishList.isEmpty) return;
+
+    final targetFish = visibleFishList.first;
+
+    setSheetState(() {
+      _highlightedSnackFishId = targetFish.id;
+    });
+
+    _scrollSnackFishToTop(targetFish.id);
+    _clearSnackHighlightLater(targetFish.id);
+  }
+
+  Widget _buildSnackActionButton({
+    required IconData icon,
+    required String label,
+    required bool active,
+    required VoidCallback onTap,
+    required Color activeColor,
+    required Color activeBgColor,
+    Color inactiveBorderColor = const Color(0xFFEAEAEA),
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? activeBgColor : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: active ? activeColor.withOpacity(0.55) : inactiveBorderColor,
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: active ? activeColor : const Color(0xFF9A9A9A),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: active ? activeColor : const Color(0xFF7A7A7A),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSnackSearchBar(StateSetter setSheetState) {
+    return Container(
+      height: 46,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFDFD),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0x30FF7A65),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _snackSearchController,
+        textAlignVertical: TextAlignVertical.center,
+        textInputAction: TextInputAction.search,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Color(0xFF333333),
+          height: 1.15,
+        ),
+        decoration: const InputDecoration(
+          hintText: '물고기 이름 검색',
+          hintStyle: TextStyle(
+            fontSize: 14,
+            color: Color(0xFFB0B0B0),
+            height: 1.15,
+          ),
+          prefixIcon: Padding(
+            padding: EdgeInsets.all(11),
+            child: Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: Color(0xFFFF8E7C),
+            ),
+          ),
+          prefixIconConstraints: BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+          ),
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.fromLTRB(0, 14, 16, 14),
+        ),
+        onChanged: (value) {
+          setSheetState(() {
+            _snackSearchQuery = value;
+            _highlightedSnackFishId = null;
+          });
+        },
+        onSubmitted: (_) {
+          _submitSnackSearch(setSheetState);
+        },
+      ),
+    );
+  }
+
   @override
-  void dispose() { _tabController.dispose(); super.dispose(); }
+  void dispose() {
+    _tabController.dispose();
+    _snackSearchController.dispose();
+    _snackFishScrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -439,21 +692,99 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (pet.favoriteSnack.isNotEmpty) ...[
-                          Builder(builder: (context) {
-                            final favFish = _fishList.firstWhere(
+                          Builder(
+                            builder: (context) {
+                              final favFish = _fishList.firstWhere(
                                     (f) => (f.nameKo ?? f.name) == pet.favoriteSnack,
-                                orElse: () => FishItem(id: '', name: '', image: '')
-                            );
-                            return favFish.image.isNotEmpty
-                                ? Image.asset(_imageAssetPath(favFish.image), width: 24, height: 24, errorBuilder: (c,e,s) => const Icon(Icons.phishing, size: 18, color: Color(0xFFFF8E7C)))
-                                : const Icon(Icons.phishing, size: 18, color: Color(0xFFFF8E7C));
-                          }),
+                                orElse: () => FishItem(id: '', name: '', image: ''),
+                              );
+
+                              return Stack(
+                                clipBehavior: Clip.none,
+                                alignment: Alignment.center,
+                                children: [
+                                  favFish.image.isNotEmpty
+                                      ? Image.asset(
+                                    _imageAssetPath(favFish.image),
+                                    width: 24,
+                                    height: 24,
+                                    errorBuilder: (c, e, s) => const Icon(
+                                      Icons.phishing,
+                                      size: 18,
+                                      color: Color(0xFFFF8E7C),
+                                    ),
+                                  )
+                                      : const Icon(
+                                    Icons.phishing,
+                                    size: 18,
+                                    color: Color(0xFFFF8E7C),
+                                  ),
+
+                                  Positioned(
+                                    right: -4,
+                                    top: -4,
+                                    child: TweenAnimationBuilder<double>(
+                                      tween: Tween(begin: 0.9, end: 1.08),
+                                      duration: const Duration(milliseconds: 700),
+                                      curve: Curves.easeInOut,
+                                      builder: (context, scale, child) {
+                                        return Transform.scale(
+                                          scale: scale,
+                                          child: child,
+                                        );
+                                      },
+                                      child: Container(
+                                        width: 13,
+                                        height: 13,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFF6B81),
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFFFF6B81).withOpacity(0.28),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 1),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.favorite,
+                                          size: 8,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                           const SizedBox(height: 2),
-                          Text(pet.favoriteSnack, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFFFF8E7C))),
+                          Text(
+                            pet.favoriteSnack,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFFF8E7C),
+                            ),
+                          ),
                         ] else ...[
-                          const Icon(Icons.phishing, size: 18, color: Color(0xFFD9D9D9)),
+                          const Icon(
+                            Icons.phishing,
+                            size: 18,
+                            color: Color(0xFFD9D9D9),
+                          ),
                           const SizedBox(height: 2),
-                          const Text('간식 실험실', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: Color(0xFFA4A4A4))),
+                          const Text(
+                            '간식 실험실',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFFA4A4A4),
+                            ),
+                          ),
                         ],
                       ],
                     ),
@@ -465,6 +796,14 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
         },
       ),
     );
+  }
+
+  void _highlightAndScrollSnackFish(String fishId) {
+    setState(() {
+      _highlightedSnackFishId = fishId;
+    });
+    _scrollSnackFishToTop(fishId);
+    _clearSnackHighlightLater(fishId);
   }
 
   void _showPetControlSheet(Pet pet) {
@@ -618,6 +957,11 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
   }
 
   void _showSnackLabSheet(Pet pet) {
+    _snackSearchController.clear();
+    _snackSearchQuery = '';
+    _submittedSnackQuery = null;
+    _highlightedSnackFishId = null;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -626,6 +970,7 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
         builder: (context, setSheetState) {
           final triedCount = pet.triedSnacks.length;
           final favoriteSnack = pet.favoriteSnack;
+          final visibleFishList = _buildVisibleSnackFishList();
 
           return Container(
             height: MediaQuery.of(context).size.height * 0.82,
@@ -732,13 +1077,42 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
                   ],
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
+
+                _buildSnackSearchBar(setSheetState),
+
+                const SizedBox(height: 12),
+
+                if (_snackSearchQuery.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 6),
+                    child: Text(
+                      '관련순',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 6),
+                    child: Text(
+                      '이름순',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
 
                 Expanded(
-                  child: _fishList.isEmpty
+                  child: visibleFishList.isEmpty
                       ? const Center(
                     child: Text(
-                      '간식 데이터를 불러오는 중이거나 비어 있어요',
+                      '검색 결과가 없어요',
                       style: TextStyle(
                         fontSize: 13,
                         color: Color(0xFF8E8E93),
@@ -746,19 +1120,19 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
                     ),
                   )
                       : ListView.separated(
+                    controller: _snackFishScrollController,
                     physics: const BouncingScrollPhysics(),
-                    itemCount: _fishList.length,
+                    itemCount: visibleFishList.length,
                     separatorBuilder: (context, index) =>
                     const SizedBox(height: 10),
                     itemBuilder: (context, index) {
-                      final fish = _fishList[index];
-                      final displayName = (fish.nameKo != null &&
-                          fish.nameKo!.trim().isNotEmpty)
-                          ? fish.nameKo!
-                          : fish.name;
+                      final fish = visibleFishList[index];
+                      final displayName = _displayFishName(fish);
 
                       final isTried = pet.triedSnacks.contains(displayName);
                       final isFav = pet.favoriteSnack == displayName;
+                      final isHighlighted =
+                          _highlightedSnackFishId == fish.id;
 
                       return AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
@@ -767,12 +1141,16 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: isFav
+                          color: isHighlighted
+                              ? const Color(0xFFFFF4E8)
+                              : isFav
                               ? const Color(0xFFFFFBF2)
                               : Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: isFav
+                            color: isHighlighted
+                                ? const Color(0xFFFFC8A2)
+                                : isFav
                                 ? const Color(0xFFFFD67A)
                                 : isTried
                                 ? const Color(0xFFFFD8D1)
@@ -781,13 +1159,14 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.035),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Container(
                               width: 52,
@@ -801,153 +1180,98 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
                                 _imageAssetPath(fish.image),
                                 width: 34,
                                 height: 34,
-                                errorBuilder: (c, e, s) => const Icon(
-                                  Icons.phishing_rounded,
-                                  color: Color(0xFFFF8E7C),
-                                  size: 24,
-                                ),
+                                fit: BoxFit.contain,
+                                errorBuilder: (c, e, s) =>
+                                const Icon(Icons.phishing),
                               ),
                             ),
-                            const SizedBox(width: 14),
+                            const SizedBox(width: 12),
 
                             Expanded(
                               child: Column(
                                 crossAxisAlignment:
                                 CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          displayName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF2C2C2E),
-                                          ),
-                                        ),
-                                      ),
-                                      if (isFav) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFFF1C9),
-                                            borderRadius:
-                                            BorderRadius.circular(999),
-                                          ),
-                                          child: const Text(
-                                            '최애',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF9C6A00),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  const SizedBox(height: 5),
                                   Text(
-                                    isTried
-                                        ? '먹어본 간식이에요'
-                                        : '아직 먹여보지 않았어요',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: isTried
-                                          ? const Color(0xFFFF8E7C)
-                                          : const Color(0xFF9A9AA1),
-                                      fontWeight: FontWeight.w500,
+                                    displayName,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF333333),
                                     ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    fish.id,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF9A9A9A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      _buildSnackActionButton(
+                                        icon: isTried
+                                            ? Icons.check_circle_rounded
+                                            : Icons.check_circle_outline_rounded,
+                                        label: '먹어본 간식이에요',
+                                        active: isTried,
+                                        activeColor:
+                                        const Color(0xFFFF8E7C),
+                                        activeBgColor:
+                                        const Color(0xFFFFF1EE),
+                                        onTap: () async {
+                                          setSheetState(() {
+                                            if (isTried) {
+                                              pet.triedSnacks.remove(displayName);
+
+                                              // 먹어본 간식을 해제하면,
+                                              // 그 물고기가 최애였을 때만 최애도 같이 해제
+                                              if (isFav) {
+                                                pet.favoriteSnack = "";
+                                              }
+                                            } else {
+                                              pet.triedSnacks.add(displayName);
+                                            }
+                                          });
+
+                                          setState(() {});
+                                          await _updatePetSnacks(pet);
+                                        },
+                                      ),
+                                      _buildSnackActionButton(
+                                        icon: isFav
+                                            ? Icons.star_rounded
+                                            : Icons.star_border_rounded,
+                                        label: '최애 간식으로 등록',
+                                        active: isFav,
+                                        activeColor:
+                                        const Color(0xFFFFC24B),
+                                        activeBgColor:
+                                        const Color(0xFFFFF8E8),
+                                        onTap: () async {
+                                          setSheetState(() {
+                                            if (isFav) {
+                                              // 최애만 해제
+                                              pet.favoriteSnack = "";
+                                            } else {
+                                              // 최애 등록할 때만 먹어본 간식 자동 추가
+                                              pet.favoriteSnack = displayName;
+                                              pet.triedSnacks.add(displayName);
+                                            }
+                                          });
+
+                                          setState(() {});
+                                          await _updatePetSnacks(pet);
+                                        },
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ),
-
-                            const SizedBox(width: 10),
-
-                            Column(
-                              children: [
-                                GestureDetector(
-                                  onTap: () async {
-                                    setSheetState(() {
-                                      if (isTried) {
-                                        pet.triedSnacks.remove(displayName);
-                                        if (isFav) {
-                                          pet.favoriteSnack = "";
-                                        }
-                                      } else {
-                                        pet.triedSnacks.add(displayName);
-                                      }
-                                    });
-                                    setState(() {});
-                                    await _updatePetSnacks(pet);
-                                  },
-                                  child: AnimatedContainer(
-                                    duration:
-                                    const Duration(milliseconds: 160),
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: isTried
-                                          ? const Color(0xFFFF8E7C)
-                                          : const Color(0xFFF6F7F9),
-                                      borderRadius:
-                                      BorderRadius.circular(14),
-                                    ),
-                                    child: Icon(
-                                      Icons.check_rounded, // 👉 항상 동일
-                                      color: isTried
-                                          ? Colors.white
-                                          : const Color(0xFFB0B0B0), // 회색 체크
-                                      size: 22,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                GestureDetector(
-                                  onTap: () async {
-                                    setSheetState(() {
-                                      // 최애 누르면 자동으로 먹어본 간식에도 추가
-                                      pet.triedSnacks.add(displayName);
-
-                                      pet.favoriteSnack = isFav ? "" : displayName;
-                                    });
-                                    setState(() {});
-                                    await _updatePetSnacks(pet);
-                                  },
-                                  child: AnimatedOpacity(
-                                    duration: const Duration(milliseconds: 150),
-                                    opacity: 1.0,
-                                    child: Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: isFav
-                                            ? const Color(0xFFFFF3CD)
-                                            : const Color(0xFFF6F7F9),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: Icon(
-                                        isFav
-                                            ? Icons.star_rounded
-                                            : Icons.star_border_rounded,
-                                        color: isFav
-                                            ? const Color(0xFFFFB800)
-                                            : const Color(0xFF8E8E93),
-                                        size: 21,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
                             ),
                           ],
                         ),
