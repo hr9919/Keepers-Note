@@ -33,6 +33,7 @@ class _MainWrapperState extends State<MainWrapper> {
   String _userUid = "";
   String? _profileImageUrl;
   String? _headerImageUrl;
+  String _kakaoId = "";
 
   GlobalSearchItem? _pendingSearchItem;
 
@@ -61,6 +62,12 @@ class _MainWrapperState extends State<MainWrapper> {
   void initState() {
     super.initState();
     _fetchUserInfo();
+  }
+
+  @override
+  void dispose() {
+    _todoController.dispose();
+    super.dispose();
   }
 
   Future<void> _openDrawerSmooth() async {
@@ -98,6 +105,11 @@ class _MainWrapperState extends State<MainWrapper> {
       User user = await UserApi.instance.me();
       final String kakaoId = user.id.toString();
 
+      if (!mounted) return;
+      setState(() {
+        _kakaoId = kakaoId;
+      });
+
       final response = await http.post(
         Uri.parse('http://161.33.30.40:8080/api/user/login'),
         headers: {"Content-Type": "application/json"},
@@ -127,14 +139,21 @@ class _MainWrapperState extends State<MainWrapper> {
             _headerImageUrl = null;
           }
         });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _userUid = kakaoId;
+        });
       }
 
       await _loadTodoFromServer(kakaoId);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("_fetchUserInfo 실패: $e");
+    }
   }
 
   Future<void> _loadTodoFromServer([String? uid]) async {
-    final targetUid = uid ?? _userUid;
+    final targetUid = uid ?? _kakaoId;
     if (targetUid.isEmpty || targetUid == "UID를 입력해보세요") return;
 
     try {
@@ -228,33 +247,68 @@ class _MainWrapperState extends State<MainWrapper> {
     final taskId = _todoTasks[index]['id'];
     if (taskId == 0) return;
 
+    final previous = _todoTasks[index]['completed'];
+
     setState(() {
-      _todoTasks[index]['completed'] = !_todoTasks[index]['completed'];
+      _todoTasks[index]['completed'] = !previous;
     });
 
     try {
-      await http.put(
+      final response = await http.put(
         Uri.parse('http://161.33.30.40:8080/api/todo/toggle/$taskId'),
       );
-    } catch (_) {}
+
+      if (response.statusCode != 200 && mounted) {
+        setState(() {
+          _todoTasks[index]['completed'] = previous;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _todoTasks[index]['completed'] = previous;
+        });
+      }
+      debugPrint("_toggleTodo 실패: $e");
+    }
   }
 
   void _addTodo() async {
-    if (_todoController.text.trim().isEmpty) return;
-    final taskName = _todoController.text.trim();
+    final taskName = _todoController.text
+        .replaceAll('\n', ' ')
+        .replaceAll('\r', ' ')
+        .trim();
+
+    if (taskName.isEmpty) return;
+
+    if (_kakaoId.isEmpty) {
+      await _fetchUserInfo();
+    }
+
+    if (_kakaoId.isEmpty) {
+      debugPrint("할 일 추가 실패: _kakaoId 비어 있음");
+      return;
+    }
 
     try {
       final response = await http.post(
         Uri.parse('http://161.33.30.40:8080/api/todo/add'),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"kakaoId": _userUid, "taskName": taskName}),
+        body: jsonEncode({
+          "kakaoId": _kakaoId,
+          "taskName": taskName,
+        }),
       );
 
-      if (response.statusCode == 200) {
+      debugPrint("할 일 추가 응답: ${response.statusCode} / ${response.body}");
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
         _todoController.clear();
-        await _loadTodoFromServer();
+        await _loadTodoFromServer(_kakaoId);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("_addTodo 실패: $e");
+    }
   }
 
   void _deleteTodo(int index) async {
@@ -794,12 +848,18 @@ class _MainWrapperState extends State<MainWrapper> {
   Widget _buildTodoTile(Map<String, dynamic> todo, int index) {
     bool isDone = todo['completed'];
 
+    final String displayTaskName = (todo['taskName'] ?? '')
+        .toString()
+        .replaceAll('\n', ' ')
+        .replaceAll('\r', ' ')
+        .trim();
+
     final bool isDefaultTask = [
       "가게 판매 품목 확인",
       "그자리 참나무 파밍",
       "완벽한 형광석 채집",
       "작물에 물 주기",
-    ].contains(todo['taskName']);
+    ].contains(displayTaskName);
 
     return GestureDetector(
       onTap: () => _toggleTodo(index),
@@ -819,6 +879,7 @@ class _MainWrapperState extends State<MainWrapper> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Icon(
                 isDone ? Icons.check_circle : Icons.circle_outlined,
@@ -827,47 +888,40 @@ class _MainWrapperState extends State<MainWrapper> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: IntrinsicWidth(
-                    child: Stack(
-                      alignment: Alignment.centerLeft,
-                      children: [
-                        Text(
-                          todo['taskName'],
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontFamily: 'SF Pro',
-                            color: isDone
-                                ? Colors.grey.withOpacity(0.6)
-                                : Colors.black87,
-                          ),
-                        ),
-                        if (isDone)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              height: 1.2,
-                              color: Colors.grey.withOpacity(0.5),
-                            ),
-                          ),
-                      ],
-                    ),
+                child: Text(
+                  displayTaskName,
+                  softWrap: true,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontFamily: 'SF Pro',
+                    color: isDone
+                        ? Colors.grey.withOpacity(0.6)
+                        : Colors.black87,
+                    decoration:
+                    isDone ? TextDecoration.lineThrough : TextDecoration.none,
+                    decorationColor: Colors.grey.withOpacity(0.5),
+                    decorationThickness: 1.2,
+                    height: 1.35,
                   ),
                 ),
               ),
-              if (todo['isSystem'] != true && !isDefaultTask)
-                IconButton(
-                  constraints: const BoxConstraints(),
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(
-                    Icons.close,
-                    size: 18,
-                    color: Colors.grey,
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: (todo['isSystem'] != true && !isDefaultTask)
+                    ? GestureDetector(
+                  onTap: () => _deleteTodo(index),
+                  behavior: HitTestBehavior.opaque,
+                  child: const Center(
+                    child: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Colors.grey,
+                    ),
                   ),
-                  onPressed: () => _deleteTodo(index),
-                ),
+                )
+                    : const SizedBox.shrink(),
+              ),
             ],
           ),
         ),

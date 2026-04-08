@@ -229,7 +229,7 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
   String _displayFishName(FishItem fish) {
     final ko = fish.nameKo?.trim();
     if (ko != null && ko.isNotEmpty) return ko;
-    return fish.name.trim();
+    return '';
   }
 
   List<FishItem> _sortedFishListByName() {
@@ -1198,14 +1198,6 @@ class _PetScreenState extends State<PetScreen> with SingleTickerProviderStateMix
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
                                       color: Color(0xFF333333),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    fish.id,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Color(0xFF9A9A9A),
                                     ),
                                   ),
                                   const SizedBox(height: 10),
