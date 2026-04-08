@@ -71,6 +71,8 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isUserInteracting = false;
   int _currentEventIndex = 0;
 
+  final Color snackAccent = const Color(0xFFFF8E7C);
+
   String _currentWeather = '맑음';
 
   late final AnimationController _weatherController;
@@ -444,6 +446,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _handleTodoCardTap() async {
     if (_isInnerTap) return;
+
+    FocusScope.of(context).unfocus();
 
     setState(() {
       _isTodoCardPressed = true;
@@ -993,31 +997,29 @@ class _HomeScreenState extends State<HomeScreen>
                           Expanded(
                             child: OutlinedButton(
                               onPressed: () {
-                                final defaults = <String>{};
-
-                                for (final res in _allPreviewCandidates) {
-                                  final key = _normalizePreviewFilterKey(res);
-
-                                  if (key == 'roaming_oak' ||
-                                      key == 'fluorite' ||
-                                      key == 'black_truffle') {
-                                    defaults.add(key);
+                                // 1. setModalState를 사용하여 바텀시트 내부 UI를 즉시 갱신합니다.
+                                setModalState(() {
+                                  // 2. 임시 저장 변수(tempResources 등)를 기본값으로 초기화합니다.
+                                  tempResources.clear();
+                                  for (final res in _allPreviewCandidates) {
+                                    final key = _normalizePreviewFilterKey(res);
+                                    if (key == 'roaming_oak' ||
+                                        key == 'fluorite' ||
+                                        key == 'black_truffle') {
+                                      tempResources.add(key);
+                                    }
                                   }
-                                }
-
-                                _applyPreviewFilter(
-                                  resources: defaults,
-                                  showNpcs: false,
-                                  showAnimals: false,
-                                );
-                                Navigator.pop(context);
+                                  tempShowNpcs = false;
+                                  tempShowAnimals = false;
+                                });
+                                // 3. Navigator.pop(context)를 호출하지 않으므로 창이 닫히지 않습니다.
                               },
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF475569),
                                 side: const BorderSide(
                                   color: Color(0xFFD7DEE7),
                                 ),
-                                minimumSize: const Size.fromHeight(48),
+                                minimumSize: const Size(double.infinity, 48),
                               ),
                               child: const Text('기본값'),
                             ),
@@ -1406,46 +1408,49 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: const BoxDecoration(
-        image: DecorationImage(
-          image: AssetImage('assets/images/bg_gradient.png'),
-          fit: BoxFit.cover,
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
+    final double topPadding = MediaQuery.of(context).padding.top;
+
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        backgroundColor: Colors.transparent,
+        body: Stack(
           children: [
-            _buildCustomAppBar(context),
-            _buildSearchBar(),
-            Expanded(
+            // [Layer 1] 배경 이미지 (최하단)
+            Positioned.fill(
+              child: Image.asset('assets/images/bg_gradient.png', fit: BoxFit.cover),
+            ),
+
+            // [Layer 2] 메인 콘텐츠 스크롤 영역
+            Positioned.fill(
               child: RefreshIndicator(
-                color: const Color(0xFFFF8E7C),
+                color: snackAccent,
                 backgroundColor: Colors.white,
                 onRefresh: () async {
-                  if (widget.onRefresh != null) {
-                    await widget.onRefresh!();
-                  }
+                  if (widget.onRefresh != null) await widget.onRefresh!();
                   await _loadMapPreviewResources();
                 },
                 child: SingleChildScrollView(
-                  physics: _shouldLockHomeScroll
-                      ? const NeverScrollableScrollPhysics()
-                      : const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  // 상단 패딩을 14에서 4로 줄임
-                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 120),
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                  // [수정] 강제 여백을 없애고 콘텐츠가 위로 자연스럽게 올라가게 설정
+                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 기존의 SizedBox(height: 12)를 제거하거나 4 정도로 줄임
-                      const SizedBox(height: 4),
+                      // 중요: 앱바의 높이만큼 빈 공간을 주어 첫 콘텐츠(이벤트)가 앱바 아래에서 시작하게 함
+                      // 앱바의 높이가 대략 180~200px 정도이므로 그만큼 여백을 줍니다.
+                      const SizedBox(height: 190),
 
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _buildSectionTitle('진행중 이벤트'),
+                      ),
                       _buildEventSection(context),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
+
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
@@ -1455,9 +1460,8 @@ class _HomeScreenState extends State<HomeScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildCompactSectionTitle('오늘의 할 일'),
-                                  // 별도 함수 사용
-                                  const SizedBox(height: 8),
+                                  _buildSectionTitle('오늘의 할 일'),
+                                  const SizedBox(height: 2),
                                   _buildTodoSummaryCard(),
                                 ],
                               ),
@@ -1467,8 +1471,8 @@ class _HomeScreenState extends State<HomeScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildCompactSectionTitle('날씨'), // 별도 함수 사용
-                                  const SizedBox(height: 8),
+                                  _buildSectionTitle('날씨'),
+                                  const SizedBox(height: 2),
                                   _buildWeatherCard(_currentWeather),
                                 ],
                               ),
@@ -1476,8 +1480,13 @@ class _HomeScreenState extends State<HomeScreen>
                           ],
                         ),
                       ),
-                      const SizedBox(height: 18),
 
+                      const SizedBox(height: 24),
+
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _buildSectionTitle('지도'),
+                      ),
                       _buildMapSection(context),
 
                       const SizedBox(height: 90),
@@ -1486,7 +1495,70 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
             ),
+
+            // [Layer 3] 커스텀 앱바 (최상단에 고정)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildCustomAppBar(context, topPadding),
+            ),
+
+            // 검색 제안 목록 (검색바 바로 아래 배치)
+            if (_searchSuggestions.isNotEmpty)
+              Positioned(
+                // 앱바 높이와 돋보기 아이콘 위치를 고려해 대략적인 위치 잡기
+                top: topPadding + 140,
+                left: 0,
+                right: 0,
+                child: _buildSearchSuggestionsOverlay(),
+              ),
           ],
+        ),
+      ),
+    );
+  }
+
+// 검색 제안 목록 위젯 분리 (깔끔한 코드를 위해)
+  Widget _buildSearchSuggestionsOverlay() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.4),
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: _searchSuggestions.length,
+            separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16, color: Color(0xFFF1F5F9)),
+            itemBuilder: (context, index) {
+              final item = _searchSuggestions[index];
+              return InkWell(
+                onTap: () {
+                  _searchFocusNode.unfocus();
+                  _searchController.clear();
+                  setState(() => _searchSuggestions = []);
+                  widget.onSearchItemSelected?.call(item);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.asset(item.iconPath, width: 34, height: 34, fit: BoxFit.cover)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(item.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF2D3436)))),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFFD1D1D6)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -1507,30 +1579,6 @@ class _HomeScreenState extends State<HomeScreen>
       default:
         return '';
     }
-  }
-
-  Widget _buildCompactSectionTitle(String title) {
-    return Row(
-      children: [
-        Container(
-          width: 3,
-          height: 14,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFF8E7C),
-            borderRadius: BorderRadius.circular(999),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF111827),
-          ),
-        ),
-      ],
-    );
   }
 
   Widget _buildAnimatedWeatherBackground(String weather) {
@@ -2042,6 +2090,7 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() => _isTodoCardPressed = false);
       },
       onTapUp: (_) async {
+        FocusManager.instance.primaryFocus?.unfocus();
         await Future.delayed(const Duration(milliseconds: 70));
         if (!mounted) return;
         setState(() => _isTodoCardPressed = false);
@@ -2610,259 +2659,82 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildMapSection(BuildContext context) {
-    final double previewWidth = MediaQuery
-        .of(context)
-        .size
-        .width - 32;
+    final double previewWidth = MediaQuery.of(context).size.width - 32;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('지도'),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            width: double.infinity,
-            height: previewWidth,
-            decoration: ShapeDecoration(
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-              shadows: _kCommonShadow,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  _setInitialPreviewTransform(constraints);
-
-                  return Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Listener(
-                          behavior: HitTestBehavior.opaque,
-                          onPointerDown: (_) {
-                            _mapPreviewPointerCount++;
-
-                            if (!_isPointerDownOnMapPreview) {
-                              _setMapPreviewPointerDown(true);
-                            } else {
-                              setState(() {});
-                            }
-                          },
-                          onPointerUp: (_) {
-                            _mapPreviewPointerCount =
-                                (_mapPreviewPointerCount - 1).clamp(0, 999);
-
-                            if (_mapPreviewPointerCount == 0) {
-                              _setMapPreviewPointerDown(false);
-                            } else {
-                              setState(() {});
-                            }
-                          },
-                          onPointerCancel: (_) {
-                            _mapPreviewPointerCount =
-                                (_mapPreviewPointerCount - 1).clamp(0, 999);
-
-                            if (_mapPreviewPointerCount == 0) {
-                              _setMapPreviewPointerDown(false);
-                            } else {
-                              setState(() {});
-                            }
-                          },
-                          child: InteractiveViewer(
-                            transformationController: _previewTransformController,
-                            minScale: _previewMinScale,
-                            maxScale: _previewMaxScale,
-                            boundaryMargin: EdgeInsets.zero,
-                            clipBehavior: Clip.hardEdge,
-                            constrained: false,
-                            panEnabled: true,
-                            scaleEnabled: true,
-                            interactionEndFrictionCoefficient: 0.0000135,
-                            child: SizedBox(
-                              width: constraints.maxWidth,
-                              height: constraints.maxHeight,
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Positioned.fill(
-                                    child: Image.asset(
-                                      'assets/images/map_background.png',
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (c, e, s) =>
-                                          Container(
-                                            color: Colors.grey[200],
-                                            child: const Icon(
-                                              Icons.map_outlined,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                    ),
-                                  ),
-                                  _buildPreviewPlaceLabels(
-                                    constraints.maxWidth,
-                                  ),
-                                  if (_isMapPreviewLoading)
-                                    const Center(
-                                      child: SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2.2,
-                                          color: Color(0xFFFF8E7C),
-                                        ),
-                                      ),
-                                    )
-                                  else
-                                    ..._mapPreviewResources.map(
-                                          (res) =>
-                                          _buildHomeMapPreviewMarker(
-                                            res,
-                                            constraints.maxWidth,
-                                            constraints.maxHeight,
-                                          ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: GestureDetector(
-                          onTap: () => _openMap(),
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.94),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x14000000),
-                                  blurRadius: 8,
-                                  offset: Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.open_in_full_rounded,
-                              color: Color(0xFF334155),
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 10,
-                        right: 10,
-                        bottom: 10,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTapDown: (_) {
-                            setState(() {
-                              _isPreviewFilterBarPressed = true;
-                            });
-                          },
-                          onTapCancel: () {
-                            setState(() {
-                              _isPreviewFilterBarPressed = false;
-                            });
-                          },
-                          onTapUp: (_) async {
-                            await Future.delayed(
-                                const Duration(milliseconds: 70));
-                            if (!mounted) return;
-
-                            setState(() {
-                              _isPreviewFilterBarPressed = false;
-                            });
-
-                            await Future.delayed(
-                                const Duration(milliseconds: 20));
-                            if (!mounted) return;
-
-                            _showPreviewFilterPopup();
-                          },
+    // Column과 내부 제목을 지우고 바로 패딩 컨테이너만 반환
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        width: double.infinity,
+        height: previewWidth,
+        decoration: ShapeDecoration(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          shadows: _kCommonShadow,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              _setInitialPreviewTransform(constraints);
+              return Stack(
+                children: [
+                  // ... (기존 InteractiveViewer 및 버튼 코드는 동일) ...
+                  Positioned.fill(
+                    child: Listener(
+                      onPointerDown: (_) { _mapPreviewPointerCount++; if (!_isPointerDownOnMapPreview) _setMapPreviewPointerDown(true); },
+                      onPointerUp: (_) { _mapPreviewPointerCount = (_mapPreviewPointerCount - 1).clamp(0, 999); if (_mapPreviewPointerCount == 0) _setMapPreviewPointerDown(false); },
+                      child: InteractiveViewer(
+                        transformationController: _previewTransformController,
+                        minScale: _previewMinScale, maxScale: _previewMaxScale,
+                        constrained: false, panEnabled: true, scaleEnabled: true,
+                        child: SizedBox(
+                          width: constraints.maxWidth, height: constraints.maxHeight,
                           child: Stack(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: const Color(0xFFEAECEF),
-                                  ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x10000000),
-                                      blurRadius: 8,
-                                      offset: Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        _buildPreviewCaption(),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                          color: Color(0xFF0F172A),
-                                          height: 1.25,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    const Icon(
-                                      Icons.tune_rounded,
-                                      size: 18,
-                                      color: Color(0xFFFF8E7C),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: IgnorePointer(
-                                  child: AnimatedOpacity(
-                                    duration: const Duration(milliseconds: 80),
-                                    opacity: _isPreviewFilterBarPressed
-                                        ? 1.0
-                                        : 0.0,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF334155)
-                                            .withOpacity(0.08),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                              Positioned.fill(child: Image.asset('assets/images/map_background.png', fit: BoxFit.cover)),
+                              _buildPreviewPlaceLabels(constraints.maxWidth),
+                              if (_isMapPreviewLoading) const Center(child: CircularProgressIndicator(color: Color(0xFFFF8E7C)))
+                              else ..._mapPreviewResources.map((res) => _buildHomeMapPreviewMarker(res, constraints.maxWidth, constraints.maxHeight)),
                             ],
                           ),
                         ),
                       ),
-                    ],
-                  );
-                },
-              ),
-            ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 12, top: 12,
+                    child: GestureDetector(
+                      onTap: () => _openMap(),
+                      child: Container(
+                        width: 42, height: 42,
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.95), borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12)]),
+                        child: const Icon(Icons.open_in_full_rounded, color: Color(0xFF475569), size: 18),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 12, right: 12, bottom: 12,
+                    child: GestureDetector(
+                      onTap: _showPreviewFilterPopup,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.95), borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 15)]),
+                        child: Row(
+                          children: [
+                            Expanded(child: Text(_buildPreviewCaption(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)))),
+                            const Icon(Icons.tune_rounded, size: 18, color: Color(0xFFFF8E7C)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -2954,44 +2826,32 @@ class _HomeScreenState extends State<HomeScreen>
     final events = _activeEvents;
 
     if (events.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionTitle('진행중 이벤트'),
-          const SizedBox(height: 8),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            height: 120,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Center(
-              child: Text('진행 중인 이벤트가 없습니다.',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600)),
-            ),
-          ),
-        ],
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        height: 120,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: const Center(
+          child: Text('진행 중인 이벤트가 없습니다.',
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600)),
+        ),
       );
     }
 
+    // Column 내부에서 제목 제거하고 PageView 영역만 남김
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('진행중 이벤트'),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         SizedBox(
           height: 170,
           child: PageView.builder(
             controller: _eventPageController,
-            // 10000개로 설정하면 왼쪽으로 약 5000번 넘길 수 있습니다.
             itemCount: 10000,
-            onPageChanged: (index) {
-              setState(() {
-                _currentEventIndex = index % events.length;
-              });
-            },
+            onPageChanged: (index) => setState(() => _currentEventIndex = index % events.length),
             itemBuilder: (context, index) {
+              // ... (기존 PageView 아이템 빌더 코드는 동일하게 유지) ...
               final event = events[index % events.length];
               final imageUrl = _resolveEventImageUrl(event.imageUrl);
 
@@ -3000,11 +2860,10 @@ class _HomeScreenState extends State<HomeScreen>
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
                       onTap: () async => await _openEventLink(event.linkUrl, event.id),
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(28),
                           boxShadow: _kCommonShadow,
                         ),
                         clipBehavior: Clip.antiAlias,
@@ -3012,29 +2871,24 @@ class _HomeScreenState extends State<HomeScreen>
                           fit: StackFit.expand,
                           children: [
                             imageUrl.isEmpty
-                                ? Container(
-                                color: const Color(0xFFF8FAFC),
-                                child: const Icon(Icons.image_not_supported_outlined, color: Color(0xFFCBD5E1)))
+                                ? Container(color: const Color(0xFFF8FAFC), child: const Icon(Icons.image_not_supported_outlined))
                                 : Image.network(imageUrl, fit: BoxFit.cover),
                             Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
+                              left: 0, right: 0, bottom: 0,
                               child: Container(
-                                padding: const EdgeInsets.fromLTRB(16, 24, 110, 14),
+                                padding: const EdgeInsets.fromLTRB(20, 32, 110, 18),
                                 decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
-                                    colors: [Color(0x77000000), Color(0x00000000)],
-                                  ),
+                                  gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Color(0x88000000), Color(0x00000000)]),
                                 ),
-                                child: Text(
-                                  event.title,
-                                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                child: Text(event.title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700), maxLines: 1),
+                              ),
+                            ),
+                            Positioned(
+                              top: 14, right: 14,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.4), borderRadius: BorderRadius.circular(999)),
+                                child: Text(formatDdayLabel(event.endAt), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                               ),
                             ),
                           ],
@@ -3043,42 +2897,18 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                   Positioned(
-                    top: 12,
-                    right: 28,
-                    child: IgnorePointer(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.38),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          formatDdayLabel(event.endAt),
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 8,
-                    right: 24,
+                    bottom: 12, right: 28,
                     child: GestureDetector(
                       onTap: () => widget.openEventScreen?.call(),
                       child: Container(
                         padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
+                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.25), borderRadius: BorderRadius.circular(999)),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.grid_view_rounded, size: 13, color: Colors.white),
+                            const Icon(Icons.grid_view_rounded, size: 12, color: Colors.white),
                             const SizedBox(width: 6),
-                            Text(
-                              '전체보기 ${_currentEventIndex + 1}/${events.length}',
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                            ),
+                            Text('${_currentEventIndex + 1}/${events.length}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                           ],
                         ),
                       ),
@@ -3090,7 +2920,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         if (events.length > 1) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(events.length, (index) {
@@ -3098,12 +2928,8 @@ class _HomeScreenState extends State<HomeScreen>
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: selected ? 16 : 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: selected ? const Color(0xFFFF8E7C) : const Color(0xFFD7DEE7),
-                  borderRadius: BorderRadius.circular(999),
-                ),
+                width: selected ? 14 : 6, height: 6,
+                decoration: BoxDecoration(color: selected ? snackAccent : const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(999)),
               );
             }),
           ),
@@ -3112,214 +2938,225 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildCustomAppBar(BuildContext context) {
+  // 1. 설정 화면 이동 함수 정의
+  void _navigateToSettings() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+    );
+  }
+
+// 2. 앱 타이틀 위젯 정의 (실험실 스타일)
+  Widget _buildAppTitle() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          "Keeper's Note",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF2D3436),
+            letterSpacing: -0.6,
+            fontFamily: 'SF Pro',
+          ),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          width: 12,
+          height: 3,
+          decoration: BoxDecoration(
+            color: snackAccent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ],
+    );
+  }
+
+// 3. 통합 검색바 수정 (기존 검색 로직 연결)
+  Widget _buildIntegratedSearchBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      height: 60,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      height: 48,
+      decoration: BoxDecoration(
+        // 1. 따뜻한 베이지 빛이 도는 웜 그레이 배경 (비스킷 느낌)
+        color: const Color(0xFFF7F6F2),
+        borderRadius: BorderRadius.circular(24),
+        // 2. 테두리에 코랄 포인트를 주되, 따뜻한 배경과 어울리게 투명도 조절
+        border: Border.all(
+          color: snackAccent.withOpacity(0.28),
+          width: 1.3,
+        ),
+      ),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        textAlignVertical: TextAlignVertical.center,
+        style: const TextStyle(
+          fontSize: 14,
+          // 3. 글자색도 차가운 네이비 대신 따뜻한 다크 브라운 그레이 사용
+          color: Color(0xFF4A4543),
+          fontWeight: FontWeight.w600,
+        ),
+        decoration: InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          prefixIcon: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: snackAccent, // 여전히 코랄 포인트로 활력 부여
+            ),
+          ),
+          hintText: '어떤 아이템을 찾으시나요?',
+          hintStyle: const TextStyle(
+            // 4. 힌트 텍스트도 배경과 톤을 맞춘 부드러운 토프(Taupe) 색상
+            color: Color(0xFFA8A29E),
+            fontSize: 14,
+          ),
+          contentPadding: const EdgeInsets.fromLTRB(0, 0, 16, 0),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18),
+            color: const Color(0xFFA8A29E),
+            onPressed: () {
+              _searchController.clear();
+              setState(() => _searchSuggestions = []);
+            },
+          )
+              : null,
+        ),
+        onChanged: (value) => _handleSearchChanged(),
+      ),
+    );
+  }
+
+  Widget _buildCustomAppBar(BuildContext context, double topPadding) {
+    return Container(
+      // 1. 천장(상태바)부터 검색창 하단부까지 배경을 채웁니다.
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.90), // 뒤가 은은하게 비치는 반투명 화이트
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24), // 하단 모서리만 살짝 굴려 단정하게 마무리
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      // 2. 내부 패딩에서 상단바 높이(topPadding)를 더해 아이콘들이 상태바 아래에 오게 합니다.
+      padding: EdgeInsets.fromLTRB(16, topPadding + 10, 16, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            onPressed: widget.openDrawer,
-            icon: SvgPicture.asset(
-              'assets/icons/ic_menu.svg',
-              width: 24,
-              height: 24,
-            ),
+          // 상단: 메뉴 - 타이틀 - 설정
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildAppBarButton(
+                icon: 'assets/icons/ic_menu.svg',
+                onTap: widget.openDrawer,
+                bgColor: const Color(0xFFF8FAFC),
+              ),
+              _buildAppTitle(),
+              _buildAppBarButton(
+                icon: 'assets/icons/ic_settings.svg',
+                onTap: _navigateToSettings,
+                bgColor: const Color(0xFFF8FAFC),
+              ),
+            ],
           ),
-          const Text(
-            "Keeper's Note",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'SF Pro',
-            ),
-          ),
-          IconButton(
-            onPressed: () =>
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SettingsScreen(),
-                  ),
-                ),
-            icon: SvgPicture.asset(
-              'assets/icons/ic_settings.svg',
-              width: 24,
-              height: 24,
-            ),
-          ),
+          const SizedBox(height: 16),
+          // 하단: 따뜻한 웜그레이 검색바
+          _buildIntegratedSearchBar(),
         ],
       ),
     );
   }
 
-  Widget _buildSearchBar() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Container(
-            height: 40,
-            decoration: ShapeDecoration(
-              color: const Color(0xFFFFFDFD),
-              shape: RoundedRectangleBorder(
-                side: const BorderSide(width: 1, color: Color(0x30FF7A65)),
-                borderRadius: BorderRadius.circular(36),
-              ),
-              shadows: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              textAlignVertical: TextAlignVertical.center,
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                prefixIcon: Padding(
-                  padding: const EdgeInsets.all(10.0),
-                  child: SvgPicture.asset(
-                    'assets/icons/ic_search.svg',
-                    colorFilter: const ColorFilter.mode(
-                      Color(0xFF898989),
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                ),
-                hintText: '아이템을 검색해보세요.',
-                hintStyle: const TextStyle(
-                  color: Color(0xFF898989),
-                  fontSize: 14,
-                  fontFamily: 'SF Pro',
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _searchSuggestions = []);
-                  },
-                )
-                    : null,
-              ),
-            ),
-          ),
-        ),
+  Widget _buildAppBarButton({
+    required String icon,
+    required VoidCallback? onTap,
+    required Color bgColor,
+  }) {
+    return StatefulBuilder(
+      builder: (context, setBtnState) {
+        bool isPressed = false;
 
-        if (_searchSuggestions.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-            child: Container(
+        return GestureDetector(
+          // 터치 시작 시 상태 변경
+          onTapDown: (_) => setBtnState(() => isPressed = true),
+          // 터치 종료/취소 시 상태 복구
+          onTapUp: (_) => setBtnState(() => isPressed = false),
+          onTapCancel: () => setBtnState(() => isPressed = false),
+          onTap: onTap,
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 100),
+            scale: isPressed ? 0.9 : 1.0, // 1. 누를 때 크기 10% 축소
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 100),
+              width: 44,
+              height: 44,
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: _kCommonShadow,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery
-                      .of(context)
-                      .size
-                      .height * 0.35,
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const BouncingScrollPhysics(),
-                  keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
-                  itemCount: _searchSuggestions.length,
-                  separatorBuilder: (_, __) =>
-                  const Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: Color(0xFFF1F5F9),
+                // 2. 누를 때 배경색을 살짝 어둡게 변경 (0.85 투명도 적용)
+                color: isPressed ? bgColor.withOpacity(0.7) : bgColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: isPressed
+                    ? [] // 3. 누를 때는 그림자를 없애서 바닥에 붙은 느낌 전달
+                    : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  itemBuilder: (context, index) {
-                    final item = _searchSuggestions[index];
-
-                    return InkWell(
-                      onTap: () {
-                        _searchController.clear();
-                        setState(() => _searchSuggestions = []);
-
-                        widget.onSearchItemSelected?.call(item);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.asset(
-                                item.iconPath,
-                                width: 32,
-                                height: 32,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                const Icon(Icons.inventory_2_outlined),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                item.title,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF111827),
-                                ),
-                              ),
-                            ),
-                            const Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 14,
-                              color: Color(0xFFCBD5E1),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                ],
+              ),
+              child: SvgPicture.asset(
+                icon,
+                colorFilter: ColorFilter.mode(
+                  // 4. 누를 때 아이콘 색상도 살짝 강조 (선택 사항)
+                  isPressed ? const Color(0xFF1E293B) : const Color(0xFF475569),
+                  BlendMode.srcIn,
                 ),
               ),
             ),
           ),
-      ],
+        );
+      },
     );
   }
 
-  // 수정된 함수: 좌우 16픽셀의 여백(Padding)을 추가했습니다.
   Widget _buildSectionTitle(String title) {
+    // 함수 내부의 Padding을 최소화하여 재사용성을 높였습니다.
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16), // 좌우 여백 추가
+      padding: const EdgeInsets.symmetric(vertical: 10), // 위아래 간격만 유지
       child: Row(
         children: [
+          // 얇고 깔끔한 포인트 캡슐
           Container(
-            width: 3,
+            width: 3.5,
             height: 14,
             decoration: BoxDecoration(
               color: const Color(0xFFFF8E7C),
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
           const SizedBox(width: 8),
+
+          // 세련된 두께의 텍스트
           Text(
             title,
             style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF111827),
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF2D3436),
+              letterSpacing: -0.4,
             ),
           ),
         ],

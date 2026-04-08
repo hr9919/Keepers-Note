@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
@@ -94,6 +95,7 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Future<void> _openDrawerSmooth() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (_isEndDrawerOpen) {
       setState(() => _isEndDrawerOpen = false);
       await Future.delayed(_kPanelDuration);
@@ -103,6 +105,7 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Future<void> _openEndDrawerSmooth() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (_isDrawerOpen) {
       setState(() => _isDrawerOpen = false);
       await Future.delayed(_kPanelDuration);
@@ -361,6 +364,7 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Future<void> _onMenuSelect(int index) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (_isDrawerOpen) {
       await _closeDrawerSmooth();
     }
@@ -658,6 +662,8 @@ class _MainWrapperState extends State<MainWrapper> {
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
 
+        FocusManager.instance.primaryFocus?.unfocus();
+
         if (_isDrawerOpen) {
           await _closeDrawerSmooth();
           return;
@@ -686,6 +692,7 @@ class _MainWrapperState extends State<MainWrapper> {
       },
       child: Scaffold(
         extendBody: true,
+        resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
             IndexedStack(
@@ -730,6 +737,8 @@ class _MainWrapperState extends State<MainWrapper> {
                     });
                   },
                   onTapUp: (_) async {
+                    FocusManager.instance.primaryFocus?.unfocus();
+
                     await Future.delayed(const Duration(milliseconds: 70));
                     if (!mounted) return;
 
@@ -810,6 +819,8 @@ class _MainWrapperState extends State<MainWrapper> {
     double progress = _todoTasks.isEmpty ? 0 : doneCount / _todoTasks.length;
 
     return SafeArea(
+      // 하단 내비게이션 바 영역까지 패널이 꽉 차도록 bottom: false 설정
+      bottom: false,
       child: Align(
         alignment: Alignment.centerRight,
         child: Material(
@@ -833,6 +844,7 @@ class _MainWrapperState extends State<MainWrapper> {
             child: Column(
               children: [
                 _buildTodoHeader(progress),
+                // 키보드가 올라오면 리스트 영역이 자동으로 줄어듭니다.
                 Expanded(child: _buildTodoListArea()),
                 _buildTodoInputArea(),
               ],
@@ -1034,12 +1046,18 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Widget _buildTodoInputArea() {
+    // 현재 화면의 키보드 높이를 가져옵니다.
+    final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    // 시스템 하단 바 높이를 가져옵니다.
+    final double systemBottomPadding = MediaQuery.of(context).padding.bottom;
+
     return Container(
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
         top: 12,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        // 키보드가 올라왔을 때는 키보드 높이만큼, 아닐 때는 시스템 바 높이만큼 바닥 여백을 줍니다.
+        bottom: keyboardHeight > 0 ? keyboardHeight + 16 : systemBottomPadding + 16,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1066,8 +1084,7 @@ class _MainWrapperState extends State<MainWrapper> {
                 ),
                 filled: true,
                 fillColor: const Color(0xFFF5F5F5),
-                contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
             ),
           ),
@@ -1269,34 +1286,45 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Widget _buildBottomNavigationBar(double bottomPadding) {
     return Container(
-      width: double.infinity,
-      height: bottomPadding > 0 ? 85 + bottomPadding : 85,
-      padding: EdgeInsets.only(bottom: bottomPadding > 0 ? bottomPadding : 10),
-      decoration: const ShapeDecoration(
-        color: Color(0xEAFFFDF9),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
+      // 1. 가로 길이를 늘리기 위해 좌우 마진을 18 -> 10으로 줄였습니다.
+      margin: EdgeInsets.fromLTRB(10, 0, 10, bottomPadding > 0 ? bottomPadding : 16),
+      child: ClipRRect(
+        // 높이가 커졌으므로 곡률도 살짝 더 굴려주면 예쁩니다. (32 -> 36)
+        borderRadius: BorderRadius.circular(36),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            // 2. 세로 높이를 72 -> 88로 시원하게 키웠습니다.
+            height: 88,
+            // 3. 아이콘들이 너무 퍼지지 않게 상하단 여백을 살짝 추가했습니다.
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.75),
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.4),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 24,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildNavItem(0, 'home', '홈'),
+                _buildNavItem(1, 'book', '도감'),
+                _buildNavItem(2, 'cook', '요리'),
+                _buildNavItem(3, 'fish', '채집'),
+                _buildNavItem(4, 'pet', '동물'),
+              ],
+            ),
           ),
         ),
-        shadows: [
-          BoxShadow(
-            color: Color(0x0F000000),
-            blurRadius: 10,
-            offset: Offset(0, -5),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildNavItem(0, 'home', '홈'),
-          _buildNavItem(1, 'book', '도감'),
-          _buildNavItem(2, 'cook', '요리'),
-          _buildNavItem(3, 'fish', '채집'),
-          _buildNavItem(4, 'pet', '동물'),
-        ],
       ),
     );
   }
@@ -1307,51 +1335,87 @@ class _MainWrapperState extends State<MainWrapper> {
         ? 'assets/icons/ic_${fileName}_active.svg'
         : 'assets/icons/ic_$fileName.svg';
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() {
-        _selectedIndex = index;
-        _pendingSearchItem = null;
-        _searchResetSignal++;
-      }),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(40),
-          border: isSelected
-              ? Border.all(
-            color: Colors.black.withOpacity(0.1),
-            width: 0.8,
-          )
-              : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SvgPicture.asset(
-              assetPath,
-              width: 24,
-              height: 24,
-              colorFilter: isSelected
-                  ? null
-                  : const ColorFilter.mode(Colors.black38, BlendMode.srcIn),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: isSelected ? Colors.black : Colors.black38,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontFamily: 'SF Pro',
+    final ValueNotifier<bool> isPressed = ValueNotifier<bool>(false);
+
+    const Duration animDuration = Duration(milliseconds: 150);
+    const Curve animCurve = Curves.easeOutBack;
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: isPressed,
+      builder: (context, pressed, child) {
+        // 현재 상태에 따른 스케일 값 미리 계산
+        double scale = 1.0;
+        if (pressed) {
+          scale = 0.88;
+        } else if (isSelected) {
+          scale = 1.02;
+        }
+
+        return Listener(
+          onPointerDown: (_) {
+            isPressed.value = true;
+            HapticFeedback.lightImpact();
+          },
+          onPointerUp: (_) => isPressed.value = false,
+          onPointerCancel: (_) => isPressed.value = false,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() {
+              _selectedIndex = index;
+              _pendingSearchItem = null;
+              _searchResetSignal++;
+            }),
+            child: AnimatedScale(
+              duration: animDuration,
+              curve: animCurve, // 튕기는 반동을 주어 연결을 매끄럽게 만듦
+              scale: scale,
+              child: AnimatedContainer(
+                duration: animDuration,
+                curve: Curves.easeInOut, // 배경색 변화는 조금 더 유연하게
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withOpacity(0.9)
+                      : (pressed ? const Color(0xFFFF8E7C).withOpacity(0.12) : Colors.transparent),
+                  borderRadius: BorderRadius.circular(40),
+                  border: isSelected
+                      ? Border.all(
+                    color: const Color(0xFFFF8E7C).withOpacity(0.3),
+                    width: 1.2,
+                  )
+                      : null,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SvgPicture.asset(
+                      assetPath,
+                      width: 26,
+                      height: 26,
+                      // 선택 시 필터를 null로 하여 아이콘 원본의 테두리/디테일을 보호합니다.
+                      colorFilter: isSelected
+                          ? null
+                          : const ColorFilter.mode(Color(0xFF94A3B8), BlendMode.srcIn),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: (isSelected || pressed) ? const Color(0xFFFF8E7C) : const Color(0xFF94A3B8),
+                        fontWeight: (isSelected || pressed) ? FontWeight.w800 : FontWeight.w500,
+                        fontFamily: 'SF Pro',
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

@@ -451,11 +451,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     final bool showVoteButton = isVoteTarget && !isActuallyVerified;
     final bool canVote = showVoteButton && !isAlreadyVoted;
 
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding + 12),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
@@ -660,12 +662,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       List<ResourceModel> items, {
         required ResourceModel tapped,
       }) {
+    // 하단 안전 영역 및 내비게이션 바 높이 계산
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+    final double navBarHeight = 80.0;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true, // 내용이 많을 경우 높이 조절 허용
       builder: (context) {
         return Container(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          // 하단 패딩: 시스템 패딩 + 내비바 높이 + 여유 여백(12)
+          padding: EdgeInsets.fromLTRB(20, 20, 20, bottomPadding + navBarHeight + 12),
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -673,10 +681,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 상단 핸들러
               Container(
                 width: 40,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
+                margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
                   color: Colors.grey[300],
                   borderRadius: BorderRadius.circular(2),
@@ -688,7 +697,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   '겹쳐 있는 캐릭터',
                   style: TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     color: Color(0xFF0F172A),
                   ),
                 ),
@@ -704,98 +713,109 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
-              ...items.map((res) {
-                final bool isAnimal = res.category == 'animal';
-                final bool isTapped = res.id == tapped.id;
+              const SizedBox(height: 16),
 
-                return InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    Navigator.pop(context);
-                    setState(() {
-                      _selectedResourceId = res.id;
-                    });
-                    _showResourceDetail(res);
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isTapped
-                          ? const Color(0xFFFFF7F5)
-                          : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isTapped
-                            ? accentColor.withOpacity(0.35)
-                            : const Color(0xFFE2E8F0),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isAnimal
-                                  ? Colors.lightBlue
-                                  : const Color(0xFFFFD7D1),
-                              width: 2,
+              // 캐릭터 리스트가 길어질 경우를 대비해 Flexible + ScrollView 적용
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: items.map((res) {
+                      final bool isAnimal = res.category == 'animal';
+                      final bool isTapped = res.id == tapped.id;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () {
+                            Navigator.pop(context);
+                            setState(() {
+                              _selectedResourceId = res.id;
+                            });
+                            _showResourceDetail(res);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
                             ),
-                          ),
-                          child: ClipOval(
-                            child: Image.asset(
-                              res.iconPath,
-                              fit: BoxFit.cover,
-                              errorBuilder: (c, e, s) => const Icon(
-                                Icons.image_not_supported_outlined,
-                                size: 18,
-                                color: Colors.grey,
+                            decoration: BoxDecoration(
+                              color: isTapped
+                                  ? const Color(0xFFFFF7F5)
+                                  : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isTapped
+                                    ? accentColor.withOpacity(0.35)
+                                    : const Color(0xFFE2E8F0),
                               ),
                             ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: isAnimal
+                                          ? Colors.lightBlue
+                                          : const Color(0xFFFFD7D1),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.asset(
+                                      res.iconPath,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (c, e, s) => const Icon(
+                                        Icons.image_not_supported_outlined,
+                                        size: 18,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        res.koName,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        isAnimal ? '동물 친구' : '마을 주민',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                res.koName,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                isAnimal ? '동물 친구' : '마을 주민',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          color: Color(0xFF94A3B8),
-                        ),
-                      ],
-                    ),
+                      );
+                    }).toList(),
                   ),
-                );
-              }),
+                ),
+              ),
             ],
           ),
         );
@@ -905,30 +925,51 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildFilterDrawer() {
+    final double topPadding = MediaQuery.of(context).padding.top;
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+    final double navBarHeight = 80.0; // 내비게이션 바 높이
+
     final gatherItems = _getDistinctNamesByCategory([
-      'fruit',
-      'bubble',
-      'tree',
-      'material',
-      'mineral',
+      'fruit', 'bubble', 'tree', 'material', 'mineral',
     ]);
     final mushroomItems = _getDistinctNamesByCategory(['mushroom']);
 
     return Drawer(
-      width: MediaQuery.of(context).size.width * 0.86,
-      backgroundColor: Colors.white,
-      child: SafeArea(
+      // 1. 드로워 자체 배경을 투명하게 해서 마진이 보이게 함
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      width: MediaQuery.of(context).size.width * 0.82, // 너비 약간 조절
+      child: Container(
+        // 2. 상단바(topPadding + 헤더높이)와 하단바(bottomPadding + 내비높이)만큼 마진 추가
+        margin: EdgeInsets.fromLTRB(
+          0,
+          topPadding + 70, // 상단 플로팅 헤더보다 약간 아래에서 시작
+          12, // 오른쪽 여백
+          bottomPadding + navBarHeight + 12, // 내비게이션 바 바로 위에서 끝남
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24), // 다른 드로워처럼 둥글게
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 20,
+              offset: const Offset(-4, 0),
+            ),
+          ],
+        ),
         child: Column(
           children: [
+            // 드로워 내부 헤더
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 14, 12),
+              padding: const EdgeInsets.fromLTRB(20, 20, 10, 12),
               child: Row(
                 children: [
                   const Expanded(
                     child: Text(
                       '지도 필터',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFF111827),
                       ),
@@ -936,15 +977,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded),
+                    icon: const Icon(Icons.close_rounded, size: 22),
+                    visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),
             ),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
+
+            // 필터 리스트 영역
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -962,15 +1006,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       onChanged: (val) => setState(() => _showAllAnimals = val),
                     ),
                     const SizedBox(height: 22),
-                    _buildMapFilterSection(
-                      title: '채집 자원',
-                      items: gatherItems,
-                    ),
+                    _buildMapFilterSection(title: '채집 자원', items: gatherItems),
                     const SizedBox(height: 18),
-                    _buildMapFilterSection(
-                      title: '버섯 종류',
-                      items: mushroomItems,
-                    ),
+                    _buildMapFilterSection(title: '버섯 종류', items: mushroomItems),
                   ],
                 ),
               ),
@@ -1054,48 +1092,73 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildFloatingMapHeader() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+    return Container(
+      // 그림자를 더 넓고 부드럽게 (Soft Shadow)
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28), // 더 동글동글하게
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.82),
-            borderRadius: BorderRadius.circular(24),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: Colors.white.withOpacity(0.6),
-              width: 1,
+              color: const Color(0xFFF1F5F9), // 아주 연한 테두리
+              width: 1.5,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
           child: Row(
             children: [
+              // 뒤로가기 버튼 (연한 배경)
               _buildHeaderIconButton(
                 icon: Icons.arrow_back_ios_new_rounded,
+                bgColor: const Color(0xFFF8FAFC),
+                iconColor: const Color(0xFF64748B),
                 onTap: () => Navigator.pop(context),
               ),
-              const Expanded(
+
+              // 중앙 타이틀 (실험실 명찰 느낌)
+              Expanded(
                 child: Center(
-                  child: Text(
-                    '지도',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
-                      height: 1.1,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: accentColor.withOpacity(0.08), // 타이틀에 살짝 배경
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_rounded, size: 16, color: accentColor),
+                        const SizedBox(width: 8),
+                        Text(
+                          '지도', // 실험실 느낌의 귀여운 타이틀
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900, // 더 두껍게
+                            color: const Color(0xFF1E293B),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
+
+              // 필터 버튼 (포인트 컬러 배경)
               _buildHeaderIconButton(
                 icon: Icons.tune_rounded,
+                bgColor: accentColor, // 메인 컬러로 강조
+                iconColor: Colors.white,
                 onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
               ),
             ],
@@ -1107,26 +1170,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   Widget _buildHeaderIconButton({
     required IconData icon,
+    required Color bgColor,
+    required Color iconColor,
     required VoidCallback onTap,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
-        child: Ink(
-          width: 42,
-          height: 42,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.92),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFFE2E8F0),
-            ),
+            color: bgColor,
+            borderRadius: BorderRadius.circular(20),
+            // 필터 버튼처럼 배경이 있는 경우 살짝 그림자 추가
+            boxShadow: bgColor == accentColor
+                ? [BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
+                : [],
           ),
           child: Icon(
             icon,
-            color: const Color(0xFF334155),
+            color: iconColor,
             size: 20,
           ),
         ),
@@ -1367,19 +1434,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        Navigator.pop(context);
-        return false;
-      },
+    // 하단 안전 영역(홈바 등) 높이 계산
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return PopScope(
+      canPop: true,
       child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: seaColor,
+        drawerScrimColor: Colors.black.withOpacity(0.2),
         endDrawer: _buildFilterDrawer(),
         body: _isLoading
-            ? const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        )
+            ? const Center(child: CircularProgressIndicator(color: Colors.white))
             : LayoutBuilder(
           builder: (context, constraints) {
             final double mapSize = constraints.maxWidth * _baseMapWidthFactor;
@@ -1473,15 +1539,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 Positioned(
-                  left: 16,
-                  right: 16,
+                  left: 20,
+                  right: 20,
                   top: MediaQuery.of(context).padding.top + 12,
                   child: _buildFloatingMapHeader(),
                 ),
-            Positioned(
-            right: 16,
-            bottom: 24,
-            child: _buildZoomButtons(constraints, mapSize),
+                Positioned(
+                  right: 16,
+                  bottom: bottomPadding + 20,
+                  child: _buildZoomButtons(constraints, mapSize),
             ),
             ],
             );
