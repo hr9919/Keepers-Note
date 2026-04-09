@@ -330,8 +330,9 @@ class _MainWrapperState extends State<MainWrapper> {
       debugPrint("할 일 추가 응답: ${response.statusCode} / ${response.body}");
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        _todoController.clear();
-        await _loadTodoFromServer(_kakaoId);
+        FocusManager.instance.primaryFocus?.unfocus(); // 키보드 닫기
+        _todoController.clear(); // 입력값 비우기
+        await _loadTodoFromServer(_kakaoId); // 목록 새로고침
       }
     } catch (e) {
       debugPrint("_addTodo 실패: $e");
@@ -815,39 +816,43 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Widget _buildTodoDrawerPanel() {
-    int doneCount = _todoTasks.where((t) => t['completed'] == true).length;
-    double progress = _todoTasks.isEmpty ? 0 : doneCount / _todoTasks.length;
+    final int doneCount = _todoTasks.where((t) => t['completed'] == true).length;
+    final int totalCount = _todoTasks.length;
+    final double progress = totalCount == 0 ? 0 : doneCount / totalCount;
 
     return SafeArea(
-      // 하단 내비게이션 바 영역까지 패널이 꽉 차도록 bottom: false 설정
-      bottom: false,
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF9F9F9),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(30),
-                bottomLeft: Radius.circular(30),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x24000000),
-                  blurRadius: 28,
-                  offset: Offset(-6, 0),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBFA),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(34),
+                  bottomLeft: Radius.circular(34),
                 ),
-              ],
-            ),
-            child: Column(
-              children: [
-                _buildTodoHeader(progress),
-                // 키보드가 올라오면 리스트 영역이 자동으로 줄어듭니다.
-                Expanded(child: _buildTodoListArea()),
-                _buildTodoInputArea(),
-              ],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.14),
+                    blurRadius: 30,
+                    offset: const Offset(-8, 0),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  _buildTodoHeader(progress, doneCount, totalCount),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: _buildTodoListArea(),
+                  ),
+                  _buildTodoInputArea(),
+                ],
+              ),
             ),
           ),
         ),
@@ -855,44 +860,123 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
-  Widget _buildTodoHeader(double progress) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
+  Widget _buildTodoHeader(double progress, int doneCount, int totalCount) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 22, 18, 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.88),
+        border: Border(
+          bottom: BorderSide(
+            color: const Color(0xFFFF8E7C).withOpacity(0.08),
+          ),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                "오늘의 할 일 🌿",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'SF Pro',
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF1ED),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Center(
+                  child: Text(
+                    '📝',
+                    style: TextStyle(fontSize: 19),
+                  ),
                 ),
               ),
-              IconButton(
-                onPressed: () async {
-                  await _closeEndDrawerSmooth();
-                },
-                icon: const Icon(Icons.close),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '오늘의 할 일',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      '오늘의 할 일을 놓치지 말고 체크하세요!',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF94A3B8),
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Material(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () async {
+                    await _closeEndDrawerSmooth();
+                  },
+                  child: const SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 20,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          const Text(
-            "오전 06:00에 모든 항목이 초기화됩니다.",
-            style: TextStyle(fontSize: 11, color: Colors.grey),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 9,
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    color: const Color(0xFFFF8E7C),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4F1),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$doneCount / $totalCount',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFFF8E7C),
+                  ),
+                ),
+              )
+            ],
           ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              backgroundColor: const Color(0xFFE0E0E0),
-              color: const Color(0xFFFF8E7C),
+          const SizedBox(height: 10),
+          const Text(
+            '오전 06:00에 모든 항목이 초기화돼요.',
+            style: TextStyle(
+              fontSize: 11.5,
+              color: Color(0xFF94A3B8),
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -902,7 +986,8 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Widget _buildTodoListArea() {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      physics: const BouncingScrollPhysics(),
       itemCount: _todoTasks.length,
       itemBuilder: (context, index) {
         return _buildTodoTile(_todoTasks[index], index);
@@ -928,104 +1013,142 @@ class _MainWrapperState extends State<MainWrapper> {
 
     const TextStyle todoTextStyle = TextStyle(
       fontSize: 14,
-      fontFamily: 'SF Pro',
+      fontWeight: FontWeight.w500,
       height: 1.35,
+      color: Color(0xFF1E293B),
     );
 
-    return GestureDetector(
-      onTap: () => _toggleTodo(index),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                isDone ? Icons.check_circle : Icons.circle_outlined,
-                color: isDone ? const Color(0xFFFF8E7C) : Colors.grey[300],
-                size: 22,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _toggleTodo(index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+            decoration: BoxDecoration(
+              color: isDone
+                  ? const Color(0xFFFFF8F6)
+                  : Colors.white.withOpacity(0.96),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDone
+                    ? const Color(0xFFFFD8D0)
+                    : const Color(0xFFF1F5F9),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final textWidth = _measureTodoTextWidth(
-                      text: displayTaskName,
-                      style: todoTextStyle,
-                      maxWidth: constraints.maxWidth,
-                    );
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.035),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: isDone
+                        ? const Color(0xFFFF8E7C)
+                        : const Color(0xFFF8FAFC),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isDone
+                          ? const Color(0xFFFF8E7C)
+                          : const Color(0xFFD9E2EC),
+                      width: 1.4,
+                    ),
+                  ),
+                  child: isDone
+                      ? const Icon(
+                    Icons.check_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  )
+                      : null,
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final textWidth = _measureTodoTextWidth(
+                        text: displayTaskName,
+                        style: todoTextStyle,
+                        maxWidth: constraints.maxWidth,
+                      );
 
-                    return Stack(
-                      alignment: Alignment.centerLeft,
-                      children: [
-                        Text(
-                          displayTaskName,
-                          softWrap: true,
-                          strutStyle: const StrutStyle(
-                            forceStrutHeight: true,
-                            fontSize: 14,
-                            height: 1.35,
+                      return Stack(
+                        alignment: Alignment.centerLeft,
+                        children: [
+                          Text(
+                            displayTaskName,
+                            softWrap: true,
+                            strutStyle: const StrutStyle(
+                              forceStrutHeight: true,
+                              fontSize: 14.5,
+                              height: 1.35,
+                            ),
+                            style: todoTextStyle.copyWith(
+                              color: isDone
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF1E293B),
+                            ),
                           ),
-                          style: todoTextStyle.copyWith(
-                            color: isDone
-                                ? Colors.grey.withOpacity(0.6)
-                                : Colors.black87,
-                          ),
-                        ),
-                        if (isDone)
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Transform.translate(
-                                  offset: const Offset(0, 0.5),
-                                  child: Container(
-                                    width: textWidth,
-                                    height: 0.8,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.withOpacity(0.6),
-                                      borderRadius: BorderRadius.circular(999),
+                          if (isDone)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Transform.translate(
+                                    offset: const Offset(0, 0.5),
+                                    child: Container(
+                                      width: textWidth,
+                                      height: 1.0,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF94A3B8)
+                                            .withOpacity(0.75),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: (todo['isSystem'] != true && !isDefaultTask)
-                    ? GestureDetector(
-                  onTap: () => _deleteTodo(index),
-                  behavior: HitTestBehavior.opaque,
-                  child: const Center(
-                    child: Icon(
-                      Icons.close,
-                      size: 18,
-                      color: Colors.grey,
-                    ),
+                        ],
+                      );
+                    },
                   ),
-                )
-                    : const SizedBox.shrink(),
-              ),
-            ],
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: (todo['isSystem'] != true && !isDefaultTask)
+                      ? Material(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => _deleteTodo(index),
+                      child: const Center(
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 17,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ),
+                  )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1046,25 +1169,29 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Widget _buildTodoInputArea() {
-    // 현재 화면의 키보드 높이를 가져옵니다.
     final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    // 시스템 하단 바 높이를 가져옵니다.
     final double systemBottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Container(
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top: 12,
-        // 키보드가 올라왔을 때는 키보드 높이만큼, 아닐 때는 시스템 바 높이만큼 바닥 여백을 줍니다.
-        bottom: keyboardHeight > 0 ? keyboardHeight + 16 : systemBottomPadding + 16,
+        top: 14,
+        bottom: keyboardHeight > 0
+            ? keyboardHeight + 12
+            : (systemBottomPadding > 0 ? 12 : 16),
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withOpacity(0.96),
+        border: Border(
+          top: BorderSide(
+            color: const Color(0xFFFF8E7C).withOpacity(0.08),
+          ),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
             offset: const Offset(0, -2),
           ),
         ],
@@ -1072,28 +1199,81 @@ class _MainWrapperState extends State<MainWrapper> {
       child: Row(
         children: [
           Expanded(
-            child: TextField(
-              controller: _todoController,
-              onSubmitted: (_) => _addTodo(),
-              decoration: InputDecoration(
-                hintText: "오늘 뭐 할까요?",
-                hintStyle: const TextStyle(fontSize: 14, color: Colors.grey),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide.none,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFEAEFF5),
                 ),
-                filled: true,
-                fillColor: const Color(0xFFF5F5F5),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              child: TextField(
+                controller: _todoController,
+                onSubmitted: (_) {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  _addTodo();
+                },
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF334155),
+                ),
+                decoration: InputDecoration(
+                  hintText: "오늘 뭐 할까요?",
+                  hintStyle: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 13,
+                  ),
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.only(left: 12, right: 8),
+                    child: Icon(
+                      Icons.edit_note_rounded,
+                      size: 20,
+                      color: Color(0xFFFF8E7C),
+                    ),
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 0,
+                    minHeight: 0,
+                  ),
+                ),
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _addTodo,
-            child: const CircleAvatar(
-              backgroundColor: Color(0xFFFF8E7C),
-              child: Icon(Icons.add, color: Colors.white),
+          const SizedBox(width: 10),
+          Material(
+            color: const Color(0xFFFF8E7C),
+            borderRadius: BorderRadius.circular(18),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () {
+                FocusManager.instance.primaryFocus?.unfocus();
+                _addTodo();
+              },
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF8E7C).withOpacity(0.28),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
             ),
           ),
         ],
@@ -1286,41 +1466,66 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Widget _buildBottomNavigationBar(double bottomPadding) {
     return Container(
-      // 1. 가로 길이를 늘리기 위해 좌우 마진을 18 -> 10으로 줄였습니다.
-      margin: EdgeInsets.fromLTRB(10, 0, 10, bottomPadding > 0 ? bottomPadding : 16),
+      margin: EdgeInsets.fromLTRB(
+        12,
+        0,
+        12,
+        bottomPadding > 0 ? bottomPadding + 10 : 18,
+      ),
       child: ClipRRect(
-        // 높이가 커졌으므로 곡률도 살짝 더 굴려주면 예쁩니다. (32 -> 36)
-        borderRadius: BorderRadius.circular(36),
+        borderRadius: BorderRadius.circular(34),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
-            // 2. 세로 높이를 72 -> 88로 시원하게 키웠습니다.
-            height: 88,
-            // 3. 아이콘들이 너무 퍼지지 않게 상하단 여백을 살짝 추가했습니다.
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            height: 80,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.75),
-              borderRadius: BorderRadius.circular(36),
+              color: Colors.white.withOpacity(0.72),
+              borderRadius: BorderRadius.circular(34),
               border: Border.all(
-                color: Colors.white.withOpacity(0.4),
-                width: 1.2,
+                color: Colors.white.withOpacity(0.55),
+                width: 1.1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 24,
+                  color: Colors.black.withOpacity(0.07),
+                  blurRadius: 22,
                   offset: const Offset(0, -4),
                 ),
               ],
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildNavItem(0, 'home', '홈'),
-                _buildNavItem(1, 'book', '도감'),
-                _buildNavItem(2, 'cook', '요리'),
-                _buildNavItem(3, 'fish', '채집'),
-                _buildNavItem(4, 'pet', '동물'),
+                _buildNavItem(
+                  index: 0,
+                  label: '홈',
+                  outlinedIcon: Icons.home_outlined,
+                  filledIcon: Icons.home_rounded,
+                ),
+                _buildNavItem(
+                  index: 1,
+                  label: '도감',
+                  outlinedIcon: Icons.collections_bookmark_outlined,
+                  filledIcon: Icons.collections_bookmark_rounded,
+                ),
+                _buildNavItem(
+                  index: 2,
+                  label: '요리',
+                  outlinedIcon: Icons.soup_kitchen_outlined,
+                  filledIcon: Icons.soup_kitchen,
+                ),
+                _buildNavItem(
+                  index: 3,
+                  label: '채집',
+                  outlinedIcon: Icons.travel_explore_outlined,
+                  filledIcon: Icons.travel_explore,
+                ),
+                _buildNavItem(
+                  index: 4,
+                  label: '동물',
+                  outlinedIcon: Icons.pets_outlined,
+                  filledIcon: Icons.pets,
+                ),
               ],
             ),
           ),
@@ -1329,93 +1534,71 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
-  Widget _buildNavItem(int index, String fileName, String label) {
-    bool isSelected = _selectedIndex == index;
-    String assetPath = isSelected
-        ? 'assets/icons/ic_${fileName}_active.svg'
-        : 'assets/icons/ic_$fileName.svg';
+  Widget _buildNavItem({
+    required int index,
+    required String label,
+    required IconData outlinedIcon,
+    required IconData filledIcon,
+  }) {
+    final bool isSelected = _selectedIndex == index;
 
-    final ValueNotifier<bool> isPressed = ValueNotifier<bool>(false);
+    const Color selectedColor = Color(0xFFFF8E7C);
+    const Color unselectedColor = Color(0xFF98A2B3);
 
-    const Duration animDuration = Duration(milliseconds: 150);
-    const Curve animCurve = Curves.easeOutBack;
-
-    return ValueListenableBuilder<bool>(
-      valueListenable: isPressed,
-      builder: (context, pressed, child) {
-        // 현재 상태에 따른 스케일 값 미리 계산
-        double scale = 1.0;
-        if (pressed) {
-          scale = 0.88;
-        } else if (isSelected) {
-          scale = 1.02;
-        }
-
-        return Listener(
-          onPointerDown: (_) {
-            isPressed.value = true;
-            HapticFeedback.lightImpact();
-          },
-          onPointerUp: (_) => isPressed.value = false,
-          onPointerCancel: (_) => isPressed.value = false,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() {
-              _selectedIndex = index;
-              _pendingSearchItem = null;
-              _searchResetSignal++;
-            }),
-            child: AnimatedScale(
-              duration: animDuration,
-              curve: animCurve, // 튕기는 반동을 주어 연결을 매끄럽게 만듦
-              scale: scale,
-              child: AnimatedContainer(
-                duration: animDuration,
-                curve: Curves.easeInOut, // 배경색 변화는 조금 더 유연하게
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () async {
+          await _onMenuSelect(index);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? Colors.white.withOpacity(0.9)
-                      : (pressed ? const Color(0xFFFF8E7C).withOpacity(0.12) : Colors.transparent),
-                  borderRadius: BorderRadius.circular(40),
-                  border: isSelected
-                      ? Border.all(
-                    color: const Color(0xFFFF8E7C).withOpacity(0.3),
-                    width: 1.2,
-                  )
-                      : null,
+                      ? Colors.white.withOpacity(0.92)
+                      : Colors.transparent,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xFFFFD8D2)
+                        : Colors.transparent,
+                    width: 1,
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SvgPicture.asset(
-                      assetPath,
-                      width: 26,
-                      height: 26,
-                      // 선택 시 필터를 null로 하여 아이콘 원본의 테두리/디테일을 보호합니다.
-                      colorFilter: isSelected
-                          ? null
-                          : const ColorFilter.mode(Color(0xFF94A3B8), BlendMode.srcIn),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        color: (isSelected || pressed) ? const Color(0xFFFF8E7C) : const Color(0xFF94A3B8),
-                        fontWeight: (isSelected || pressed) ? FontWeight.w800 : FontWeight.w500,
-                        fontFamily: 'SF Pro',
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  ],
+                child: Icon(
+                  isSelected ? filledIcon : outlinedIcon,
+                  size: 25,
+                  color: isSelected ? selectedColor : unselectedColor,
                 ),
               ),
-            ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? selectedColor : unselectedColor,
+                  fontFamily: 'SF Pro',
+                  height: 1.0,
+                ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

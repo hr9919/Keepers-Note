@@ -3,6 +3,7 @@ import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'data/place_labels.dart';
@@ -482,22 +483,6 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  Color _getWeatherIconColor(String weather) {
-    switch (weather) {
-      case '맑음':
-        return const Color(0xFFFFB703);
-      case '흐림':
-        return const Color(0xFF94A3B8);
-      case '비':
-        return const Color(0xFF7DD3FC);
-      case '무지개':
-        return const Color(0xFFFFD166);
-      case '눈':
-        return const Color(0xFFBFE9FF);
-      default:
-        return Colors.white;
-    }
-  }
 
   Color _getWeatherTextColor(String weather) {
     switch (weather) {
@@ -606,21 +591,25 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-
-  IconData _getWeatherIcon(String weather) {
+  Widget _buildWeatherIcon(String weather, {double size = 24}) {
     switch (weather) {
       case '맑음':
-        return Icons.wb_sunny_rounded;
+        return Text('☀️', style: TextStyle(fontSize: size));
+
       case '흐림':
-        return Icons.cloud_rounded;
+        return Text('☁️', style: TextStyle(fontSize: size));
+
       case '비':
-        return Icons.umbrella_rounded;
+        return Text('🌧️', style: TextStyle(fontSize: size));
+
       case '무지개':
-        return Icons.auto_awesome;
+        return Text('🌈', style: TextStyle(fontSize: size));
+
       case '눈':
-        return Icons.ac_unit;
+        return Text('❄️', style: TextStyle(fontSize: size));
+
       default:
-        return Icons.wb_cloudy_rounded;
+        return Text('🌤️', style: TextStyle(fontSize: size));
     }
   }
 
@@ -1408,51 +1397,61 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final double topPadding = MediaQuery.of(context).padding.top;
+    final topPadding = MediaQuery.of(context).padding.top;
 
-    return GestureDetector(
-      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      behavior: HitTestBehavior.translucent,
-      child: Scaffold(
-        extendBodyBehindAppBar: true,
-        backgroundColor: Colors.transparent,
-        body: Stack(
+    // 커스텀 앱바가 실제로 차지하는 높이
+    const double appBarBodyHeight = 108;
+    final double refreshTop = topPadding + appBarBodyHeight;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFDF8F6),
+      body: SafeArea(
+        top: false,
+        child: Stack(
           children: [
-            // [Layer 1] 배경 이미지 (최하단)
+            // [Layer 1] 배경
             Positioned.fill(
-              child: Image.asset('assets/images/bg_gradient.png', fit: BoxFit.cover),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFFFFF6F3),
+                      Color(0xFFFFFBFA),
+                    ],
+                  ),
+                ),
+              ),
             ),
 
-            // [Layer 2] 메인 콘텐츠 스크롤 영역
+            // [Layer 2] 본문 - 앱바 아래에서부터 새로고침/스크롤 시작
             Positioned.fill(
+              top: refreshTop,
               child: RefreshIndicator(
                 color: const Color(0xFFFF8E7C),
                 backgroundColor: Colors.white,
-                edgeOffset: topPadding + 140,
-                displacement: 24,
+                edgeOffset: 8,
+                displacement: 26,
                 onRefresh: () async {
-                  if (widget.onRefresh != null) {
-                    await widget.onRefresh!();
-                  }
+                  await widget.onRefresh?.call();
                   await _loadMapPreviewResources();
                 },
                 child: SingleChildScrollView(
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
-                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
+                  padding: const EdgeInsets.only(top: 26, bottom: 110),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(height: topPadding + 130),
-
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _buildSectionTitle('이벤트'),
+                        child: _buildSectionTitle('진행중 이벤트'),
                       ),
                       _buildEventSection(context),
                       const SizedBox(height: 20),
+
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
@@ -1463,8 +1462,11 @@ class _HomeScreenState extends State<HomeScreen>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   _buildSectionTitle('오늘의 할 일'),
-                                  const SizedBox(height: 2),
-                                  _buildTodoSummaryCard(),
+                                  const SizedBox(height: 6),
+                                  SizedBox(
+                                    height: 246,
+                                    child: _buildTodoSummaryCard(),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1474,8 +1476,11 @@ class _HomeScreenState extends State<HomeScreen>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   _buildSectionTitle('날씨'),
-                                  const SizedBox(height: 2),
-                                  _buildWeatherCard(_currentWeather),
+                                  const SizedBox(height: 6),
+                                  SizedBox(
+                                    height: 246,
+                                    child: _buildWeatherCard(_currentWeather),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1491,14 +1496,14 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                       _buildMapSection(context),
 
-                      const SizedBox(height: 90),
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
               ),
             ),
 
-            // [Layer 3] 커스텀 앱바 (최상단에 고정)
+            // [Layer 3] 앱바
             Positioned(
               top: 0,
               left: 0,
@@ -1506,10 +1511,24 @@ class _HomeScreenState extends State<HomeScreen>
               child: _buildCustomAppBar(context, topPadding),
             ),
 
-            // 검색 제안 목록 (검색바 바로 아래 배치)
+            // [Layer 4] 검색 팝업 바깥 영역 터치 시 닫기
+            if (_searchSuggestions.isNotEmpty)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {
+                    _searchFocusNode.unfocus();
+                    setState(() {
+                      _searchSuggestions = [];
+                    });
+                  },
+                  child: const SizedBox.expand(),
+                ),
+              ),
+
+            // [Layer 5] 검색 제안 팝업
             if (_searchSuggestions.isNotEmpty)
               Positioned(
-                // 앱바 높이와 돋보기 아이콘 위치를 고려해 대략적인 위치 잡기
                 top: topPadding + 140,
                 left: 0,
                 right: 0,
@@ -1521,48 +1540,141 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-// 검색 제안 목록 위젯 분리 (깔끔한 코드를 위해)
   Widget _buildSearchSuggestionsOverlay() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.4),
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: _searchSuggestions.length,
-            separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16, color: Color(0xFFF1F5F9)),
-            itemBuilder: (context, index) {
-              final item = _searchSuggestions[index];
-              return InkWell(
-                onTap: () {
-                  _searchFocusNode.unfocus();
-                  _searchController.clear();
-                  setState(() => _searchSuggestions = []);
-                  widget.onSearchItemSelected?.call(item);
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.asset(item.iconPath, width: 34, height: 34, fit: BoxFit.cover)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(item.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF2D3436)))),
-                      const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFFD1D1D6)),
-                    ],
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.4,
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: _searchSuggestions.length,
+              separatorBuilder: (_, __) => const Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: Color(0xFFF1F5F9),
+              ),
+              itemBuilder: (context, index) {
+                final item = _searchSuggestions[index];
+
+                return InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () {
+                    _searchFocusNode.unfocus();
+                    _searchController.clear();
+
+                    setState(() {
+                      _searchSuggestions = [];
+                    });
+
+                    widget.onSearchItemSelected?.call(item);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF7F4),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: _buildSuggestionLeading(item),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              if ((item.subtitle ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  item.subtitle!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.north_west_rounded,
+                          size: 18,
+                          color: Color(0xFFCBD5E1),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSuggestionLeading(GlobalSearchItem item) {
+    final iconPath = item.iconPath.trim();
+
+    if (iconPath.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(5),
+        child: Image.asset(
+          iconPath,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return const Icon(
+              Icons.search_rounded,
+              size: 18,
+              color: Color(0xFFFF8E7C),
+            );
+          },
+        ),
+      );
+    }
+
+    return const Icon(
+      Icons.search_rounded,
+      size: 18,
+      color: Color(0xFFFF8E7C),
     );
   }
 
@@ -1748,7 +1860,7 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (context, child) {
         final t = _weatherController.value;
         double dy = 0;
-        double scale = 1;
+        double scale = 1.0;
 
         switch (weather) {
           case '맑음':
@@ -1773,11 +1885,7 @@ class _HomeScreenState extends State<HomeScreen>
           offset: Offset(0, dy),
           child: Transform.scale(
             scale: scale,
-            child: Icon(
-              _getWeatherIcon(weather),
-              size: 52,
-              color: _getWeatherIconColor(weather),
-            ),
+            child: _buildWeatherIcon(weather, size: 52),
           ),
         );
       },
@@ -1785,111 +1893,143 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildWeatherCard(String weather) {
-    return Container(
-      height: 220,
-      decoration: _buildWeatherBackground(weather),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Stack(
-          children: [
-            _buildAnimatedWeatherBackground(weather),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        '현재 날씨',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _getWeatherSubTextColor(weather),
-                        ),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: _showWeeklyWeatherPopup,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            // 배경색에 따라 버튼 색상을 다르게 (유리창 느낌)
-                            color: (weather == '맑음' || weather == '눈')
-                                ? Colors.black.withOpacity(0.06) // 밝은 배경에선 살짝 어두운 유리
-                                : Colors.white.withOpacity(0.2), // 어두운 배경에선 밝은 유리
-                            borderRadius: BorderRadius.circular(12),
+    final bool isLightBg = ['맑음', '눈', '무지개'].contains(weather);
+
+    return SizedBox.expand(
+      child: Container(
+        decoration: _buildWeatherBackground(weather),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: _buildAnimatedWeatherBackground(weather),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '현재 날씨',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: _getWeatherSubTextColor(weather),
                           ),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: _showWeeklyWeatherPopup,
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(13, 5, 9, 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(
+                                isLightBg ? 0.22 : 0.14,
+                              ),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(
+                                  isLightBg ? 0.28 : 0.18,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '주간',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: _getWeatherSubTextColor(weather),
+                                  ),
+                                ),
+                                const SizedBox(width: 2),
+                                Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 15,
+                                  color: _getWeatherSubTextColor(weather),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6), // ⭐ 여기 숫자 조절
+                          child: SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: Center(
+                              child: _buildWeatherAnimatedIcon(weather),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 25),
+                        Expanded(
                           child: Text(
-                            '주간',
+                            weather,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              // 글자색을 헤더 색상과 맞춤
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              height: 1.0,
                               color: _getWeatherTextColor(weather),
                             ),
                           ),
                         ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      _getWeatherDescription(weather),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        height: 1.3,
+                        fontWeight: FontWeight.w500,
+                        color: _getWeatherSubTextColor(weather),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      _buildWeatherAnimatedIcon(weather),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              weather,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 23, // 크기를 27 -> 23으로 축소
-                                height: 1.2,
-                                fontWeight: FontWeight.w700, // 굵기를 w800 -> w700으로 소폭 하향
-                                color: _getWeatherTextColor(weather),
-                                letterSpacing: -0.5, // 자간을 살짝 좁혀서 더 단정한 느낌 추가
-                              ),
-                            ),
-                            const SizedBox(height: 4), // 간격도 살짝 조정
-                            Text(
-                              _getWeatherDescription(weather),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                height: 1.3,
-                                fontWeight: FontWeight.w500, // 설명 글자도 살짝 얇게 조정
-                                color: _getWeatherSubTextColor(weather),
-                              ),
-                            ),
-                          ],
-                        ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: _buildHourlyWeatherStrip(weather),
                       ),
-                    ],
-                  ),
-                  const Spacer(),
-                  const SizedBox(height: 12),
-                  _buildHourlyWeatherStrip(weather),
-                ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildHourlyWeatherStrip(String currentWeather) {
-    // 밝은 배경색인지 확인 (맑음, 눈, 무지개)
     final bool isLightBg = ['맑음', '눈', '무지개'].contains(currentWeather);
 
     final hourly = [
+      {'time': '09시', 'weather': '맑음'},
       {'time': '12시', 'weather': '맑음'},
       {'time': '15시', 'weather': '흐림'},
       {'time': '18시', 'weather': '비'},
@@ -1898,30 +2038,28 @@ class _HomeScreenState extends State<HomeScreen>
     ];
 
     return SizedBox(
-      height: 64,
+      height: 58,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemCount: hourly.length,
-        // 🔥 에러 해결: 아이템 사이의 간격을 정의합니다.
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final item = hourly[index];
           final weather = item['weather']!;
 
           return Container(
-            width: 58,
+            width: 56,
+            padding: const EdgeInsets.symmetric(vertical: 6),
             decoration: BoxDecoration(
-              // 🎨 개선된 디자인: 회색 대신 반투명 화이트(유리 효과) 적용
               color: isLightBg
-                  ? Colors.white.withOpacity(0.45) // 밝은 배경에선 조금 더 불투명하게
-                  : Colors.white.withOpacity(0.12), // 어두운 배경에선 투명하게
+                  ? Colors.white.withOpacity(0.42)
+                  : Colors.white.withOpacity(0.13),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: Colors.white.withOpacity(0.2), // 미세한 테두리 추가
+                color: Colors.white.withOpacity(0.20),
               ),
             ),
-            padding: const EdgeInsets.symmetric(vertical: 7),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1929,26 +2067,17 @@ class _HomeScreenState extends State<HomeScreen>
                   item['time']!,
                   style: TextStyle(
                     fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    // 글자색을 배경색 톤에 맞춘 네이비 그레이로 설정
+                    fontWeight: FontWeight.w700,
                     color: _getWeatherTextColor(currentWeather),
                   ),
                 ),
-                const SizedBox(height: 5),
-                Icon(
-                  _getWeatherIcon(weather),
-                  size: 16,
-                  color: _getWeatherIconColor(weather).withOpacity(0.9),
-                  // 🔥 아이콘 가독성을 위한 그림자 추가
-                  shadows: [
-                    Shadow(
-                      color: isLightBg
-                          ? Colors.black.withOpacity(0.12) // 밝은 배경에선 아주 미세하게
-                          : Colors.black.withOpacity(0.3),  // 어두운 배경에선 조금 더 선명하게
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: Center(
+                    child: _buildWeatherIcon(weather, size: 16),
+                  ),
                 ),
               ],
             ),
@@ -1967,109 +2096,167 @@ class _HomeScreenState extends State<HomeScreen>
       {'day': '일요일', 'weather': '눈'},
     ];
 
+    final bool isLightBg = ['맑음', '눈', '무지개'].contains(_currentWeather);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
-        return Container(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(99),
-                ),
+        final bottomInset = MediaQuery.of(context).padding.bottom;
+
+        return SafeArea(
+          top: false,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, 24 + bottomInset),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(26),
               ),
-              const Row(
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.calendar_month_rounded, size: 22, color: Color(0xFF64748B)),
-                  SizedBox(width: 10),
-                  Text(
-                    '주간 날씨 예보 (클릭 시 변경)', // 안내 텍스트 살짝 수정
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    '주간 날씨 예보',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF111827),
-                      letterSpacing: -0.5,
+                      color: Color(0xFF0F172A),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Column(
-                children: weekly.map((item) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    // 🔥 클릭 가능하도록 InkWell 추가
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _currentWeather = item['weather']!; // 클릭한 날씨로 변경
-                        });
-                        Navigator.pop(context); // 팝업 닫기
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: const Color(0xFFF1F5F9),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                item['day']!,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF64748B),
+                  const SizedBox(height: 6),
+                  const Text(
+                    '날씨를 탭하면 홈 날씨 카드에 바로 반영돼요.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Column(
+                    children: weekly.map((item) {
+                      final weather = item['weather']!;
+                      final day = item['day']!;
+                      final isSelected = _currentWeather == weather;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _currentWeather = weather;
+                              });
+                              Navigator.pop(context);
+                            },
+                            borderRadius: BorderRadius.circular(18),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 15,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFFFFF4F1)
+                                    : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFFFFD4CC)
+                                      : const Color(0xFFEAEFF5),
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              flex: 3,
                               child: Row(
                                 children: [
-                                  Icon(
-                                    _getWeatherIcon(item['weather']!),
-                                    size: 24,
-                                    color: _getWeatherIconColor(item['weather']!),
+                                  Container(
+                                    width: 28,
+                                    height: 28,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: isLightBg
+                                          ? Colors.white.withOpacity(0.32)
+                                          : Colors.white.withOpacity(0.10),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: _buildWeatherIcon(weather, size: 24),
                                   ),
                                   const SizedBox(width: 14),
-                                  Text(
-                                    item['weather']!,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF111827),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          day,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF64748B),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          weather,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF111827),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? const Color(0xFFFF8E7C)
+                                          : const Color(0xFFEFF3F8),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      isSelected ? '현재 적용됨' : '선택',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : const Color(0xFF64748B),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
@@ -2077,141 +2264,237 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildTodoSummaryCard() {
-    const int displayLimit = 5;
+    const int displayLimit = 4;
 
     final items = widget.todoList;
-    final visible = items.take(displayLimit).toList();
-    final extraCount = items.length - visible.length;
+    final visibleItems = items.take(displayLimit).toList();
+    final int extraCount =
+    items.length > displayLimit ? items.length - displayLimit : 0;
 
     return GestureDetector(
-      onTap: _handleTodoCardTap,
       onTapDown: (_) {
+        if (_isInnerTap) return;
         setState(() => _isTodoCardPressed = true);
       },
       onTapCancel: () {
+        if (_isInnerTap) return;
         setState(() => _isTodoCardPressed = false);
       },
       onTapUp: (_) async {
-        FocusManager.instance.primaryFocus?.unfocus();
+        if (_isInnerTap) return;
+
         await Future.delayed(const Duration(milliseconds: 70));
         if (!mounted) return;
+
         setState(() => _isTodoCardPressed = false);
         await _handleTodoCardTap();
       },
+      behavior: HitTestBehavior.opaque,
       child: AnimatedScale(
         duration: const Duration(milliseconds: 100),
         scale: _isTodoCardPressed ? 0.985 : 1.0,
-        child: Container(
-          height: 220,
-          padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: double.infinity,
+          height: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
+            color: Colors.white.withOpacity(0.95),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: _kCommonShadow,
           ),
-          child: Stack(
+          child: items.isEmpty
+              ? const Align(
+            alignment: Alignment.topLeft,
+            child: Text(
+              '오늘의 할 일을 등록해보세요! 🌿',
+              style: TextStyle(
+                color: Color(0xFF94A3B8),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          )
+              : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 28),
-                child: items.isEmpty
-                    ? const Align(
-                  alignment: Alignment.topLeft,
-                  child: Text(
-                    '오늘의 할 일을 등록해보세요! 🌿',
-                    style: TextStyle(
-                      color: Color(0xFF94A3B8),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                )
-                    : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: List.generate(visible.length, (index) {
-                          final todo = visible[index];
-                          final String text =
-                          (todo['taskName'] ??
-                              todo['title'] ??
-                              todo['task'] ??
-                              '')
-                              .toString();
-                          final bool isDone =
-                              (todo['completed'] ?? false) == true;
+              ...List.generate(visibleItems.length, (index) {
+                final todo = visibleItems[index];
+                final String text = (todo['taskName'] ?? '')
+                    .toString()
+                    .replaceAll('\n', ' ')
+                    .replaceAll('\r', ' ')
+                    .trim();
+                final bool isDone = todo['completed'] == true;
 
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              bottom: index == visible.length - 1 ? 0 : 6,
-                            ),
-                            child: _buildTodoRow(
-                              index: index,
-                              text: text,
-                              isDone: isDone,
-                              onCheckTap: () =>
-                                  widget.onTodoToggle?.call(index),
-                            ),
-                          );
-                        }),
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == visibleItems.length - 1 ? 0 : 10,
+                  ),
+                  child: _buildTodoSummaryRow(
+                    index: index,
+                    text: text,
+                    isDone: isDone,
+                  ),
+                );
+              }),
+              const Spacer(),
+              Row(
+                children: [
+                  if (extraCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF4F1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '+$extraCount개 더 있어요',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFFF8E7C),
+                        ),
                       ),
                     ),
-                    if (extraCount > 0) ...[
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF5F2),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '+$extraCount개 더 있어요',
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            color: Color(0xFFFF8E7C),
-                            fontWeight: FontWeight.w700,
+                  const Spacer(),
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFF1F5F9),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: Color(0xFFCBD5E1),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTodoSummaryRow({
+    required int index,
+    required String text,
+    required bool isDone,
+  }) {
+    const TextStyle todoTextStyle = TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w500,
+      height: 1.25,
+      color: Color(0xFF1E293B),
+    );
+
+    final Color splashColor = Colors.grey.withOpacity(0.08);
+    final Color highlightColor = Colors.grey.withOpacity(0.05);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        splashColor: splashColor,
+        highlightColor: highlightColor,
+        onTap: () {
+          _isInnerTap = true;
+          widget.onTodoToggle?.call(index);
+
+          Future.delayed(const Duration(milliseconds: 120), () {
+            _isInnerTap = false;
+          });
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: isDone
+                      ? const Color(0xFFFF8E7C)
+                      : const Color(0xFFF8FAFC),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isDone
+                        ? const Color(0xFFFF8E7C)
+                        : const Color(0xFFD9E2EC),
+                    width: 1.3,
+                  ),
+                ),
+                child: isDone
+                    ? const Icon(
+                  Icons.check_rounded,
+                  size: 15,
+                  color: Colors.white,
+                )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final double textWidth = _measureTodoTextWidth(
+                      text: text,
+                      style: todoTextStyle,
+                      maxWidth: constraints.maxWidth,
+                    );
+
+                    return Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        Text(
+                          text,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                          strutStyle: const StrutStyle(
+                            forceStrutHeight: true,
+                            fontSize: 14,
+                            height: 1.25,
+                          ),
+                          style: todoTextStyle.copyWith(
+                            color: isDone
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF1E293B),
                           ),
                         ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 18,
-                    color: Color(0xFFCBD5E1),
-                  ),
-                ),
-              ),
-
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 90),
-                    opacity: _isTodoCardPressed ? 1.0 : 0.0,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF334155).withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                    ),
-                  ),
+                        if (isDone)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Transform.translate(
+                                  offset: const Offset(0, 0.5),
+                                  child: Container(
+                                    width: textWidth.clamp(0, constraints.maxWidth),
+                                    height: 0.9,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF94A3B8)
+                                          .withOpacity(0.72),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],
@@ -2330,13 +2613,7 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
                 const SizedBox(height: 6),
-                Icon(
-                  _getWeatherIcon(weather),
-                  size: 19,
-                  color: weather == '눈'
-                      ? const Color(0xFF60A5FA)
-                      : Colors.white,
-                ),
+                _buildWeatherIcon(weather, size: 24),
                 const SizedBox(height: 6),
                 Text(
                   weather,
@@ -3004,6 +3281,12 @@ class _HomeScreenState extends State<HomeScreen>
           color: Color(0xFF4A4543),
           fontWeight: FontWeight.w600,
         ),
+        onTapOutside: (_) {
+          _searchFocusNode.unfocus();
+          setState(() {
+            _searchSuggestions = [];
+          });
+        },
         decoration: InputDecoration(
           isDense: true,
           border: InputBorder.none,
@@ -3023,8 +3306,18 @@ class _HomeScreenState extends State<HomeScreen>
           contentPadding: const EdgeInsets.fromLTRB(0, 0, 16, 0),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: () => _searchController.clear(),
+            icon: const Icon(
+              Icons.close,
+              size: 18,
+              color: Color(0xFFA8A29E),
+            ),
+            onPressed: () {
+              _searchController.clear();
+              _searchFocusNode.unfocus();
+              setState(() {
+                _searchSuggestions = [];
+              });
+            },
           )
               : null,
         ),
