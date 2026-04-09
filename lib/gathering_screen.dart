@@ -1,5 +1,5 @@
 import 'dart:convert';
-
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
@@ -219,6 +219,41 @@ class _GatheringScreenState extends State<GatheringScreen>
   String _searchQuery = '';
   String _selectedSort = '이름순';
 
+  bool _showTopBtn = false;
+  bool _isFilterVisible = true;
+  bool _isRefreshing = false;
+
+  ScrollController _getCurrentController() {
+    final index = _tabController.index.clamp(0, 3);
+    if (index == 0) return _fishScrollController;
+    if (index == 1) return _birdScrollController;
+    if (index == 2) return _insectScrollController;
+    return _plantScrollController;
+  }
+
+  List<String> _getCurrentFilterList() {
+    final index = _tabController.index;
+    if (index == 0) return ['전체', '강 물고기', '호수 물고기', '바다 물고기'];
+    if (index == 1) return ['전체', '숲', '호수', '바다', '도시근교'];
+    if (index == 2) return ['전체', '숲', '들판', '호수', '바다'];
+    return ['전체', '꽃밭', '숲', '농장', '온실'];
+  }
+
+  void _attachScrollListener(ScrollController controller) {
+    controller.addListener(() {
+      if (!mounted || !controller.hasClients) return;
+
+      final bool showBtn = controller.offset > 100;
+      if (showBtn != _showTopBtn) {
+        setState(() => _showTopBtn = showBtn);
+      }
+
+      if (controller.offset <= 5 && !_isFilterVisible) {
+        setState(() => _isFilterVisible = true);
+      }
+    });
+  }
+
   String? _highlightedId;
   GlobalSearchItem? _pendingSearchItem;
 
@@ -314,6 +349,12 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   @override
   void initState() {
+
+    _attachScrollListener(_fishScrollController);
+    _attachScrollListener(_birdScrollController);
+    _attachScrollListener(_insectScrollController);
+    _attachScrollListener(_plantScrollController);
+
     super.initState();
 
     _tabController = TabController(length: 4, vsync: this);
@@ -861,194 +902,76 @@ class _GatheringScreenState extends State<GatheringScreen>
     }
   }
 
-  String _pricePreview(FishItem fish) {
-    final prices = [
-      fish.price1,
-      fish.price2,
-      fish.price3,
-      fish.price4,
-      fish.price5,
-    ].whereType<int>().toList();
+  @override
+  Widget build(BuildContext context) {
+    final double topPadding = MediaQuery.of(context).padding.top;
+    final double appBarHeight = topPadding + 156;
 
-    if (prices.isEmpty) {
-      if (fish.price != null) return '${_formatPrice(fish.price)}원';
-      return '-';
-    }
-
-    final minPrice = prices.first;
-    final maxPrice = prices.last;
-
-    if (minPrice == maxPrice) {
-      return '${_formatPrice(minPrice)}원';
-    } else {
-      // 예: 500원 ~ 2,500원
-      return '${_formatPrice(minPrice)}원 ~ ${_formatPrice(maxPrice)}원';
-    }
-  }
-
-  List<PopupMenuEntry<String>> _buildPriceMenuItems(FishItem fish) {
-    final items = <PopupMenuEntry<String>>[];
-
-    void addPriceItem(String label, int? value) {
-      if (value != null) {
-        items.add(
-          PopupMenuItem<String>(
-            value: label,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/bg_gradient.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned.fill(
+            child: Column(
               children: [
-                Text(label, style: const TextStyle(fontSize: 13)),
-                const SizedBox(width: 20),
-                Text(
-                  '${_formatPrice(value)}원', // 여기에도 포맷팅과 '원' 추가
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: Color(0xFF333333),
+                SizedBox(height: appBarHeight),
+                const SizedBox(height: 12),
+                AnimatedBuilder(
+                  animation: _tabController,
+                  builder: (context, child) {
+                    final controller = _getCurrentController();
+                    final double offset = controller.hasClients ? controller.offset : 0;
+
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOutCubic,
+                      height: (_isFilterVisible || offset < 20) ? 48 : 0,
+                      child: SingleChildScrollView(
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: (_isFilterVisible || offset < 20) ? 1.0 : 0.0,
+                          child: _buildFilterAndSortHeader(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      _buildFishingTabContent(),
+                      _buildBirdTabContent(),
+                      _buildInsectTabContent(),
+                      _buildPlantTabContent(),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        );
-      }
-    }
-
-    // 가격 필드를 추가하는 부분
-    addPriceItem('1성', fish.price1);
-    addPriceItem('2성', fish.price2);
-    addPriceItem('3성', fish.price3);
-    addPriceItem('4성', fish.price4);
-    addPriceItem('5성', fish.price5);
-
-    if (items.isEmpty) {
-      items.add(
-        const PopupMenuItem<String>(
-          value: 'empty',
-          enabled: false,
-          child: Text('가격 정보 없음'),
-        ),
-      );
-    }
-
-    return items;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/bg_gradient.png'),
-            fit: BoxFit.cover,
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _buildIntegratedAppBar(context, topPadding),
           ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              _buildCustomAppBar(context),
-              _buildTabBar(),
-              const SizedBox(height: 10),
-              _buildSearchBar(hint: "채집물을 검색해보세요."),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  physics: const PageScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  children: [
-                    _buildFishingTabContent(), // 낚시
-                    _buildBirdTabContent(), // 새 관찰 (추가/수정)
-                    _buildInsectTabContent(), // 곤충 채집
-                    _buildPlantTabContent(), // 원예 (추가/수정)
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCustomAppBar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      height: 60,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            onPressed: widget.openDrawer,
-            icon: SvgPicture.asset(
-              'assets/icons/ic_menu.svg',
-              width: 24,
-              height: 24,
-            ),
-          ),
-          const Text(
-            '채집',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'SF Pro',
-            ),
-          ),
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(),
-                ),
-              );
-            },
-            icon: SvgPicture.asset(
-              'assets/icons/ic_settings.svg',
-              width: 24,
-              height: 24,
-            ),
+          Positioned(
+            right: 20,
+            bottom: 140,
+            child: _buildScrollToTopButton(),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Stack(
-      alignment: Alignment.bottomCenter,
-      children: [
-        Container(
-          width: double.infinity,
-          height: 0.7,
-          color: const Color(0xFFC4C4C4),
-        ),
-        TabBar(
-          controller: _tabController,
-          labelColor: Colors.black,
-          unselectedLabelColor: const Color(0xFF898989),
-          labelStyle: const TextStyle(
-            fontSize: 16,
-            fontFamily: 'SF Pro',
-            fontWeight: FontWeight.w500,
-          ),
-          indicatorColor: Colors.black,
-          indicatorWeight: 1.5,
-          indicatorSize: TabBarIndicatorSize.label,
-          indicatorPadding: const EdgeInsets.symmetric(horizontal: -15),
-          tabs: const [
-            Tab(text: '낚시'),
-            Tab(text: '새 관찰'),
-            Tab(text: '곤충 채집'),
-            Tab(text: '원예'),
-          ],
-        ),
-      ],
     );
   }
 
@@ -1169,85 +1092,6 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-  Widget _buildFishingListArea() {
-    if (_isFishLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF666666),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: _fetchFish,
-                child: const Text('다시 시도'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_visibleFishList.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _fetchFish,
-        child: ListView(
-          controller: _fishScrollController,
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          children: const [
-            SizedBox(height: 180),
-            Center(
-              child: Text(
-                '검색 결과가 없어요.',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF666666),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _fetchFish,
-      child: SingleChildScrollView(
-        controller: _fishScrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            children: [
-              ..._visibleFishList.map(
-                    (fish) =>
-                    _buildGatheringCard(
-                      fish: fish,
-                    ),
-              ),
-              const SizedBox(height: 120),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildInsectTabContent() {
     return Column(
@@ -2043,72 +1887,296 @@ class _GatheringScreenState extends State<GatheringScreen>
       ),
     );
   }
+  Widget _buildIntegratedAppBar(BuildContext context, double topPadding) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0.0, 0.42, 1.0],
+          colors: [
+            const Color(0xFFFF8E7C).withOpacity(0.12),
+            const Color(0xFFFFCFC7).withOpacity(0.05),
+            const Color(0xFFFFFAF8),
+          ],
+        ),
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 8),
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildAppBarButton(
+                    icon: 'assets/icons/ic_menu.svg',
+                    onTap: widget.openDrawer,
+                  ),
+                  _buildAppTitle(),
+                  _buildAppBarButton(
+                    icon: 'assets/icons/ic_settings.svg',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              _buildGatheringTopTabBar(),
+              const SizedBox(height: 8),
+              _buildIntegratedSearchBar(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-  Widget _buildFilterBarArea() {
-    List<String> filters = ['전체'];
+  Widget _buildAppBarButton({
+    required String icon,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBFA).withOpacity(0.72),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFFF8E7C).withOpacity(0.07),
+            width: 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.025),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: SvgPicture.asset(
+          icon,
+          colorFilter: const ColorFilter.mode(
+            Color(0xFF5F6B7A),
+            BlendMode.srcIn,
+          ),
+        ),
+      ),
+    );
+  }
 
-    switch (_tabController.index) {
-      case 0:
-        filters.addAll(['강 물고기', '호수 물고기', '바다 물고기']);
-        break;
-      case 1:
-        filters.addAll(['도시', '숲', '물가', '고래산']);
-        break; // 새 위치
-      case 2:
-        filters.addAll(['도시', '곤충 유인', '꽃밭', '온천 산', '숲']);
-        break;
-      case 3:
-        filters.addAll(['꽃', '농작물', '나무']);
-        break; // 원예 타입
-    }
+  Widget _buildAppTitle() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          "채집",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF2D3436),
+            letterSpacing: 0.8,
+            fontFamily: 'SF Pro',
+          ),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          width: 12,
+          height: 3,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF8E7C),
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ],
+    );
+  }
 
-    return IntrinsicHeight(
+  Widget _buildGatheringTopTabBar() {
+    return Container(
+      height: 38,
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4F1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFFF8E7C).withOpacity(0.25),
+          width: 1,
+        ),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        splashFactory: NoSplash.splashFactory,
+        indicatorAnimation: TabIndicatorAnimation.elastic,
+        overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(WidgetState.pressed)) {
+            return Colors.black.withOpacity(0.03);
+          }
+          return Colors.transparent;
+        }),
+        indicator: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        labelColor: const Color(0xFFFF8E7C),
+        unselectedLabelColor: const Color(0xFF94A3B8),
+        labelStyle: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'SF Pro',
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'SF Pro',
+        ),
+        tabs: const [
+          Tab(text: '낚시'),
+          Tab(text: '새'),
+          Tab(text: '곤충'),
+          Tab(text: '원예'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIntegratedSearchBar() {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFAF8),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFFF8E7C).withOpacity(0.22),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        textAlignVertical: TextAlignVertical.center,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Color(0xFF4A4543),
+          fontWeight: FontWeight.w600,
+        ),
+        decoration: const InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          prefixIcon: Padding(
+            padding: EdgeInsets.all(12),
+            child: Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: Color(0xFFFF8E7C),
+            ),
+          ),
+          hintText: '채집물을 검색해보세요.',
+          hintStyle: TextStyle(
+            color: Color(0xFFA8A29E),
+            fontSize: 14,
+          ),
+          contentPadding: EdgeInsets.fromLTRB(0, 0, 16, 0),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterAndSortHeader() {
+    final filterList = _getCurrentFilterList();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 16),
+            child: ShaderMask(
+              shaderCallback: (Rect rect) => const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [Colors.black, Colors.transparent],
+                stops: [0.92, 1.0],
+              ).createShader(rect),
+              blendMode: BlendMode.dstIn,
               child: SizedBox(
-                height: 48,
-                child: ListView.builder( // 2. ListView.builder로 동적 생성
+                height: 38,
+                child: ListView(
                   scrollDirection: Axis.horizontal,
-                  itemCount: filters.length,
-                  itemBuilder: (context, index) {
-                    return _buildFilterChip(filters[index]);
-                  },
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(left: 16, right: 20),
+                  children: filterList.map((label) => _buildFilterChip(label)).toList(),
                 ),
               ),
             ),
           ),
-          // 정렬 버튼 (이 부분은 모든 탭 공통이므로 유지)
           Padding(
-            padding: const EdgeInsets.only(right: 16, left: 8),
-            child: PopupMenuButton<String>(
-              onSelected: _onSortSelected,
-              itemBuilder: (context) =>
-              const [
-                PopupMenuItem(value: '이름순', child: Text('이름순')),
-                PopupMenuItem(value: '가격순', child: Text('가격순')),
-                PopupMenuItem(value: '좋아요순', child: Text('좋아요순')),
-              ],
-              offset: const Offset(0, 30),
-              child: Row(
-                children: [
-                  Text(
-                    _selectedSort,
-                    style: const TextStyle(
-                      color: Color(0xFF616161),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+            padding: const EdgeInsets.only(right: 16, left: 4),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                final next = _selectedSort == '이름순'
+                    ? '가격순'
+                    : _selectedSort == '가격순'
+                    ? '좋아요순'
+                    : '이름순';
+                _onSortSelected(next);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _selectedSort,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 2),
-                  const Icon(
-                    Icons.keyboard_arrow_down,
-                    size: 16,
-                    color: Color(0xFF616161),
-                  ),
-                ],
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: Color(0xFF64748B),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -2116,6 +2184,97 @@ class _GatheringScreenState extends State<GatheringScreen>
       ),
     );
   }
+
+  Widget _buildFilterChip(String label) {
+    final bool isSelected = _selectedFilter == label;
+
+    return GestureDetector(
+      onTap: () => _onFilterSelected(label),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFFFF8E7C).withOpacity(0.12)
+              : Colors.white.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFFFF8E7C).withOpacity(0.4)
+                : Colors.black.withOpacity(0.05),
+            width: 1.2,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? const Color(0xFFFF8E7C)
+                : const Color(0xFF64748B),
+            fontSize: 12.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScrollToTopButton() {
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutBack,
+      scale: _showTopBtn ? 1.0 : 0.0,
+      child: GestureDetector(
+        onTap: () => _getCurrentController().animateTo(
+          0,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOutQuart,
+        ),
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.85),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.black.withOpacity(0.05),
+              width: 0.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.keyboard_arrow_up_rounded,
+            color: Color(0xFF64748B),
+            size: 26,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBaseContainer({
+    required String itemId,
+    required Widget child,
+  }) { ... }
+
+  Widget _buildCardImage(String imagePath, IconData fallbackIcon) { ... }
+
+  Widget _buildCardTitle(String title, String itemId) { ... }
+
+  Widget _buildSmallTag(String text, {bool isEvent = false}) { ... }
+
+  Widget _buildPriceButton(List<int> prices) { ... }
+
+  void _showPriceDialog(List<int> prices) { ... }
+
+  Color _getStarBadgeColor(int star) { ... }
 
   Widget _buildFilterChip(String label) {
     final isSelected = _selectedFilter == label;
@@ -2158,55 +2317,6 @@ class _GatheringScreenState extends State<GatheringScreen>
           padding: EdgeInsets.zero,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           showCheckmark: false,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchBar({required String hint}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Container(
-        height: 40,
-        decoration: ShapeDecoration(
-          color: const Color(0xFFFFFDFD),
-          shape: RoundedRectangleBorder(
-            side: const BorderSide(
-              width: 1,
-              color: Color(0x30FF7A65),
-            ),
-            borderRadius: BorderRadius.circular(36),
-          ),
-          shadows: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: TextField(
-          controller: _searchController,
-          textAlignVertical: TextAlignVertical.center,
-          decoration: InputDecoration(
-            isDense: true,
-            border: InputBorder.none,
-            prefixIcon: Padding(
-              padding: const EdgeInsets.all(10.0),
-              child: SvgPicture.asset(
-                'assets/icons/ic_search.svg',
-                colorFilter: const ColorFilter.mode(
-                  Color(0xFF898989),
-                  BlendMode.srcIn,
-                ),
-              ),
-            ),
-            hintText: hint,
-            hintStyle: const TextStyle(
-              color: Color(0xFF898989),
-              fontSize: 14,
-            ),
-          ),
         ),
       ),
     );

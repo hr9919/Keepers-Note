@@ -224,9 +224,11 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
+          stops: const [0.0, 0.42, 1.0],
           colors: [
-            const Color(0xFFFF8E7C).withOpacity(0.05), // 핵심 수정
-            const Color(0xFFFFFAF8).withOpacity(0.96),
+            const Color(0xFFFF8E7C).withOpacity(0.12), // 상단바 쪽
+            const Color(0xFFFFCFC7).withOpacity(0.05), // 중간 완충
+            const Color(0xFFFFFAF8), // 앱바 하단
           ],
         ),
         borderRadius: const BorderRadius.vertical(
@@ -240,7 +242,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
           ),
         ],
       ),
-      padding: EdgeInsets.fromLTRB(16, topPadding + 10, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 8),
       child: ClipRRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -288,20 +290,24 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
         height: 44,
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: const Color(0xFFFFFBFA).withOpacity(0.72),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFFF8E7C).withOpacity(0.07),
+            width: 0.8,
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(0.025),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
         child: SvgPicture.asset(
           icon,
           colorFilter: const ColorFilter.mode(
-            Color(0xFF475569),
+            Color(0xFF5F6B7A),
             BlendMode.srcIn,
           ),
         ),

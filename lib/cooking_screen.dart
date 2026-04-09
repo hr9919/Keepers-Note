@@ -156,7 +156,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
-    final double appBarHeight = topPadding + 168;
+    final double appBarHeight = topPadding + 156;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -215,11 +215,28 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   Widget _buildIntegratedAppBar(BuildContext context, double topPadding) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.90),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 8))],
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0.0, 0.42, 1.0],
+          colors: [
+            const Color(0xFFFF8E7C).withOpacity(0.12),
+            const Color(0xFFFFCFC7).withOpacity(0.05),
+            const Color(0xFFFFFAF8),
+          ],
+        ),
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      padding: EdgeInsets.fromLTRB(16, topPadding + 10, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 8),
       child: ClipRRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -229,14 +246,25 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildAppBarButton(icon: 'assets/icons/ic_menu.svg', onTap: widget.openDrawer),
+                  _buildAppBarButton(
+                    icon: 'assets/icons/ic_menu.svg',
+                    onTap: widget.openDrawer,
+                  ),
                   _buildAppTitle(),
-                  _buildAppBarButton(icon: 'assets/icons/ic_settings.svg', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+                  _buildAppBarButton(
+                    icon: 'assets/icons/ic_settings.svg',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
               _buildTabBar(),
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
               _buildIntegratedSearchBar(),
             ],
           ),
@@ -249,72 +277,136 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text("요리", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF2D3436), letterSpacing: 0.8, fontFamily: 'SF Pro')),
+        const Text(
+          "요리",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF2D3436),
+            letterSpacing: 0.8,
+            fontFamily: 'SF Pro',
+          ),
+        ),
         const SizedBox(height: 2),
-        Container(width: 12, height: 3, decoration: BoxDecoration(color: snackAccent, borderRadius: BorderRadius.circular(10))),
+        Container(
+          width: 12,
+          height: 3,
+          decoration: BoxDecoration(
+            color: snackAccent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildTabBar() {
-    return TabBar(
-      controller: _tabController,
-
-      // ✅ 도감이랑 동일
-      labelColor: snackAccent,
-      unselectedLabelColor: const Color(0xFF94A3B8),
-
-      indicator: UnderlineTabIndicator(
-        borderSide: BorderSide(width: 4, color: snackAccent),
-        insets: const EdgeInsets.symmetric(horizontal: -12),
+    return Container(
+      height: 38,
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4F1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFFF8E7C).withOpacity(0.25),
+          width: 1,
+        ),
       ),
-
-      splashFactory: NoSplash.splashFactory,
-      overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-        if (states.contains(WidgetState.pressed)) {
-          return Colors.black.withOpacity(0.05);
-        }
-        return Colors.transparent;
-      }),
-
-      indicatorSize: TabBarIndicatorSize.label,
-      dividerColor: Colors.transparent,
-      labelPadding: const EdgeInsets.symmetric(horizontal: 16),
-
-      labelStyle: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w900,
-        fontFamily: 'SF Pro',
+      child: TabBar(
+        controller: _tabController,
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        splashFactory: NoSplash.splashFactory,
+        indicatorAnimation: TabIndicatorAnimation.elastic,
+        overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(WidgetState.pressed)) {
+            return Colors.black.withOpacity(0.03);
+          }
+          return Colors.transparent;
+        }),
+        indicator: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        labelColor: const Color(0xFFFF8E7C),
+        unselectedLabelColor: const Color(0xFF94A3B8),
+        labelStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'SF Pro',
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'SF Pro',
+        ),
+        tabs: const [
+          Tab(text: '레시피'),
+          Tab(text: '재료'),
+        ],
       ),
-
-      unselectedLabelStyle: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        fontFamily: 'SF Pro',
-      ),
-
-      tabs: const [
-        Tab(height: 44, text: '요리 레시피'),
-        Tab(height: 44, text: '요리 재료'),
-      ],
     );
   }
 
   Widget _buildIntegratedSearchBar() {
     return Container(
       height: 48,
-      decoration: BoxDecoration(color: const Color(0xFFF7F6F2), borderRadius: BorderRadius.circular(24), border: Border.all(color: snackAccent.withOpacity(0.28), width: 1.3)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFAF8), // ✅ 도감과 동일
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFFF8E7C).withOpacity(0.22),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: TextField(
         controller: _searchController,
         textAlignVertical: TextAlignVertical.center,
-        style: const TextStyle(fontSize: 14, color: Color(0xFF4A4543), fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          fontSize: 14,
+          color: Color(0xFF4A4543),
+          fontWeight: FontWeight.w600,
+        ),
         decoration: InputDecoration(
-          isDense: true, border: InputBorder.none,
-          prefixIcon: Padding(padding: const EdgeInsets.all(12), child: Icon(Icons.search_rounded, size: 20, color: snackAccent)),
-          hintText: _tabController.index == 0 ? '요리 레시피를 검색해보세요.' : '요리 재료를 검색해보세요.',
-          hintStyle: const TextStyle(color: Color(0xFFA8A29E), fontSize: 14),
+          isDense: true,
+          border: InputBorder.none,
+          prefixIcon: const Padding(
+            padding: EdgeInsets.all(12),
+            child: Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: Color(0xFFFF8E7C),
+            ),
+          ),
+          hintText: _tabController.index == 0
+              ? '음식 이름을 검색해보세요.'
+              : '요리 재료를 검색해보세요.',
+          hintStyle: const TextStyle(
+            color: Color(0xFFA8A29E),
+            fontSize: 14,
+          ),
           contentPadding: const EdgeInsets.fromLTRB(0, 0, 16, 0),
-          suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _searchController.clear()) : null,
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () => _searchController.clear(),
+          )
+              : null,
         ),
       ),
     );
@@ -336,13 +428,38 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildAppBarButton({required String icon, required VoidCallback? onTap}) {
+  Widget _buildAppBarButton({
+    required String icon,
+    required VoidCallback? onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 44, height: 44, padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
-        child: SvgPicture.asset(icon, colorFilter: const ColorFilter.mode(Color(0xFF475569), BlendMode.srcIn)),
+        width: 44,
+        height: 44,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBFA).withOpacity(0.72),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFFF8E7C).withOpacity(0.07),
+            width: 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.025),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: SvgPicture.asset(
+          icon,
+          colorFilter: const ColorFilter.mode(
+            Color(0xFF5F6B7A),
+            BlendMode.srcIn,
+          ),
+        ),
       ),
     );
   }
