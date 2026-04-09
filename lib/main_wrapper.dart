@@ -426,13 +426,20 @@ class _MainWrapperState extends State<MainWrapper> {
         return SafeArea(
           child: Stack(
             children: [
+              // 🔥 배경 (터치 시 닫힘)
               GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Container(
                   width: size.width,
                   height: size.height,
-                  color: Colors.transparent,
-                  alignment: Alignment.center,
+                  color: Colors.black.withOpacity(0.9),
+                ),
+              ),
+
+              // 🔥 이미지 영역 (터치 이벤트 막기)
+              Center(
+                child: GestureDetector(
+                  onTap: () {}, // 👉 이벤트 막기 (닫힘 방지)
                   child: isProfile
                       ? Hero(
                     tag: 'drawer_profile_image',
@@ -465,18 +472,6 @@ class _MainWrapperState extends State<MainWrapper> {
                         ),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Material(
-                  color: Colors.black.withOpacity(0.35),
-                  shape: const CircleBorder(),
-                  child: IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white),
                   ),
                 ),
               ),
@@ -1101,20 +1096,17 @@ class _MainWrapperState extends State<MainWrapper> {
                             ),
                           ),
                           if (isDone)
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Transform.translate(
-                                    offset: const Offset(0, 0.5),
-                                    child: Container(
-                                      width: textWidth,
-                                      height: 1.0,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF94A3B8)
-                                            .withOpacity(0.75),
-                                        borderRadius: BorderRadius.circular(999),
-                                      ),
+                            IgnorePointer(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Transform.translate(
+                                  offset: const Offset(0, 0.5),
+                                  child: Container(
+                                    width: textWidth,
+                                    height: 1.0,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF94A3B8).withOpacity(0.75),
+                                      borderRadius: BorderRadius.circular(999),
                                     ),
                                   ),
                                 ),
@@ -1283,164 +1275,377 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Widget _buildCommonDrawerPanel(double bottomPadding) {
     return SafeArea(
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topRight: Radius.circular(28),
-              bottomRight: Radius.circular(28),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0x24000000),
-                blurRadius: 24,
-                offset: Offset(4, 0),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 10, 18, 10),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFBFA),
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(34),
+                bottomRight: Radius.circular(34),
               ),
-            ],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.14),
+                  blurRadius: 30,
+                  offset: const Offset(8, 0),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                _buildPrettyDrawerHeader(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildDrawerSectionLabel('메뉴'),
+                        const SizedBox(height: 10),
+
+                        _buildDrawerItem(
+                          icon: Icons.home_rounded,
+                          title: '홈',
+                          subtitle: '오늘의 정보와 할 일을 확인해요',
+                          isSelected: _selectedIndex == 0,
+                          onTap: () => _onMenuSelect(0),
+                        ),
+                        _buildDrawerItem(
+                          icon: Icons.collections_bookmark_rounded,
+                          title: '도감',
+                          subtitle: '아이템과 생물 정보를 둘러봐요',
+                          isSelected: _selectedIndex == 1,
+                          onTap: () => _onMenuSelect(1),
+                        ),
+                        _buildDrawerItem(
+                          icon: Icons.soup_kitchen_rounded,
+                          title: '요리',
+                          subtitle: '레시피와 재료를 정리해요',
+                          isSelected: _selectedIndex == 2,
+                          onTap: () => _onMenuSelect(2),
+                        ),
+                        _buildDrawerItem(
+                          icon: Icons.travel_explore_rounded,
+                          title: '채집',
+                          subtitle: '낚시, 곤충, 새, 원예를 모아봐요',
+                          isSelected: _selectedIndex == 3,
+                          onTap: () => _onMenuSelect(3),
+                        ),
+                        _buildDrawerItem(
+                          icon: Icons.pets_rounded,
+                          title: '동물',
+                          subtitle: '간식 실험실과 동물 정보를 확인해요',
+                          isSelected: _selectedIndex == 4,
+                          onTap: () => _onMenuSelect(4),
+                        ),
+
+                        const SizedBox(height: 18),
+                        _buildDrawerSectionLabel('기타'),
+                        const SizedBox(height: 10),
+
+                        _buildDrawerItem(
+                          icon: Icons.settings_rounded,
+                          title: '설정',
+                          subtitle: '프로필과 앱 설정을 관리해요',
+                          isSelected: false,
+                          onTap: () async {
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            await _closeDrawerSmooth();
+
+                            if (!mounted) return;
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SettingsScreen(),
+                              ),
+                            );
+
+                            _fetchUserInfo();
+                          },
+                        ),
+
+                        SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Column(
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrettyDrawerHeader() {
+    final ImageProvider headerProvider = _headerImageUrl != null
+        ? NetworkImage(_headerImageUrl!)
+        : const AssetImage('assets/images/profile_header_bg.png');
+
+    final ImageProvider profileProvider = _profileImageUrl != null
+        ? NetworkImage(_profileImageUrl!)
+        : const AssetImage('assets/images/profile.png');
+
+    final String displayUid = _userUid.isEmpty ? _kakaoId : _userUid;
+    final bool hasUid = displayUid.isNotEmpty;
+
+    return GestureDetector(
+      onTap: () {
+        _showImageViewer(
+          imageProvider: headerProvider,
+          isProfile: false,
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.only(
+            topRight: Radius.circular(34),
+          ),
+          image: DecorationImage(
+            image: headerProvider,
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 22, 18, 18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withOpacity(0.12),
+                Colors.black.withOpacity(0.30),
+              ],
+            ),
+          ),
+          child: Stack(
             children: [
-              Stack(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
-                      final ImageProvider provider = _headerImageUrl != null
-                          ? NetworkImage(_headerImageUrl!)
-                          : const AssetImage('assets/images/profile_header_bg.png');
-
                       _showImageViewer(
-                        imageProvider: provider,
-                        isProfile: false,
+                        imageProvider: profileProvider,
+                        isProfile: true,
                       );
                     },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.only(left: 20, top: 40, bottom: 20),
-                      decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(28),
-                        ),
-                        image: DecorationImage(
-                          image: _headerImageUrl != null
-                              ? NetworkImage(_headerImageUrl!)
-                              : const AssetImage('assets/images/profile_header_bg.png')
-                          as ImageProvider,
-                          fit: BoxFit.cover,
+                    child: Hero(
+                      tag: 'drawer_profile_image',
+                      child: Container(
+                        width: 68,
+                        height: 68,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2.4),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.18),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          image: DecorationImage(
+                            image: profileProvider,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 42),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          GestureDetector(
-                            onTap: () {
-                              final ImageProvider provider = _profileImageUrl != null
-                                  ? NetworkImage(_profileImageUrl!)
-                                  : const AssetImage('assets/images/profile.png');
+                          Text(
+                            '$_userName 님',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(999),
+                              onTap: hasUid
+                                  ? () async {
+                                await Clipboard.setData(
+                                  ClipboardData(text: displayUid),
+                                );
 
-                              _showImageViewer(
-                                imageProvider: provider,
-                                isProfile: true,
-                              );
-                            },
-                            child: Hero(
-                              tag: 'drawer_profile_image',
-                              child: Container(
-                                width: 60,
-                                height: 60,
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context)
+                                  ..hideCurrentSnackBar()
+                                  ..showSnackBar(
+                                    SnackBar(
+                                      behavior: SnackBarBehavior.floating,
+                                      margin: const EdgeInsets.fromLTRB(
+                                        16,
+                                        0,
+                                        16,
+                                        18,
+                                      ),
+                                      backgroundColor: const Color(0xFF2B3440),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                      content: Row(
+                                        children: const [
+                                          Icon(
+                                            Icons.check_circle_rounded,
+                                            size: 18,
+                                            color: Colors.white,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'UID가 복사되었어요',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                              }
+                                  : null,
+                              child: Ink(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 7,
+                                ),
                                 decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                  image: DecorationImage(
-                                    image: _profileImageUrl != null
-                                        ? NetworkImage(_profileImageUrl!) as ImageProvider
-                                        : const AssetImage('assets/images/profile.png'),
-                                    fit: BoxFit.cover,
+                                  color: Colors.white.withOpacity(hasUid ? 0.18 : 0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(
+                                      hasUid ? 0.26 : 0.16,
+                                    ),
                                   ),
+                                  boxShadow: hasUid
+                                      ? [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.08),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ]
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      hasUid
+                                          ? Icons.badge_rounded
+                                          : Icons.schedule_rounded,
+                                      size: 14,
+                                      color: Colors.white.withOpacity(0.96),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        hasUid ? displayUid : 'UID 불러오는 중...',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11.8,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white.withOpacity(0.96),
+                                          letterSpacing: -0.1,
+                                        ),
+                                      ),
+                                    ),
+                                    if (hasUid) ...[
+                                      const SizedBox(width: 7),
+                                      Icon(
+                                        Icons.content_copy_rounded,
+                                        size: 13,
+                                        color: Colors.white.withOpacity(0.88),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 15),
+                          const SizedBox(height: 8),
                           Text(
-                            "$_userName 님",
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: Colors.white,
-                              fontFamily: 'SF Pro',
-                            ),
-                          ),
-                          Text(
-                            "UID: $_userUid",
+                            hasUid ? '즐거운 타운생활 되세요!' : 'UID를 불러오고 있어요',
                             style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white.withOpacity(0.9),
-                              fontFamily: 'SF Pro',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.82),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  Positioned(
-                    bottom: 12,
-                    right: 12,
-                    child: GestureDetector(
-                      onTap: () async {
-                        await _closeDrawerSmooth();
-                        if (!mounted) return;
+                ],
+              ),
 
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SettingsScreen(),
-                          ),
-                        );
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Material(
+                  color: Colors.black.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(999),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () async {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      await _closeDrawerSmooth();
 
-                        _fetchUserInfo();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
-                          shape: BoxShape.circle,
+                      if (!mounted) return;
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsScreen(),
                         ),
-                        child: const Icon(
-                          Icons.edit_rounded,
-                          color: Colors.white,
-                          size: 16,
+                      );
+
+                      _fetchUserInfo();
+                    },
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.22),
                         ),
+                      ),
+                      child: const Icon(
+                        Icons.edit_rounded,
+                        size: 16,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-              _buildDrawerItem(Icons.home_rounded, '홈', () => _onMenuSelect(0)),
-              _buildDrawerItem(Icons.auto_stories_rounded, '아이템 도감', () => _onMenuSelect(1)),
-              _buildDrawerItem(Icons.restaurant_menu_rounded, '요리 레시피', () => _onMenuSelect(2)),
-              _buildDrawerItem(Icons.backpack_rounded, '채집 도감', () => _onMenuSelect(3)),
-              _buildDrawerItem(Icons.pets_rounded, '동물 도감', () => _onMenuSelect(4)),
-              _buildDrawerItem(Icons.celebration_rounded, '이벤트', () async {
-                await _openEventScreen();
-              }),
-              const Spacer(),
-              const Divider(height: 1),
-              _buildDrawerItem(Icons.settings_rounded, '설정', () async {
-                await _closeDrawerSmooth();
-                if (!mounted) return;
-
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                );
-
-                _fetchUserInfo();
-              }),
-              SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
             ],
           ),
         ),
@@ -1448,19 +1653,128 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
-  Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon, color: const Color(0xFF636363), size: 22),
-      title: Text(
-        title,
+  Widget _buildDrawerSectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        text,
         style: const TextStyle(
-          color: Color(0xFF636363),
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          fontFamily: 'SF Pro',
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF94A3B8),
+          letterSpacing: 0.2,
         ),
       ),
-      onTap: onTap,
+    );
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? const Color(0xFFFFF4F1)
+                  : Colors.white.withOpacity(0.92),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isSelected
+                    ? const Color(0xFFFFD7CF)
+                    : const Color(0xFFF1F5F9),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.035),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFFFF8E7C)
+                        : const Color(0xFFFFF1ED),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 22,
+                    color: isSelected
+                        ? Colors.white
+                        : const Color(0xFFFF8E7C),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                          color: isSelected
+                              ? const Color(0xFFE56F5B)
+                              : const Color(0xFF334155),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF94A3B8),
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFFFFE4DE)
+                        : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: isSelected
+                        ? const Color(0xFFFF8E7C)
+                        : const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1470,18 +1784,18 @@ class _MainWrapperState extends State<MainWrapper> {
         12,
         0,
         12,
-        bottomPadding > 0 ? bottomPadding + 10 : 18,
+        bottomPadding > 0 ? bottomPadding + 6 : 12,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(34),
+        borderRadius: BorderRadius.circular(32),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
-            height: 80,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            height: 72,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.72),
-              borderRadius: BorderRadius.circular(34),
+              borderRadius: BorderRadius.circular(32),
               border: Border.all(
                 color: Colors.white.withOpacity(0.55),
                 width: 1.1,
@@ -1533,7 +1847,6 @@ class _MainWrapperState extends State<MainWrapper> {
       ),
     );
   }
-
   Widget _buildNavItem({
     required int index,
     required String label,
@@ -1551,51 +1864,49 @@ class _MainWrapperState extends State<MainWrapper> {
         onTap: () async {
           await _onMenuSelect(index);
         },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.white.withOpacity(0.92)
-                      : Colors.transparent,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected
-                        ? const Color(0xFFFFD8D2)
-                        : Colors.transparent,
-                    width: 1,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.symmetric(
+              horizontal: isSelected ? 12 : 0,
+              vertical: isSelected ? 8 : 0,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Colors.white.withOpacity(0.92)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isSelected
+                    ? const Color(0xFFFFD8D2)
+                    : Colors.transparent,
+                width: 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isSelected ? filledIcon : outlinedIcon,
+                  size: 23,
+                  color: isSelected ? selectedColor : unselectedColor,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                    color: isSelected ? selectedColor : unselectedColor,
+                    fontFamily: 'SF Pro',
+                    height: 1.0,
                   ),
                 ),
-                child: Icon(
-                  isSelected ? filledIcon : outlinedIcon,
-                  size: 25,
-                  color: isSelected ? selectedColor : unselectedColor,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                  color: isSelected ? selectedColor : unselectedColor,
-                  fontFamily: 'SF Pro',
-                  height: 1.0,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

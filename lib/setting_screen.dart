@@ -228,7 +228,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         color: snackCard,
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
-          BoxShadow(color: snackAccent.withOpacity(0.08), blurRadius: 24, offset: const Offset(0, 8)),
+          BoxShadow(
+            color: snackAccent.withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
         ],
       ),
       child: Stack(
@@ -238,23 +242,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
             child: Column(
               children: [
-                Text(_nickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF2D3436))),
-                const SizedBox(height: 6),
-                GestureDetector(
-                  onTap: () => _copyToClipboard(_displayUid),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(color: snackBg, borderRadius: BorderRadius.circular(14)),
-                    child: Text('UID: $_displayUid', style: TextStyle(fontSize: 13, color: snackAccent, fontWeight: FontWeight.w700)),
+                Text(
+                  _nickname,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2D3436),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildUidCapsule(),
+                const SizedBox(height: 12),
+                Text(
+                  _displayUid != "UID를 입력해보세요"
+                      ? '멋진 타운키퍼가 되고 계신가요?'
+                      : '연필 버튼을 눌러 UID를 설정해보세요',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF9AA4B2),
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Divider(color: Color(0xFFF1F2F6), thickness: 1.2),
-                _buildSnackRowItem('푸시 알림 설정', trailing: _buildCustomSwitch(_isPushEnabled)),
+                const Divider(
+                  color: Color(0xFFF1F2F6),
+                  thickness: 1.2,
+                ),
+                _buildSnackRowItem(
+                  '푸시 알림 설정',
+                  trailing: _buildCustomSwitch(_isPushEnabled),
+                ),
               ],
             ),
           ),
-          // 프로필 사진 (명찰 스타일 오버랩)
+
           Positioned(
             top: -50,
             left: 0,
@@ -268,11 +289,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 6),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 5))],
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
                     image: DecorationImage(
                       image: _profileImageUrl != null
                           ? NetworkImage(_profileImageUrl!)
-                          : const AssetImage('assets/images/profile.png') as ImageProvider,
+                          : const AssetImage('assets/images/profile.png')
+                      as ImageProvider,
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -280,16 +308,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          // 수정 아이콘 버튼
+
           Positioned(
             top: 14,
             right: 14,
             child: IconButton(
               onPressed: _showIntegratedEditDialog,
-              icon: Icon(Icons.edit_note_rounded, color: snackAccent, size: 30),
+              icon: Icon(
+                Icons.edit_note_rounded,
+                color: snackAccent,
+                size: 30,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUidCapsule() {
+    final bool hasUid =
+        _displayUid.isNotEmpty && _displayUid != "UID를 입력해보세요";
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: hasUid ? () => _copyToClipboard(_displayUid) : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: hasUid
+                ? snackAccent.withOpacity(0.10)
+                : const Color(0xFFF6F7F9),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: hasUid
+                  ? snackAccent.withOpacity(0.22)
+                  : const Color(0xFFE9EDF2),
+            ),
+            boxShadow: hasUid
+                ? [
+              BoxShadow(
+                color: snackAccent.withOpacity(0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                hasUid ? Icons.badge_rounded : Icons.schedule_rounded,
+                size: 15,
+                color: hasUid ? snackAccent : const Color(0xFFB8C0CC),
+              ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  hasUid ? _displayUid : "UID를 입력해보세요",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: hasUid ? snackAccent : const Color(0xFF9AA4B2),
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+              if (hasUid) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: snackAccent.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.content_copy_rounded,
+                    size: 12,
+                    color: snackAccent,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -405,44 +514,174 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // --- 유틸리티 및 다이얼로그 ---
   void _showIntegratedEditDialog() {
     final nameController = TextEditingController(text: _nickname);
-    final uidController = TextEditingController(text: _displayUid == "UID를 입력해보세요" ? "" : _displayUid);
+    final uidController = TextEditingController(
+      text: _displayUid == "UID를 입력해보세요" ? "" : _displayUid,
+    );
 
     showDialog(
       context: context,
-      builder: (context) => Dialog(
+      barrierDismissible: true,
+      builder: (dialogContext) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 24),
         child: Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(32), // 펫 관리와 동일한 둥근 모서리
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '프로필 정보 수정',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF2D3436)),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: snackAccent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.edit_note_rounded,
+                      color: snackAccent,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '프로필 정보 수정',
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2D3436),
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          '닉네임과 UID를 한 번에 수정할 수 있어요',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF9AA4B2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Material(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => Navigator.pop(dialogContext),
+                      child: const SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
-              _buildDialogField('닉네임', nameController, 10, '새로운 닉네임 입력'),
-              const SizedBox(height: 16),
-              _buildDialogField('UID', uidController, 7, '소문자와 숫자 조합 7자리'),
-              const SizedBox(height: 24),
+              const SizedBox(height: 22),
+
+              _buildDialogField(
+                '닉네임',
+                nameController,
+                10,
+                '새로운 닉네임 입력',
+                icon: Icons.person_rounded,
+              ),
+              const SizedBox(height: 14),
+              _buildDialogField(
+                'UID',
+                uidController,
+                7,
+                '소문자와 숫자 조합 7자리',
+                icon: Icons.badge_rounded,
+                helperText: '예: abc1234',
+              ),
+
+              const SizedBox(height: 22),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8F6),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: snackAccent.withOpacity(0.14),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 16,
+                      color: snackAccent,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'UID는 비워두면 변경하지 않고, 입력하면 기존 UID를 새 값으로 바꿔요.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.4,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF7C8796),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 22),
+
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () => Navigator.pop(dialogContext),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2), // 검정 대신 부드러운 그레이
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        side: const BorderSide(
+                          color: Color(0xFFE2E8F0),
+                          width: 1.2,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
                         foregroundColor: const Color(0xFF636E72),
+                        backgroundColor: const Color(0xFFF8FAFC),
                       ),
-                      child: const Text('취소', style: TextStyle(fontWeight: FontWeight.w600)),
+                      child: const Text(
+                        '취소',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -451,21 +690,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: () {
                         final name = nameController.text.trim();
                         final uid = uidController.text.trim();
-                        if (uid.isNotEmpty && !RegExp(r'^[a-z0-9]{7}$').hasMatch(uid)) {
+
+                        if (uid.isNotEmpty &&
+                            !RegExp(r'^[a-z0-9]{7}$').hasMatch(uid)) {
                           _showSnackBar("UID 형식을 확인해주세요.");
                           return;
                         }
-                        Navigator.pop(context);
+
+                        Navigator.pop(dialogContext);
                         _updateUserInfoOnServer(name, uid);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: snackAccent,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 0, // 입체감 제거
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        elevation: 0,
                       ),
-                      child: const Text('저장', style: TextStyle(fontWeight: FontWeight.w800)),
+                      child: const Text(
+                        '저장',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -477,24 +727,101 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildDialogField(String label, TextEditingController controller, int max, String hint) {
+  Widget _buildDialogField(
+      String label,
+      TextEditingController controller,
+      int max,
+      String hint, {
+        IconData? icon,
+        String? helperText,
+      }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF636E72))),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          maxLength: max,
-          decoration: InputDecoration(
-            hintText: hint,
-            filled: true,
-            fillColor: snackBg,
-            counterText: "",
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Row(
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 16,
+                  color: snackAccent,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF636E72),
+                ),
+              ),
+            ],
           ),
         ),
+        Container(
+          decoration: BoxDecoration(
+            color: snackBg,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: const Color(0xFFF0E6E3),
+            ),
+          ),
+          child: TextField(
+            controller: controller,
+            maxLength: max,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF2D3436),
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(
+                color: Color(0xFFB5BDC8),
+                fontWeight: FontWeight.w500,
+              ),
+              filled: true,
+              fillColor: Colors.transparent,
+              counterText: "",
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide(
+                  color: snackAccent.withOpacity(0.35),
+                  width: 1.4,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 15,
+              ),
+            ),
+          ),
+        ),
+        if (helperText != null) ...[
+          const SizedBox(height: 7),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text(
+              helperText,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF9AA4B2),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

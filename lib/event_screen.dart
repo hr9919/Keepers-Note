@@ -219,7 +219,7 @@ class _EventScreenState extends State<EventScreen> {
             widget.isAdmin ? '이벤트 관리' : '진행 중 이벤트',
             style: const TextStyle(
               fontSize: 20,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
           if (widget.canManage && !widget.isAdmin)
@@ -382,7 +382,7 @@ class _EventScreenState extends State<EventScreen> {
                         event.title,
                         style: const TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: Color(0xFF111827),
                           height: 1.25,
                         ),

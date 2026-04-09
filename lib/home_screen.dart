@@ -1993,7 +1993,7 @@ class _HomeScreenState extends State<HomeScreen>
                       ],
                     ),
 
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 14),
 
                     Text(
                       _getWeatherDescription(weather),
@@ -2007,7 +2007,7 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ),
 
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 24),
 
                     Expanded(
                       child: Align(
@@ -3364,14 +3364,11 @@ class _HomeScreenState extends State<HomeScreen>
                   children: [
                     _buildAppBarButton(
                       icon: 'assets/icons/ic_menu.svg',
-                      onTap: widget.openDrawer,
-                      bgColor: const Color(0xFFFFFBFA).withOpacity(0.72),
+                      onTap: widget.openDrawer ?? () {},
                     ),
-                    Expanded(
-                      child: Center(
-                        child: _buildAppTitle(),
-                      ),
-                    ),
+                    const Spacer(),
+                    _buildAppTitle(),
+                    const Spacer(),
                     _buildAppBarButton(
                       icon: 'assets/icons/ic_settings.svg',
                       onTap: () => Navigator.push(
@@ -3380,7 +3377,6 @@ class _HomeScreenState extends State<HomeScreen>
                           builder: (_) => const SettingsScreen(),
                         ),
                       ),
-                      bgColor: const Color(0xFFFFFBFA).withOpacity(0.72),
                     ),
                   ],
                 ),
@@ -3396,58 +3392,44 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildAppBarButton({
     required String icon,
-    required VoidCallback? onTap,
-    required Color bgColor,
+    required VoidCallback onTap,
   }) {
-    return StatefulBuilder(
-      builder: (context, setBtnState) {
-        bool isPressed = false;
+    final bool isMenu = icon.contains('menu');
 
-        return GestureDetector(
-          onTapDown: (_) => setBtnState(() => isPressed = true),
-          onTapUp: (_) => setBtnState(() => isPressed = false),
-          onTapCancel: () => setBtnState(() => isPressed = false),
-          onTap: onTap,
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 100),
-            scale: isPressed ? 0.92 : 1.0,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 100),
-              width: 44,
-              height: 44,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isPressed
-                    ? bgColor.withOpacity(0.78)
-                    : bgColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: const Color(0xFFFF8E7C).withOpacity(0.10),
-                  width: 0.8,
-                ),
-                boxShadow: isPressed
-                    ? []
-                    : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: SvgPicture.asset(
-                icon,
-                colorFilter: ColorFilter.mode(
-                  isPressed
-                      ? const Color(0xFF334155)
-                      : const Color(0xFF5F6B7A),
-                  BlendMode.srcIn,
-                ),
-              ),
+    return Material(
+      color: isMenu
+          ? const Color(0xFFFFF3F0)
+          : const Color(0xFFF2F7FF),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          width: 40, // 🔥 40 → 34
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isMenu
+                  ? const Color(0xFFFFE2DB)
+                  : const Color(0xFFDCEBFF),
+              width: 1,
             ),
           ),
-        );
-      },
+          child: SvgPicture.asset(
+            icon,
+            width: 17, // 🔥 20 → 17
+            height: 17,
+            colorFilter: ColorFilter.mode(
+              isMenu
+                  ? const Color(0xFFFF8E7C)
+                  : const Color(0xFF4A90E2),
+              BlendMode.srcIn,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

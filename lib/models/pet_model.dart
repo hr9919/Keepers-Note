@@ -1,5 +1,7 @@
 class Pet {
   final int? id;
+  final String color;
+  final String eyeType;
   String name;
   String breed;
   String? imagePath;
@@ -17,6 +19,8 @@ class Pet {
     Set<String>? triedSnacks,
     this.favoriteSnack = "",
     this.sortOrder,
+    this.color = '전체',
+    this.eyeType = '전체',
   }) : triedSnacks = triedSnacks ?? {};
 }
 

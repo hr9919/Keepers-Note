@@ -243,75 +243,53 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(24),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 8),
-      child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildAppBarButton(
-                    icon: 'assets/icons/ic_menu.svg',
-                    onTap: widget.openDrawer,
-                  ),
-                  _buildAppTitle(),
-                  _buildAppBarButton(
-                    icon: 'assets/icons/ic_settings.svg',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SettingsScreen(),
-                      ),
-                    ),
-                  ),
-                ],
+              _buildAppBarButton(
+                icon: 'assets/icons/ic_menu.svg',
+                onTap: widget.openDrawer ?? () {},
               ),
-              const SizedBox(height: 4),
-              _buildTabBar(),
-              const SizedBox(height: 8),
-              _buildIntegratedSearchBar(),
+              const Spacer(),
+              _buildAppTitle(),
+              const Spacer(),
+              _buildAppBarButton(
+                icon: 'assets/icons/ic_settings.svg',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SettingsScreen(),
+                  ),
+                ),
+              ),
             ],
           ),
-        ),
+
+          const SizedBox(height: 10),
+
+          _buildTabBar(),
+
+          const SizedBox(height: 8),
+
+          _buildIntegratedSearchBar(),
+        ],
       ),
     );
   }
 
   Widget _buildAppTitle() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          "요리",
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            color: Color(0xFF2D3436),
-            letterSpacing: 0.8,
-            fontFamily: 'SF Pro',
-          ),
-        ),
-        const SizedBox(height: 2),
-        Container(
-          width: 12,
-          height: 3,
-          decoration: BoxDecoration(
-            color: snackAccent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      ],
+    return const Text(
+      '요리',
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF2D3436),
+        letterSpacing: -0.2,
+      ),
     );
   }
 
@@ -445,34 +423,41 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   Widget _buildAppBarButton({
     required String icon,
-    required VoidCallback? onTap,
+    required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFFBFA).withOpacity(0.72),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFFFF8E7C).withOpacity(0.07),
-            width: 0.8,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.025),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
+    final bool isMenu = icon.contains('menu');
+
+    return Material(
+      color: isMenu
+          ? const Color(0xFFFFF3F0)
+          : const Color(0xFFF2F7FF),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isMenu
+                  ? const Color(0xFFFFE2DB)
+                  : const Color(0xFFDCEBFF),
+              width: 1,
             ),
-          ],
-        ),
-        child: SvgPicture.asset(
-          icon,
-          colorFilter: const ColorFilter.mode(
-            Color(0xFF5F6B7A),
-            BlendMode.srcIn,
+          ),
+          child: SvgPicture.asset(
+            icon,
+            width: 17,
+            height: 17,
+            colorFilter: ColorFilter.mode(
+              isMenu
+                  ? const Color(0xFFFF8E7C)
+                  : const Color(0xFF4A90E2),
+              BlendMode.srcIn,
+            ),
           ),
         ),
       ),
