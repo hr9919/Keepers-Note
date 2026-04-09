@@ -107,7 +107,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
-    final double appBarHeight = topPadding + 168;
+    final double appBarHeight = topPadding + 166;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -123,8 +123,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
           Positioned.fill(
             child: Column(
               children: [
-                SizedBox(height: appBarHeight),
-                const SizedBox(height: 12),
+                SizedBox(height: appBarHeight - 8),
                 AnimatedBuilder(
                   animation: _tabController,
                   builder: (context, child) {
@@ -135,7 +134,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
                     return AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeInOutCubic,
-                      height: (_isFilterVisible || offset < 20) ? 48 : 0,
+                      height: (_isFilterVisible || offset < 20) ? 40 : 0,
                       child: SingleChildScrollView(
                         physics: const NeverScrollableScrollPhysics(),
                         child: AnimatedOpacity(
@@ -435,40 +434,96 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   }
 
   Widget _buildFurnitureContent() {
-    return RefreshIndicator(
-      onRefresh: () async {},
-      color: snackAccent,
-      child: ListView(
-        controller: _furnitureScrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
+    final List<String> dummyTitles = List.generate(
+      12,
+          (index) => '가구 세트 ${index + 1}',
+    );
+
+    return NotificationListener<ScrollUpdateNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.axis != Axis.vertical) return false;
+
+        final controller = _furnitureScrollController;
+        if (!controller.hasClients) return false;
+
+        if (controller.offset < 20 || _isRefreshing) {
+          if (!_isFilterVisible) setState(() => _isFilterVisible = true);
+          return false;
+        }
+
+        if ((notification.scrollDelta ?? 0) > 2 && _isFilterVisible) {
+          setState(() => _isFilterVisible = false);
+        } else if ((notification.scrollDelta ?? 0) < -2 && !_isFilterVisible) {
+          setState(() => _isFilterVisible = true);
+        }
+
+        return false;
+      },
+      child: RefreshIndicator(
+        onRefresh: () async {},
+        color: snackAccent,
+        child: ListView.builder(
+          controller: _furnitureScrollController,
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 180),
+          itemCount: dummyTitles.length,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _buildSeriesCard(dummyTitles[index]),
+            );
+          },
         ),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 180),
-        children: [
-          _buildSeriesCard('클래식 거실'),
-          const SizedBox(height: 16),
-          _buildSeriesCard('포근한 침실'),
-        ],
       ),
     );
   }
 
   Widget _buildAchievementContent() {
-    return RefreshIndicator(
-      key: const PageStorageKey('achievement_tab'),
-      onRefresh: () async {},
-      color: snackAccent,
-      child: ListView(
-        controller: _achievementScrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
+    final List<String> dummyTitles = List.generate(
+      12,
+          (index) => '업적 세트 ${index + 1}',
+    );
+
+    return NotificationListener<ScrollUpdateNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.axis != Axis.vertical) return false;
+
+        final controller = _achievementScrollController;
+        if (!controller.hasClients) return false;
+
+        if (controller.offset < 20 || _isRefreshing) {
+          if (!_isFilterVisible) setState(() => _isFilterVisible = true);
+          return false;
+        }
+
+        if ((notification.scrollDelta ?? 0) > 2 && _isFilterVisible) {
+          setState(() => _isFilterVisible = false);
+        } else if ((notification.scrollDelta ?? 0) < -2 && !_isFilterVisible) {
+          setState(() => _isFilterVisible = true);
+        }
+
+        return false;
+      },
+      child: RefreshIndicator(
+        key: const PageStorageKey('achievement_tab'),
+        onRefresh: () async {},
+        color: snackAccent,
+        child: ListView.builder(
+          controller: _achievementScrollController,
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 180),
+          itemCount: dummyTitles.length,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _buildSeriesCard(dummyTitles[index]),
+            );
+          },
         ),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 180),
-        children: [
-          _buildSeriesCard('기본 업적 세트'),
-          const SizedBox(height: 16),
-          _buildSeriesCard('수집 업적 세트'),
-        ],
       ),
     );
   }
@@ -485,7 +540,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
     }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.zero,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [

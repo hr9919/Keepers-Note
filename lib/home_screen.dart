@@ -1426,31 +1426,33 @@ class _HomeScreenState extends State<HomeScreen>
             // [Layer 2] 메인 콘텐츠 스크롤 영역
             Positioned.fill(
               child: RefreshIndicator(
-                color: snackAccent,
+                color: const Color(0xFFFF8E7C),
                 backgroundColor: Colors.white,
+                edgeOffset: topPadding + 140,
+                displacement: 24,
                 onRefresh: () async {
-                  if (widget.onRefresh != null) await widget.onRefresh!();
+                  if (widget.onRefresh != null) {
+                    await widget.onRefresh!();
+                  }
                   await _loadMapPreviewResources();
                 },
                 child: SingleChildScrollView(
                   keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                  // [수정] 강제 여백을 없애고 콘텐츠가 위로 자연스럽게 올라가게 설정
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
                   padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 중요: 앱바의 높이만큼 빈 공간을 주어 첫 콘텐츠(이벤트)가 앱바 아래에서 시작하게 함
-                      // 앱바의 높이가 대략 180~200px 정도이므로 그만큼 여백을 줍니다.
-                      const SizedBox(height: 190),
+                      SizedBox(height: topPadding + 130),
 
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _buildSectionTitle('진행중 이벤트'),
+                        child: _buildSectionTitle('이벤트'),
                       ),
                       _buildEventSection(context),
                       const SizedBox(height: 20),
-
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
@@ -2975,19 +2977,23 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-// 3. 통합 검색바 수정 (기존 검색 로직 연결)
   Widget _buildIntegratedSearchBar() {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        // 1. 따뜻한 베이지 빛이 도는 웜 그레이 배경 (비스킷 느낌)
-        color: const Color(0xFFF7F6F2),
+        color: const Color(0xFFFFFAF8),
         borderRadius: BorderRadius.circular(24),
-        // 2. 테두리에 코랄 포인트를 주되, 따뜻한 배경과 어울리게 투명도 조절
         border: Border.all(
-          color: snackAccent.withOpacity(0.28),
-          width: 1.3,
+          color: const Color(0xFFFF8E7C).withOpacity(0.22),
+          width: 1.2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: TextField(
         controller: _searchController,
@@ -2995,51 +3001,52 @@ class _HomeScreenState extends State<HomeScreen>
         textAlignVertical: TextAlignVertical.center,
         style: const TextStyle(
           fontSize: 14,
-          // 3. 글자색도 차가운 네이비 대신 따뜻한 다크 브라운 그레이 사용
           color: Color(0xFF4A4543),
           fontWeight: FontWeight.w600,
         ),
         decoration: InputDecoration(
           isDense: true,
           border: InputBorder.none,
-          prefixIcon: Padding(
-            padding: const EdgeInsets.all(12),
+          prefixIcon: const Padding(
+            padding: EdgeInsets.all(12),
             child: Icon(
               Icons.search_rounded,
               size: 20,
-              color: snackAccent, // 여전히 코랄 포인트로 활력 부여
+              color: Color(0xFFFF8E7C),
             ),
           ),
-          hintText: '어떤 아이템을 찾으시나요?',
+          hintText: '찾는 아이템을 검색해보세요.',
           hintStyle: const TextStyle(
-            // 4. 힌트 텍스트도 배경과 톤을 맞춘 부드러운 토프(Taupe) 색상
             color: Color(0xFFA8A29E),
             fontSize: 14,
           ),
           contentPadding: const EdgeInsets.fromLTRB(0, 0, 16, 0),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
-            icon: const Icon(Icons.close_rounded, size: 18),
-            color: const Color(0xFFA8A29E),
-            onPressed: () {
-              _searchController.clear();
-              setState(() => _searchSuggestions = []);
-            },
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () => _searchController.clear(),
           )
               : null,
         ),
-        onChanged: (value) => _handleSearchChanged(),
       ),
     );
   }
 
   Widget _buildCustomAppBar(BuildContext context, double topPadding) {
     return Container(
-      // 1. 천장(상태바)부터 검색창 하단부까지 배경을 채웁니다.
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.90), // 뒤가 은은하게 비치는 반투명 화이트
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0.0, 0.42, 1.0],
+          colors: [
+            const Color(0xFFFFC2B8).withOpacity(0.45),
+            const Color(0xFFFFECE8).withOpacity(0.30),
+            const Color(0xFFFFFAF8),
+          ],
+        ),
         borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(24), // 하단 모서리만 살짝 굴려 단정하게 마무리
+          bottom: Radius.circular(24),
         ),
         boxShadow: [
           BoxShadow(
@@ -3049,32 +3056,47 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ],
       ),
-      // 2. 내부 패딩에서 상단바 높이(topPadding)를 더해 아이콘들이 상태바 아래에 오게 합니다.
-      padding: EdgeInsets.fromLTRB(16, topPadding + 10, 16, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 상단: 메뉴 - 타이틀 - 설정
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_menu.svg',
-                onTap: widget.openDrawer,
-                bgColor: const Color(0xFFF8FAFC),
-              ),
-              _buildAppTitle(),
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_settings.svg',
-                onTap: _navigateToSettings,
-                bgColor: const Color(0xFFF8FAFC),
-              ),
-            ],
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    _buildAppBarButton(
+                      icon: 'assets/icons/ic_menu.svg',
+                      onTap: widget.openDrawer,
+                      bgColor: const Color(0xFFFFFBFA).withOpacity(0.72),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: _buildAppTitle(),
+                      ),
+                    ),
+                    _buildAppBarButton(
+                      icon: 'assets/icons/ic_settings.svg',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      ),
+                      bgColor: const Color(0xFFFFFBFA).withOpacity(0.72),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildIntegratedSearchBar(),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
-          // 하단: 따뜻한 웜그레이 검색바
-          _buildIntegratedSearchBar(),
-        ],
+        ),
       ),
     );
   }
@@ -3089,26 +3111,29 @@ class _HomeScreenState extends State<HomeScreen>
         bool isPressed = false;
 
         return GestureDetector(
-          // 터치 시작 시 상태 변경
           onTapDown: (_) => setBtnState(() => isPressed = true),
-          // 터치 종료/취소 시 상태 복구
           onTapUp: (_) => setBtnState(() => isPressed = false),
           onTapCancel: () => setBtnState(() => isPressed = false),
           onTap: onTap,
           child: AnimatedScale(
             duration: const Duration(milliseconds: 100),
-            scale: isPressed ? 0.9 : 1.0, // 1. 누를 때 크기 10% 축소
+            scale: isPressed ? 0.92 : 1.0,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 100),
               width: 44,
               height: 44,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                // 2. 누를 때 배경색을 살짝 어둡게 변경 (0.85 투명도 적용)
-                color: isPressed ? bgColor.withOpacity(0.7) : bgColor,
+                color: isPressed
+                    ? bgColor.withOpacity(0.78)
+                    : bgColor,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFFF8E7C).withOpacity(0.10),
+                  width: 0.8,
+                ),
                 boxShadow: isPressed
-                    ? [] // 3. 누를 때는 그림자를 없애서 바닥에 붙은 느낌 전달
+                    ? []
                     : [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.05),
@@ -3120,8 +3145,9 @@ class _HomeScreenState extends State<HomeScreen>
               child: SvgPicture.asset(
                 icon,
                 colorFilter: ColorFilter.mode(
-                  // 4. 누를 때 아이콘 색상도 살짝 강조 (선택 사항)
-                  isPressed ? const Color(0xFF1E293B) : const Color(0xFF475569),
+                  isPressed
+                      ? const Color(0xFF334155)
+                      : const Color(0xFF5F6B7A),
                   BlendMode.srcIn,
                 ),
               ),

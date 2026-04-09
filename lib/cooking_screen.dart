@@ -172,7 +172,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
-    final double appBarHeight = topPadding + 156;
+    final double appBarHeight = topPadding + 166;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -183,8 +183,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           Positioned.fill(
             child: Column(
               children: [
-                SizedBox(height: appBarHeight),
-                const SizedBox(height: 12),
+                SizedBox(height: appBarHeight - 8),
                 AnimatedBuilder(
                   animation: _tabController,
                   builder: (context, child) {
@@ -195,7 +194,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                     return AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeInOutCubic,
-                      height: (_isFilterVisible || offset < 20) ? 48 : 0,
+                      height: (_isFilterVisible || offset < 20) ? 40 : 0,
                       child: SingleChildScrollView(
                         physics: const NeverScrollableScrollPhysics(),
                         child: AnimatedOpacity(
@@ -1446,18 +1445,72 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   Widget _buildFilterBarArea() {
     final filters = _currentFilters();
-    return Row(
-      children: [
-        Expanded(child: SizedBox(height: 38, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16), children: filters.map((f) => _buildFilterChip(f)).toList()))),
-        Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: PopupMenuButton<String>(
-            onSelected: _onSortSelected,
-            itemBuilder: (context) => const [PopupMenuItem(value: '이름순', child: Text('이름순')), PopupMenuItem(value: '가격순', child: Text('가격순')), PopupMenuItem(value: '좋아요순', child: Text('좋아요순'))],
-            child: Row(children: [Text(_selectedSort, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12.5, fontWeight: FontWeight.w700)), const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF64748B))]),
+
+    return Padding(
+      padding: EdgeInsets.zero,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: ShaderMask(
+              shaderCallback: (Rect rect) => const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [Colors.black, Colors.transparent],
+                stops: [0.92, 1.0],
+              ).createShader(rect),
+              blendMode: BlendMode.dstIn,
+              child: SizedBox(
+                height: 38,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(left: 16, right: 20),
+                  children: filters.map((filter) => _buildFilterChip(filter)).toList(),
+                ),
+              ),
+            ),
           ),
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.only(right: 16, left: 4),
+            child: PopupMenuButton<String>(
+              onSelected: _onSortSelected,
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: '이름순', child: Text('이름순')),
+                PopupMenuItem(value: '가격순', child: Text('가격순')),
+                PopupMenuItem(value: '좋아요순', child: Text('좋아요순')),
+              ],
+              offset: const Offset(0, 28),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              color: Colors.white,
+              elevation: 8,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _selectedSort,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: Color(0xFF64748B),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
