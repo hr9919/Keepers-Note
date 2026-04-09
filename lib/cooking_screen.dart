@@ -146,6 +146,22 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant CookingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.initialSearchItem != null &&
+        widget.initialSearchItem != oldWidget.initialSearchItem) {
+      _pendingSearchItem = widget.initialSearchItem;
+      _applySearchItem(widget.initialSearchItem!);
+      return;
+    }
+
+    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
+      _clearSearchState();
+    }
+  }
+
   // 🔥 에러 해결 핵심: 탭 전환 시 인덱스를 안전하게 계산하여 반환
   ScrollController _getCurrentController() {
     int index = _tabController.index.clamp(0, 1);
@@ -1043,6 +1059,40 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     );
   }
 
+  String _normalizeSearchTargetId(String rawId) {
+    if (rawId.startsWith('gourmet_')) {
+      return rawId.replaceFirst('gourmet_', '');
+    }
+    if (rawId.startsWith('material_')) {
+      return rawId.replaceFirst('material_', '');
+    }
+    return rawId;
+  }
+
+  void _moveToTopInList<T>(List<T> list, bool Function(T e) match) {
+    final index = list.indexWhere(match);
+    if (index <= 0) return;
+
+    final selected = list.removeAt(index);
+    list.insert(0, selected);
+  }
+
+  void _scrollToTopForCookingTab(CookingTabType tab) {
+    final controller = tab == CookingTabType.material
+        ? _materialScrollController
+        : _recipeScrollController;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !controller.hasClients) return;
+
+      controller.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   // --- 공통 카드 헬퍼 (레벨별 컬러 복구) ---
   String _ingredientImagePath(String ingredientName) {
     const map = {
@@ -1261,18 +1311,73 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   void _applyFilters() {
     final query = _searchQuery.trim().toLowerCase();
+
     if (_tabController.index == 0) {
       List<Gourmet> temp = List.from(_allRecipeList);
-      if (query.isNotEmpty) temp = temp.where((item) => item.nameKo.contains(query) || item.id.contains(query)).toList();
-      if (_selectedFilter == '일반 레시피') temp = temp.where((item) => !_isEventRecipe(item)).toList();
-      else if (_selectedFilter == '히든 레시피') temp = temp.where((item) => _isEventRecipe(item)).toList();
-      _sortRecipes(temp); setState(() => _visibleRecipeList = temp);
+
+      if (query.isNotEmpty) {
+        temp = temp.where((item) {
+          final name = item.nameKo.toLowerCase();
+          final id = item.id.toLowerCase();
+          return name.contains(query) || id.contains(query);
+        }).toList();
+      }
+
+      if (_selectedFilter == '일반 레시피') {
+        temp = temp.where((item) => !_isEventRecipe(item)).toList();
+      } else if (_selectedFilter == '히든 레시피') {
+        temp = temp.where((item) => _isEventRecipe(item)).toList();
+      }
+
+      _sortRecipes(temp);
+
+      if (_pendingSearchItem != null &&
+          _pendingSearchItem!.cookingTab == CookingTabType.recipe) {
+        final normalizedId = _normalizeSearchTargetId(_pendingSearchItem!.id);
+
+        _moveToTopInList<Gourmet>(
+          temp,
+              (e) => e.id.trim() == normalizedId.trim(),
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _visibleRecipeList = temp;
+      });
     } else {
       List<CookingMaterialItem> temp = List.from(_allMaterialList);
-      if (query.isNotEmpty) temp = temp.where((item) => item.nameKo.contains(query) || item.id.contains(query)).toList();
-      if (_selectedFilter == '작물') temp = temp.where((item) => item.isCultivable).toList();
-      else if (_selectedFilter == '상점구매') temp = temp.where((item) => !item.isCultivable).toList();
-      _sortMaterials(temp); setState(() => _visibleMaterialList = temp);
+
+      if (query.isNotEmpty) {
+        temp = temp.where((item) {
+          final name = item.nameKo.toLowerCase();
+          final id = item.id.toLowerCase();
+          return name.contains(query) || id.contains(query);
+        }).toList();
+      }
+
+      if (_selectedFilter == '작물') {
+        temp = temp.where((item) => item.isCultivable).toList();
+      } else if (_selectedFilter == '상점구매') {
+        temp = temp.where((item) => !item.isCultivable).toList();
+      }
+
+      _sortMaterials(temp);
+
+      if (_pendingSearchItem != null &&
+          _pendingSearchItem!.cookingTab == CookingTabType.material) {
+        final normalizedId = _normalizeSearchTargetId(_pendingSearchItem!.id);
+
+        _moveToTopInList<CookingMaterialItem>(
+          temp,
+              (e) => e.id.trim() == normalizedId.trim(),
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _visibleMaterialList = temp;
+      });
     }
   }
 
@@ -1301,10 +1406,42 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   void _onSortSelected(String sort) { setState(() => _selectedSort = sort); _applyFilters(); }
 
   void _applySearchItem(GlobalSearchItem item) {
-    _searchController.clear(); _searchQuery = '';
-    _tabController.animateTo(item.cookingTab == CookingTabType.material ? 1 : 0);
-    setState(() => _highlightedId = item.id.replaceFirst('gourmet_', '').replaceFirst('material_', ''));
-    _applyFilters();
+    _pendingSearchItem = item;
+
+    if (item.cookingTab == null) return;
+
+    final normalizedId = _normalizeSearchTargetId(item.id);
+
+    // 홈 검색으로 들어왔을 때 검색창은 비워둠
+    _searchController.clear();
+    _searchQuery = '';
+
+    if (item.cookingTab == CookingTabType.material) {
+      _tabController.animateTo(1);
+    } else {
+      _tabController.animateTo(0);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _applyFilters();
+
+      setState(() {
+        _highlightedId = normalizedId;
+      });
+
+      _scrollToTopForCookingTab(item.cookingTab ?? CookingTabType.recipe);
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        if (_highlightedId == normalizedId) {
+          setState(() {
+            _highlightedId = null;
+          });
+        }
+      });
+    });
   }
 
   Widget _buildFilterBarArea() {
@@ -1343,8 +1480,19 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   void _clearSearchState() {
     _pendingSearchItem = null;
-    if (_searchController.text.isNotEmpty) _searchController.clear();
-    setState(() { _searchQuery = ''; _highlightedId = null; _selectedFilter = '전체'; });
+
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _searchQuery = '';
+      _highlightedId = null;
+      _selectedFilter = '전체';
+    });
+
     _applyFilters();
   }
 }
