@@ -73,6 +73,11 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isUserInteracting = false;
   int _currentEventIndex = 0;
 
+  static const Set<String> _previewDefaultResourceKeys = {
+    'roaming_oak',
+    'fluorite',
+  };
+
   Future<void> _handlePreviewSpawnVote(SpawnResourceModel res) async {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
@@ -138,7 +143,25 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String _normalizeSpawnPreviewFilterKey(SpawnResourceModel res) {
-    return res.resourceName;
+    final raw = res.resourceName;
+
+    if (raw == 'fluorite' ||
+        raw == 'flawless_fluorite' ||
+        res.koName.contains('형광석')) {
+      return 'fluorite';
+    }
+
+    if (raw == 'roaming_oak' || res.koName.contains('참나무')) {
+      return 'roaming_oak';
+    }
+
+    if (raw == 'black_truffle' ||
+        raw == 'black-truffle' ||
+        res.koName.contains('트러플')) {
+      return 'black_truffle';
+    }
+
+    return raw;
   }
 
   double _previewSpawnPointOpacity(SpawnPointModel point) {
@@ -168,51 +191,58 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildPreviewSpawnPin(SpawnPointModel point) {
-    final bool isSelected = false;
+    final bool hasOak = point.oak != null;
+    final bool hasFluorite = point.fluorite != null;
+    final bool isVerified = point.isOakVerified || point.isFluoriteVerified;
+
+    final Color borderColor = hasOak && hasFluorite
+        ? const Color(0xFFB794F4)
+        : hasOak
+        ? const Color(0xFF8BC34A)
+        : const Color(0xFF7E57C2);
+
+    final String iconPath = hasOak
+        ? point.oak!.iconPath
+        : hasFluorite
+        ? point.fluorite!.iconPath
+        : 'assets/images/default.png';
 
     return IgnorePointer(
-      child: SizedBox(
-        width: 26,
-        height: 34,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.topCenter,
-          children: [
-            Positioned(
-              top: 0,
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFFFF8E7C),
-                    width: isSelected ? 2.4 : 1.8,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.16),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  point.isOakOnly ? '🌳' : '💎',
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 18,
-              child: CustomPaint(
-                size: const Size(10, 14),
-                painter: _PreviewSpawnTailPainter(),
-              ),
+      child: isVerified
+          ? _buildHomePreviewCircleMarker(
+        iconPath: iconPath,
+        borderColor: borderColor,
+        size: 24,
+        fit: BoxFit.contain,
+        padding: const EdgeInsets.all(3),
+      )
+          : Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: borderColor,
+            width: 2.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.14),
+              blurRadius: 7,
+              offset: const Offset(0, 3),
             ),
           ],
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '❓',
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.0,
+            fontWeight: FontWeight.w900,
+            color: borderColor,
+          ),
         ),
       ),
     );
@@ -253,13 +283,32 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   List<String> _getDistinctPreviewResourceKeysByCategory(
-      List<String> categories) {
-    return _allPreviewCandidates
+      List<String> categories,
+      ) {
+    final fixedKeys = _allPreviewCandidates
         .where((res) => categories.contains(res.category))
         .where((res) => res.category != 'npc' && res.category != 'animal')
-        .map((res) => _normalizePreviewFilterKey(res))
-        .toSet()
-        .toList()
+        .map((res) => _normalizePreviewFilterKey(res));
+
+    final spawnKeys = _previewSpawnPoints
+        .expand((point) => point.resources)
+        .where((res) {
+      if (categories.contains('tree') && res.resourceName == 'roaming_oak') {
+        return true;
+      }
+      if (categories.contains('mineral') &&
+          (res.resourceName == 'fluorite' ||
+              res.resourceName == 'flawless_fluorite')) {
+        return true;
+      }
+      return false;
+    })
+        .map((res) => _normalizeSpawnPreviewFilterKey(res));
+
+    return {
+      ...fixedKeys,
+      ...spawnKeys,
+    }.toList()
       ..sort((a, b) {
         final aName = _getPreviewDisplayName(a);
         final bName = _getPreviewDisplayName(b);
@@ -279,9 +328,31 @@ class _HomeScreenState extends State<HomeScreen>
       return _allPreviewCandidates.firstWhere(
             (res) => _normalizePreviewFilterKey(res) == resourceName,
       );
-    } catch (_) {
-      return null;
+    } catch (_) {}
+
+    for (final point in _previewSpawnPoints) {
+      for (final res in point.resources) {
+        if (_normalizeSpawnPreviewFilterKey(res) == resourceName) {
+          return ResourceModel(
+            id: res.id,
+            resourceName: res.resourceName,
+            category: point.isOakOnly ? 'tree' : 'mineral',
+            description: '',
+            x: point.x,
+            y: point.y,
+            voteCount: res.voteCount,
+            isVerified: res.isVerified,
+            isFixed: false,
+            isActive: true,
+            alreadyVoted: false,
+            alreadyVotedSameType: res.alreadyVotedSameType,
+            votedByMe: res.votedByMe,
+          );
+        }
+      }
     }
+
+    return null;
   }
 
   void _togglePreviewResource(String resourceName) {
@@ -365,30 +436,6 @@ class _HomeScreenState extends State<HomeScreen>
     ),
   ];
 
-  double _previewVotePinOpacity(ResourceModel res) {
-    if (!_isPreviewVotableResource(res)) return 1.0;
-
-    // 내가 투표해서 남아 있는 핀은 항상 완전 불투명
-    if (res.votedByMe) return 1.0;
-
-    if (_isPreviewVoteCompleted(res)) return 1.0;
-
-    switch (res.voteCount) {
-      case 0:
-        return 0.28;
-      case 1:
-        return 0.42;
-      case 2:
-        return 0.58;
-      case 3:
-        return 0.74;
-      case 4:
-        return 0.88;
-      default:
-        return 1.0;
-    }
-  }
-
   void _startEventBannerAutoScroll({bool initialDelay = false}) {
     _eventBannerTimer?.cancel();
     final events = _activeEvents;
@@ -428,23 +475,16 @@ class _HomeScreenState extends State<HomeScreen>
       final data = await ApiService.getResources(voterId: _voterId);
       if (!mounted) return;
 
-      const defaultNames = <String>{
-        'roaming_oak',
-        'fluorite',
-        'black_truffle',
-      };
-
       final allFixed = data.fixedResources;
       final allSpawn = data.spawnPoints;
 
       setState(() {
         if (_previewEnabledResources.isEmpty) {
-          _previewEnabledResources = {...defaultNames};
+          _previewEnabledResources = {..._previewDefaultResourceKeys};
         } else {
           _previewEnabledResources = {
             ..._previewEnabledResources,
-            ...defaultNames,
-          };
+          }..removeWhere((key) => !_getPreviewFilterKeys().contains(key));
         }
 
         _allPreviewCandidates = allFixed;
@@ -934,18 +974,31 @@ class _HomeScreenState extends State<HomeScreen>
 
   List<ResourceModel> _getFilteredPreviewResources(List<ResourceModel> source) {
     return source.where((res) {
-      if (_shouldHideOtherSameTypePins(res)) {
+      final String key = _normalizePreviewFilterKey(res);
+      final bool isNpc = res.category == 'npc';
+      final bool isAnimal = res.category == 'animal';
+      final bool isVoteTarget = key == 'roaming_oak' || key == 'fluorite';
+
+      // 같은 종류에 내가 이미 투표한 다른 좌표 숨김
+      if (isVoteTarget && _shouldHideOtherSameTypePins(res)) {
         return false;
       }
 
-      final String key = _normalizePreviewFilterKey(res);
-      final bool isMatched = _previewEnabledResources.contains(key);
-      final bool isNpc = res.category == 'npc';
-      final bool isAnimal = res.category == 'animal';
+      // 일반 자원 필터
+      if (_previewEnabledResources.contains(key)) {
+        return true;
+      }
 
-      return isMatched ||
-          (_previewShowNpcs && isNpc) ||
-          (_previewShowAnimals && isAnimal);
+      // NPC / 동물 토글
+      if (_previewShowNpcs && isNpc) {
+        return true;
+      }
+
+      if (_previewShowAnimals && isAnimal) {
+        return true;
+      }
+
+      return false;
     }).toList();
   }
 
@@ -955,11 +1008,10 @@ class _HomeScreenState extends State<HomeScreen>
     required bool showAnimals,
   }) {
     setState(() {
-      _previewEnabledResources = resources;
+      _previewEnabledResources = {...resources};
       _previewShowNpcs = showNpcs;
       _previewShowAnimals = showAnimals;
-      _mapPreviewResources =
-          _getFilteredPreviewResources(_allPreviewCandidates);
+      _mapPreviewResources = _getFilteredPreviewResources(_allPreviewCandidates);
     });
   }
 
@@ -978,6 +1030,16 @@ class _HomeScreenState extends State<HomeScreen>
     final mushroomItems =
     _getDistinctPreviewResourceKeysByCategory(['mushroom']);
 
+    void resetToDefault(StateSetter setModalState) {
+      setModalState(() {
+        tempResources
+          ..clear()
+          ..addAll(_previewDefaultResourceKeys);
+        tempShowNpcs = false;
+        tempShowAnimals = false;
+      });
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -985,10 +1047,114 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            Widget buildToggleRow({
+              required IconData icon,
+              required String title,
+              required bool value,
+              required ValueChanged<bool> onChanged,
+            }) {
+              return Container(
+                height: 50,
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                decoration: BoxDecoration(
+                  color: value
+                      ? const Color(0xFFFFF8F5)
+                      : Colors.white.withOpacity(0.94),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                    color: value
+                        ? const Color(0xFFFFE0D8)
+                        : const Color(0xFFF1E7E3),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.025),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      icon,
+                      size: 18,
+                      color: value
+                          ? const Color(0xFFFF8E7C)
+                          : const Color(0xFF7A8A9A),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: value ? FontWeight.w700 : FontWeight.w600,
+                          color: const Color(0xFF334155),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => onChanged(!value),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 49,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: value
+                              ? const Color(0xFFFF8E7C).withOpacity(0.42)
+                              : const Color(0xFFE5E7EB),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: AnimatedAlign(
+                          duration: const Duration(milliseconds: 200),
+                          alignment:
+                          value ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                            child: Container(
+                              width: 23,
+                              height: 23,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            Widget buildSectionLabel(String title) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              );
+            }
+
             Widget buildChip(String resourceName) {
               final bool selected = tempResources.contains(resourceName);
-              final ResourceModel? sample =
+              final sample =
               _getPreviewRepresentativeByResourceName(resourceName);
+
+              String? fallbackIconPath;
+              if (resourceName == 'roaming_oak') {
+                fallbackIconPath = 'assets/images/resources/oak.png';
+              } else if (resourceName == 'fluorite') {
+                fallbackIconPath = 'assets/images/resources/fluorite.png';
+              }
 
               return GestureDetector(
                 onTap: () {
@@ -1001,59 +1167,70 @@ class _HomeScreenState extends State<HomeScreen>
                   });
                 },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: selected
-                        ? const Color(0xFFFFF4F1)
-                        : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
+                        ? const Color(0xFFFFF1ED)
+                        : Colors.white.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: selected
                           ? const Color(0xFFFF8E7C)
-                          : const Color(0xFFE2E8F0),
+                          : const Color(0xFFFFE4DE),
+                      width: 1,
                     ),
+                    boxShadow: selected
+                        ? [
+                      BoxShadow(
+                        color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                        : [],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 22,
-                        height: 22,
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: selected
-                                ? const Color(0xFFFFD4CC)
-                                : const Color(0xFFE5E7EB),
+                      if (sample != null || fallbackIconPath != null)
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: selected
+                                  ? const Color(0xFFFFD4CC)
+                                  : const Color(0xFFE5E7EB),
+                            ),
                           ),
+                          padding: const EdgeInsets.all(3),
+                          child: sample != null || fallbackIconPath != null
+                              ? Image.asset(
+                            sample?.iconPath ?? fallbackIconPath!,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(
+                                Icons.inventory_2_outlined,
+                                size: 12,
+                                color: Colors.grey,
+                              );
+                            },
+                          )
+                              : const SizedBox.shrink(),
                         ),
-                        child: sample == null
-                            ? const Icon(
-                          Icons.inventory_2_outlined,
-                          size: 12,
-                          color: Colors.grey,
-                        )
-                            : Image.asset(
-                          sample.iconPath,
-                          fit: BoxFit.contain,
-                          errorBuilder: (c, e, s) =>
-                          const Icon(
-                            Icons.inventory_2_outlined,
-                            size: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
                       const SizedBox(width: 7),
                       Text(
-                        sample?.koName ?? resourceName,
+                        _getPreviewDisplayName(resourceName),
                         style: TextStyle(
                           fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
+                          fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w600,
                           color: selected
                               ? const Color(0xFF111827)
                               : const Color(0xFF334155),
@@ -1065,132 +1242,141 @@ class _HomeScreenState extends State<HomeScreen>
               );
             }
 
-            Widget buildSection(String title, List<String> items) {
-              if (items.isEmpty) return const SizedBox.shrink();
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF94A3B8),
-                      letterSpacing: 0.2,
-                    ),
+            return Container(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withOpacity(0.98),
+                    const Color(0xFFFFFBFA),
+                  ],
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(30),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.10),
+                    blurRadius: 26,
+                    offset: const Offset(0, -8),
                   ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: items.map(buildChip).toList(),
+                  BoxShadow(
+                    color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, -4),
                   ),
                 ],
-              );
-            }
-
-            return Container(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
               ),
               child: SafeArea(
                 top: false,
                 child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Center(
                         child: Container(
                           width: 42,
                           height: 4,
-                          margin: const EdgeInsets.only(bottom: 18),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE2E8F0),
+                            color: const Color(0xFFE7E5E4),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
                       ),
+                      const SizedBox(height: 16),
                       const Text(
-                        '프리뷰 핀 선택',
+                        '지도 미리보기 필터',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w900,
                           color: Color(0xFF0F172A),
                         ),
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        '홈 프리뷰 지도에 보일 핀을 골라보세요.',
+                        '보고 싶은 자원과 캐릭터만 골라서 볼 수 있어요.',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF7A8A9A),
                         ),
                       ),
                       const SizedBox(height: 18),
+
+                      buildSectionLabel('캐릭터'),
                       Row(
                         children: [
-                          _buildPreviewTopToggle(
-                            title: 'NPC',
-                            value: tempShowNpcs,
-                            icon: Icons.people_alt_outlined,
-                            onTap: () {
-                              setModalState(() {
-                                tempShowNpcs = !tempShowNpcs;
-                              });
-                            },
+                          Expanded(
+                            child: buildToggleRow(
+                              icon: Icons.person_rounded,
+                              title: 'NPC',
+                              value: tempShowNpcs,
+                              onChanged: (value) {
+                                setModalState(() {
+                                  tempShowNpcs = value;
+                                });
+                              },
+                            ),
                           ),
                           const SizedBox(width: 10),
-                          _buildPreviewTopToggle(
-                            title: '동물',
-                            value: tempShowAnimals,
-                            icon: Icons.pets_outlined,
-                            onTap: () {
-                              setModalState(() {
-                                tempShowAnimals = !tempShowAnimals;
-                              });
-                            },
+                          Expanded(
+                            child: buildToggleRow(
+                              icon: Icons.pets_rounded,
+                              title: '동물',
+                              value: tempShowAnimals,
+                              onChanged: (value) {
+                                setModalState(() {
+                                  tempShowAnimals = value;
+                                });
+                              },
+                            ),
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 18),
-                      buildSection('채집 자원', gatherItems),
-                      const SizedBox(height: 16),
-                      buildSection('버섯 종류', mushroomItems),
+                      buildSectionLabel('채집 자원'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: gatherItems.map(buildChip).toList(),
+                      ),
+
+                      if (mushroomItems.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        buildSectionLabel('버섯'),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: mushroomItems.map(buildChip).toList(),
+                        ),
+                      ],
+
                       const SizedBox(height: 22),
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () {
-                                // 1. setModalState를 사용하여 바텀시트 내부 UI를 즉시 갱신합니다.
-                                setModalState(() {
-                                  // 2. 임시 저장 변수(tempResources 등)를 기본값으로 초기화합니다.
-                                  tempResources.clear();
-                                  for (final res in _allPreviewCandidates) {
-                                    final key = _normalizePreviewFilterKey(res);
-                                    if (key == 'roaming_oak' ||
-                                        key == 'fluorite' ||
-                                        key == 'black-truffle') {
-                                      tempResources.add(key);
-                                    }
-                                  }
-                                  tempShowNpcs = false;
-                                  tempShowAnimals = false;
-                                });
-                                // 3. Navigator.pop(context)를 호출하지 않으므로 창이 닫히지 않습니다.
-                              },
+                              onPressed: () => resetToDefault(setModalState),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF475569),
+                                minimumSize: const Size.fromHeight(48),
                                 side: const BorderSide(
-                                  color: Color(0xFFD7DEE7),
+                                  color: Color(0xFFFFD8D0),
                                 ),
-                                minimumSize: const Size(double.infinity, 48),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                foregroundColor: const Color(0xFFFF8E7C),
                               ),
-                              child: const Text('기본값'),
+                              child: const Text(
+                                '기본값으로',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -1205,31 +1391,23 @@ class _HomeScreenState extends State<HomeScreen>
                                 Navigator.pop(context);
                               },
                               style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
                                 backgroundColor: const Color(0xFFFF8E7C),
                                 foregroundColor: Colors.white,
-                                minimumSize: const Size.fromHeight(48),
                                 elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
-                              child: const Text('적용'),
+                              child: const Text(
+                                '적용하기',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 10),
-                      Center(
-                        child: TextButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _openMap(openFilter: true);
-                          },
-                          child: const Text(
-                            '지도에서 자세히 보기',
-                            style: TextStyle(
-                              color: Color(0xFF64748B),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -1250,120 +1428,259 @@ class _HomeScreenState extends State<HomeScreen>
     final bool showVoteButton = isVoteTarget && !isActuallyVerified;
     final bool canVote = showVoteButton && !isAlreadyVoted;
 
+    final bool isNpc = res.category == 'npc';
+    final bool isAnimal = res.category == 'animal';
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) =>
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+      isScrollControlled: true,
+      builder: (context) => _buildPreviewUnifiedSheet(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildPreviewSheetHandle(),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 18),
+                  width: 52,
+                  height: 52,
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(999),
+                    color: const Color(0xFFF8FAFC),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isAnimal
+                          ? const Color(0xFFD9EEFF)
+                          : isNpc
+                          ? const Color(0xFFFFDDD7)
+                          : const Color(0xFFFFDDD7),
+                      width: 1.4,
+                    ),
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      res.iconPath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) =>
+                      const Icon(Icons.image_not_supported_outlined),
+                    ),
                   ),
                 ),
-                Row(
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        res.koName,
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isAnimal
+                              ? const Color(0xFFEFF8FF)
+                              : const Color(0xFFFFF4F1),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          isAnimal
+                              ? '동물 친구'
+                              : isNpc
+                              ? '마을 주민'
+                              : isActuallyVerified
+                              ? '위치 확정'
+                              : isVoteTarget
+                              ? '투표 가능한 위치'
+                              : '위치 정보',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isAnimal
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFFFF8E7C),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE7EDF5)),
+              ),
+              child: Text(
+                (res.description != null && res.description!.trim().isNotEmpty)
+                    ? res.description!.trim()
+                    : '설명 정보가 없습니다.',
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  height: 1.5,
+                  color: Color(0xFF334155),
+                ),
+              ),
+            ),
+            if (showVoteButton) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white,
+                      Color(0xFFFFFAF8),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: const Color(0xFFFFE7E1),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF8E7C).withOpacity(0.07),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
                   children: [
                     Container(
-                      width: 42,
-                      height: 42,
-                      padding: const EdgeInsets.all(6),
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Image.asset(
-                        res.iconPath,
-                        fit: BoxFit.contain,
-                        errorBuilder: (c, e, s) =>
-                        const Icon(
-                          Icons.inventory_2_outlined,
-                          color: Colors.grey,
+                        color: const Color(0xFFFFF3EF),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFFFDED6),
                         ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        isActuallyVerified
+                            ? Icons.check_rounded
+                            : Icons.how_to_vote_rounded,
+                        color: const Color(0xFFFF8E7C),
+                        size: 20,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        res.koName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF111827),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            canVote ? '여기 있어요!' : '이미 투표했어요',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF2D3436),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '현재 ${res.voteCount}표 모였어요',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF7A8A9A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: canVote ? () => _handlePreviewVote(res) : null,
+                        child: Ink(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: canVote
+                                ? const Color(0xFFFF8E7C)
+                                : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: canVote
+                                ? [
+                              BoxShadow(
+                                color: const Color(0xFFFF8E7C)
+                                    .withOpacity(0.24),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                                : null,
+                          ),
+                          child: Text(
+                            canVote ? '투표' : '완료',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              color: canVote
+                                  ? Colors.white
+                                  : const Color(0xFF94A3B8),
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    (res.description != null &&
-                        res.description!.trim().isNotEmpty)
-                        ? res.description!
-                        : '설명 정보가 없습니다.',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.45,
-                      color: Color(0xFF475569),
-                    ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF8E7C),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(50),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    if (showVoteButton) ...[
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _handlePreviewVote(res),
-                          icon: const Icon(Icons.thumb_up_outlined),
-                          label: Text(
-                            canVote
-                                ? "여기 있어요! (${res.voteCount})"
-                                : "이미 투표했어요",
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor:
-                            canVote ? const Color(0xFFFF8E7C) : Colors.grey,
-                            side: BorderSide(
-                              color: canVote
-                                  ? const Color(0xFFFF8E7C)
-                                  : Colors.grey.shade400,
-                            ),
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                    ],
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF8E7C),
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size.fromHeight(48),
-                          elevation: 0,
-                        ),
-                        child: const Text('확인'),
-                      ),
-                    ),
-                  ],
+                child: const Text(
+                  '확인',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1588,9 +1905,9 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
 
-    // 커스텀 앱바가 실제로 차지하는 높이
     const double appBarBodyHeight = 108;
-    final double refreshTop = topPadding + appBarBodyHeight;
+    const double appBarBottomGap = 14; // 앱바 아래 고정 여백
+    final double refreshTop = topPadding + appBarBodyHeight + appBarBottomGap;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8F6),
@@ -1598,23 +1915,13 @@ class _HomeScreenState extends State<HomeScreen>
         top: false,
         child: Stack(
           children: [
-            // [Layer 1] 배경
             Positioned.fill(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFFFFF6F3),
-                      Color(0xFFFFFBFA),
-                    ],
-                  ),
-                ),
+              child: Image.asset(
+                'assets/images/bg_gradient.png',
+                fit: BoxFit.cover,
               ),
             ),
 
-            // [Layer 2] 본문 - 앱바 아래에서부터 새로고침/스크롤 시작
             Positioned.fill(
               top: refreshTop,
               child: RefreshIndicator(
@@ -1630,7 +1937,10 @@ class _HomeScreenState extends State<HomeScreen>
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
-                  padding: const EdgeInsets.only(top: 26, bottom: 110),
+                  padding: EdgeInsets.only(
+                    top: _getHomeSectionTopSpacing(context),
+                    bottom: 110,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1692,7 +2002,6 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
 
-            // [Layer 3] 앱바
             Positioned(
               top: 0,
               left: 0,
@@ -1700,7 +2009,6 @@ class _HomeScreenState extends State<HomeScreen>
               child: _buildCustomAppBar(context, topPadding),
             ),
 
-            // [Layer 4] 검색 팝업 바깥 영역 터치 시 닫기
             if (_searchSuggestions.isNotEmpty)
               Positioned.fill(
                 child: GestureDetector(
@@ -1715,7 +2023,6 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-            // [Layer 5] 검색 제안 팝업
             if (_searchSuggestions.isNotEmpty)
               Positioned(
                 top: topPadding + 140,
@@ -1724,6 +2031,30 @@ class _HomeScreenState extends State<HomeScreen>
                 child: _buildSearchSuggestionsOverlay(),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeStyleBottomSheet({
+    required Widget child,
+    EdgeInsets? padding,
+  }) {
+    final media = MediaQuery.of(context);
+    final bottomInset = media.viewPadding.bottom > 0
+        ? media.viewPadding.bottom
+        : media.padding.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: padding ?? EdgeInsets.fromLTRB(20, 14, 20, bottomInset + 14),
+          child: child,
         ),
       ),
     );
@@ -2167,16 +2498,35 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         const SizedBox(width: 25),
                         Expanded(
-                          child: Text(
-                            weather,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              height: 1.0,
-                              color: _getWeatherTextColor(weather),
-                            ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              const baseStyle = TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                height: 1.0,
+                              );
+
+                              final fittedFontSize = _fitSingleLineFontSize(
+                                text: weather,
+                                baseStyle: baseStyle,
+                                maxWidth: constraints.maxWidth,
+                                minFontSize: 15,
+                              );
+
+                              return Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  weather,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.visible,
+                                  softWrap: false,
+                                  style: baseStyle.copyWith(
+                                    fontSize: fittedFontSize,
+                                    color: _getWeatherTextColor(weather),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -2218,33 +2568,34 @@ class _HomeScreenState extends State<HomeScreen>
     final bool isLightBg = ['맑음', '눈', '무지개'].contains(currentWeather);
 
     final hourly = [
-      {'time': '09시', 'weather': '맑음'},
-      {'time': '12시', 'weather': '맑음'},
-      {'time': '15시', 'weather': '흐림'},
-      {'time': '18시', 'weather': '비'},
-      {'time': '21시', 'weather': '맑음'},
-      {'time': '00시', 'weather': '눈'},
+      {'time': '아침', 'weather': '맑음'},
+      {'time': '점심', 'weather': '맑음'},
+      {'time': '저녁', 'weather': '흐림'},
+      {'time': '밤', 'weather': '비'},
+      {'time': '새벽', 'weather': '맑음'},
+      {'time': '아침', 'weather': '눈'},
     ];
 
     return SizedBox(
-      height: 58,
+      height: 50,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.zero,
         itemCount: hourly.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
         itemBuilder: (context, index) {
           final item = hourly[index];
           final weather = item['weather']!;
 
           return Container(
-            width: 56,
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            width: 50,
+            padding: const EdgeInsets.symmetric(vertical: 4),
             decoration: BoxDecoration(
               color: isLightBg
                   ? Colors.white.withOpacity(0.42)
                   : Colors.white.withOpacity(0.13),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: Colors.white.withOpacity(0.20),
               ),
@@ -2255,17 +2606,18 @@ class _HomeScreenState extends State<HomeScreen>
                 Text(
                   item['time']!,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w700,
+                    height: 1.0,
                     color: _getWeatherTextColor(currentWeather),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 SizedBox(
-                  width: 22,
-                  height: 22,
+                  width: 18,
+                  height: 18,
                   child: Center(
-                    child: _buildWeatherIcon(weather, size: 16),
+                    child: _buildWeatherIcon(weather, size: 14),
                   ),
                 ),
               ],
@@ -2693,6 +3045,25 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildPreviewSheetHandle() {
+    return Center(
+      child: Container(
+        width: 54,
+        height: 6,
+        margin: const EdgeInsets.only(bottom: 18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFFFFD6CD),
+              Color(0xFFFFB3A3),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
+    );
+  }
+
   Widget _buildWeatherTimeline() {
     final items = [
       {'label': '아침', 'current': true},
@@ -2970,6 +3341,51 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildPreviewUnifiedSheet({required Widget child}) {
+    final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white.withOpacity(0.98),
+              const Color(0xFFFFFBFA),
+            ],
+          ),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(32),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 30,
+              offset: const Offset(0, -8),
+            ),
+            BoxShadow(
+              color: const Color(0xFFFF8E7C).withOpacity(0.08),
+              blurRadius: 24,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTodoRow({
     required int index,
     required String text,
@@ -3057,9 +3473,23 @@ class _HomeScreenState extends State<HomeScreen>
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
+                  final fittedFontSize = _fitSingleLineFontSize(
+                    text: text,
+                    baseStyle: todoTextStyle,
+                    maxWidth: constraints.maxWidth,
+                    minFontSize: 9.8,
+                  );
+
+                  final fittedStyle = todoTextStyle.copyWith(
+                    fontSize: fittedFontSize,
+                    color: isDone
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF111827),
+                  );
+
                   final visibleWidth = _measureTodoTextWidth(
                     text: text,
-                    style: todoTextStyle,
+                    style: fittedStyle,
                     maxWidth: constraints.maxWidth,
                   );
 
@@ -3069,18 +3499,14 @@ class _HomeScreenState extends State<HomeScreen>
                       Text(
                         text,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        strutStyle: const StrutStyle(
+                        overflow: TextOverflow.visible,
+                        softWrap: false,
+                        strutStyle: StrutStyle(
                           forceStrutHeight: true,
                           height: 1.15,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
+                          fontSize: fittedFontSize,
                         ),
-                        style: todoTextStyle.copyWith(
-                          color: isDone
-                              ? const Color(0xFF94A3B8)
-                              : const Color(0xFF111827),
-                        ),
+                        style: fittedStyle,
                       ),
 
                       if (isDone)
@@ -3111,6 +3537,53 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  double _fitSingleLineFontSize({
+    required String text,
+    required TextStyle baseStyle,
+    required double maxWidth,
+    double minFontSize = 9.5,
+  }) {
+    double low = minFontSize;
+    double high = baseStyle.fontSize ?? 14;
+    double best = low;
+
+    bool fits(double size) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: baseStyle.copyWith(fontSize: size),
+        ),
+        maxLines: 1,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: maxWidth);
+
+      return !painter.didExceedMaxLines && painter.width <= maxWidth;
+    }
+
+    if (fits(high)) return high;
+
+    for (int i = 0; i < 10; i++) {
+      final mid = (low + high) / 2;
+      if (fits(mid)) {
+        best = mid;
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+
+    return best;
+  }
+
+  double _getHomeSectionTopSpacing(BuildContext context) {
+    final height = MediaQuery.of(context).size.height;
+
+    if (height <= 690) return 12;
+    if (height <= 780) return 16;
+    if (height <= 900) return 20;
+    return 24;
+  }
+
   double _measureTodoTextWidth({
     required String text,
     required TextStyle style,
@@ -3119,17 +3592,15 @@ class _HomeScreenState extends State<HomeScreen>
     final textPainter = TextPainter(
       text: TextSpan(text: text, style: style),
       maxLines: 1,
-      ellipsis: '…',
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: maxWidth);
 
-    return textPainter.size.width;
+    return textPainter.size.width.clamp(0, maxWidth);
   }
 
   Widget _buildMapSection(BuildContext context) {
     final double previewWidth = MediaQuery.of(context).size.width - 32;
 
-    // Column과 내부 제목을 지우고 바로 패딩 컨테이너만 반환
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -3137,7 +3608,9 @@ class _HomeScreenState extends State<HomeScreen>
         height: previewWidth,
         decoration: ShapeDecoration(
           color: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
           shadows: _kCommonShadow,
         ),
         child: ClipRRect(
@@ -3145,24 +3618,49 @@ class _HomeScreenState extends State<HomeScreen>
           child: LayoutBuilder(
             builder: (context, constraints) {
               _setInitialPreviewTransform(constraints);
+
               return Stack(
                 children: [
-                  // ... (기존 InteractiveViewer 및 버튼 코드는 동일) ...
                   Positioned.fill(
                     child: Listener(
-                      onPointerDown: (_) { _mapPreviewPointerCount++; if (!_isPointerDownOnMapPreview) _setMapPreviewPointerDown(true); },
-                      onPointerUp: (_) { _mapPreviewPointerCount = (_mapPreviewPointerCount - 1).clamp(0, 999); if (_mapPreviewPointerCount == 0) _setMapPreviewPointerDown(false); },
+                      onPointerDown: (_) {
+                        _mapPreviewPointerCount++;
+                        if (!_isPointerDownOnMapPreview) {
+                          _setMapPreviewPointerDown(true);
+                        }
+                      },
+                      onPointerUp: (_) {
+                        _mapPreviewPointerCount =
+                            (_mapPreviewPointerCount - 1).clamp(0, 999);
+                        if (_mapPreviewPointerCount == 0) {
+                          _setMapPreviewPointerDown(false);
+                        }
+                      },
                       child: InteractiveViewer(
                         transformationController: _previewTransformController,
-                        minScale: _previewMinScale, maxScale: _previewMaxScale,
-                        constrained: false, panEnabled: true, scaleEnabled: true,
+                        minScale: _previewMinScale,
+                        maxScale: _previewMaxScale,
+                        constrained: false,
+                        panEnabled: true,
+                        scaleEnabled: true,
                         child: SizedBox(
-                          width: constraints.maxWidth, height: constraints.maxHeight,
+                          width: constraints.maxWidth,
+                          height: constraints.maxHeight,
                           child: Stack(
                             children: [
-                              Positioned.fill(child: Image.asset('assets/images/map_background.png', fit: BoxFit.cover)),
+                              Positioned.fill(
+                                child: Image.asset(
+                                  'assets/images/map_background.png',
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
                               _buildPreviewPlaceLabels(constraints.maxWidth),
-                              if (_isMapPreviewLoading) const Center(child: CircularProgressIndicator(color: Color(0xFFFF8E7C)))
+                              if (_isMapPreviewLoading)
+                                const Center(
+                                  child: CircularProgressIndicator(
+                                    color: Color(0xFFFF8E7C),
+                                  ),
+                                )
                               else ...[
                                 ..._mapPreviewResources.map(
                                       (res) => _buildHomeMapPreviewMarker(
@@ -3185,28 +3683,123 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ),
                   ),
+
+                  // ✅ 지도 열기 버튼 복구
                   Positioned(
-                    right: 12, top: 12,
+                    top: 12,
+                    right: 12,
                     child: GestureDetector(
-                      onTap: () => _openMap(),
+                      onTap: _openMap,
                       child: Container(
-                        width: 42, height: 42,
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.95), borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12)]),
-                        child: const Icon(Icons.open_in_full_rounded, color: Color(0xFF475569), size: 18),
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.white.withOpacity(0.90),
+                              const Color(0xFFFFF6F3).withOpacity(0.95),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFFFE4DE),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.open_in_full_rounded,
+                          color: Color(0xFFFF8E7C),
+                          size: 18,
+                        ),
                       ),
                     ),
                   ),
+
+                  // 하단 프리뷰 필터바
                   Positioned(
-                    left: 12, right: 12, bottom: 12,
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
                     child: GestureDetector(
                       onTap: _showPreviewFilterPopup,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.95), borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 15)]),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.white.withOpacity(0.90),
+                              const Color(0xFFFFF6F3).withOpacity(0.95),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: const Color(0xFFFFE4DE),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.045),
+                              blurRadius: 12,
+                              offset: const Offset(0, 5),
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFFFF8E7C).withOpacity(0.06),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
                         child: Row(
                           children: [
-                            Expanded(child: Text(_buildPreviewCaption(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)))),
-                            const Icon(Icons.tune_rounded, size: 18, color: Color(0xFFFF8E7C)),
+                            Expanded(
+                              child: Text(
+                                _buildPreviewCaption(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF334155),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF3EF),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: const Color(0xFFFFE5DE),
+                                  width: 1,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.tune_rounded,
+                                size: 14,
+                                color: Color(0xFFFF8E7C),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -3229,54 +3822,149 @@ class _HomeScreenState extends State<HomeScreen>
     final double currentScale =
     _previewTransformController.value.getMaxScaleOnAxis();
 
-    const double pinWidth = 24;
-    const double pinHeight = 32;
+    const double markerSize = 24;
     final double visualScale = (1 / currentScale).clamp(0.5, 1.0);
 
     return Positioned(
-      left: (point.x * width) - (pinWidth / 2),
-      top: (point.y * height) - pinHeight,
+      left: (point.x * width) - (markerSize / 2),
+      top: (point.y * height) - (markerSize / 2),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _showPreviewSpawnPointDetail(point),
         child: Transform.scale(
           scale: visualScale,
-          alignment: Alignment.bottomCenter,
-          child: Opacity(
-            opacity: _previewSpawnPointOpacity(point),
-            child: _buildPreviewSpawnPin(point),
-          ),
+          alignment: Alignment.center,
+          child: _buildPreviewSpawnPin(point),
         ),
       ),
     );
   }
 
   void _showPreviewSpawnPointDetail(SpawnPointModel point) {
-    final double bottomPadding = MediaQuery.of(context).padding.bottom;
     final oak = point.oak;
     final fluorite = point.fluorite;
 
-    Widget buildVoteButton(SpawnResourceModel res) {
+    Widget buildVoteCard(SpawnResourceModel res) {
       final bool canVote = !res.isVerified && !res.alreadyVotedSameType;
 
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: OutlinedButton.icon(
-          onPressed: canVote ? () => _handlePreviewSpawnVote(res) : null,
-          icon: Image.asset(
-            res.iconPath,
-            width: 22,
-            height: 22,
-            errorBuilder: (c, e, s) =>
-            const Icon(Icons.help_outline, size: 18),
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white,
+              Color(0xFFFFFAF8),
+            ],
           ),
-          label: Text(
-            res.isVerified
-                ? '${res.koName} 확정됨'
-                : canVote
-                ? '${res.koName} 여기 있어요! (${res.voteCount})'
-                : '${res.koName} 이미 투표했어요',
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: const Color(0xFFFFE7E1),
+            width: 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF8E7C).withOpacity(0.07),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3EF),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xFFFFDED6),
+                ),
+              ),
+              child: Image.asset(
+                res.iconPath,
+                fit: BoxFit.contain,
+                errorBuilder: (c, e, s) =>
+                const Icon(Icons.help_outline_rounded, size: 18),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    res.koName,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2D3436),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    res.isVerified
+                        ? '오늘 위치가 확정되었어요'
+                        : res.alreadyVotedSameType
+                        ? '이미 같은 종류에 투표했어요'
+                        : '현재 ${res.voteCount}표 모였어요',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF7A8A9A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: canVote ? () => _handlePreviewSpawnVote(res) : null,
+                child: Ink(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 11,
+                  ),
+                  decoration: BoxDecoration(
+                    color: canVote
+                        ? const Color(0xFFFF8E7C)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: canVote
+                        ? [
+                      BoxShadow(
+                        color: const Color(0xFFFF8E7C).withOpacity(0.24),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                        : null,
+                  ),
+                  child: Text(
+                    res.isVerified
+                        ? '확정'
+                        : res.alreadyVotedSameType
+                        ? '완료'
+                        : '투표',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: canVote
+                          ? Colors.white
+                          : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -3284,18 +3972,126 @@ class _HomeScreenState extends State<HomeScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding + 12),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-        ),
+      isScrollControlled: true,
+      builder: (context) => _buildPreviewUnifiedSheet(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (oak != null) buildVoteButton(oak),
-            if (fluorite != null) buildVoteButton(fluorite),
+            _buildPreviewSheetHandle(),
+            Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF4F1),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFFFE1D9),
+                    ),
+                  ),
+                  child: Text(
+                    point.isOakOnly ? '🌳' : '💎',
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        point.isOakOnly ? '참나무 후보 위치' : '참나무/형광석 후보 위치',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2D3436),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        point.isBothVerified
+                            ? '오늘 위치가 모두 확정되었어요.'
+                            : '게임에서 확인한 위치에 투표해 주세요.',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF7A8A9A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (oak != null) buildVoteCard(oak),
+            if (fluorite != null) buildVoteCard(fluorite),
+            if (oak == null && fluorite == null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFE7EDF5)),
+                ),
+                child: const Text(
+                  '표시할 후보 자원이 없어요.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomePreviewCircleMarker({
+    required String iconPath,
+    required Color borderColor,
+    bool isSelected = false,
+    double size = 24,
+    BoxFit fit = BoxFit.cover,
+    EdgeInsets padding = const EdgeInsets.all(2),
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: borderColor,
+          width: isSelected ? 2.6 : 2.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isSelected ? 0.20 : 0.14),
+            blurRadius: isSelected ? 10 : 7,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: Container(
+          color: Colors.white,
+          child: Image.asset(
+            iconPath,
+            fit: fit,
+            errorBuilder: (c, e, s) => const Icon(
+              Icons.image_not_supported_outlined,
+              size: 14,
+              color: Colors.grey,
+            ),
+          ),
         ),
       ),
     );
@@ -3319,45 +4115,28 @@ class _HomeScreenState extends State<HomeScreen>
         child: Transform.scale(
           scale: visualScale,
           alignment: Alignment.center,
-          child: Opacity(
-            opacity: _previewVotePinOpacity(res),
             child: _buildPreviewPin(res),
-          ),
         ),
       ),
     );
   }
 
   Widget _buildPreviewPin(ResourceModel res) {
-    return Container(
-      width: 24,
-      height: 24,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: const Color(0xFFFF8E7C),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.14),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Image.asset(
-        res.iconPath,
-        fit: BoxFit.contain,
-        errorBuilder: (c, e, s) =>
-        const Icon(
-          Icons.circle,
-          size: 10,
-          color: Colors.grey,
-        ),
-      ),
+    final bool isNpc = res.category == 'npc';
+    final bool isAnimal = res.category == 'animal';
+
+    final Color borderColor = isAnimal
+        ? const Color(0xFF38BDF8)
+        : isNpc
+        ? const Color(0xFF3B82F6)
+        : const Color(0xFFFF8E7C);
+
+    return _buildHomePreviewCircleMarker(
+      iconPath: res.iconPath,
+      borderColor: borderColor,
+      size: 24,
+      fit: BoxFit.cover,
+      padding: const EdgeInsets.all(2),
     );
   }
 
@@ -3460,18 +4239,83 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                   Positioned(
-                    bottom: 12, right: 28,
+                    bottom: 12,
+                    right: 28,
                     child: GestureDetector(
                       onTap: () => widget.openEventScreen?.call(),
                       child: Container(
-                        padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
-                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.25), borderRadius: BorderRadius.circular(999)),
+                        padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Icon(Icons.grid_view_rounded, size: 12, color: Colors.white),
+                            SizedBox(
+                              height: 16,
+                              child: Center(
+                                child: Transform.translate(
+                                  offset: const Offset(0, 0.8),
+                                  child: const Icon(
+                                    Icons.grid_view_rounded,
+                                    size: 12,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+
                             const SizedBox(width: 6),
-                            Text('${_currentEventIndex + 1}/${events.length}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+
+                            const SizedBox(
+                              height: 16,
+                              child: Center(
+                                child: Text(
+                                  '전체보기',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.0,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 6),
+
+                            const SizedBox(
+                              height: 16,
+                              child: Center(
+                                child: Text(
+                                  '|',
+                                  style: TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 10,
+                                    height: 1.0,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 6),
+
+                            SizedBox(
+                              height: 16,
+                              child: Center(
+                                child: Text(
+                                  '${_currentEventIndex + 1}/${events.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.0,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),

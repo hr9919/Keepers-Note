@@ -497,6 +497,21 @@ class _PetScreenState extends State<PetScreen>
             child: Column(
               children: [
                 SizedBox(height: appBarHeight - 8),
+
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
+                  child: _showMyPetProfiles
+                      ? Column(
+                    children: [
+                      _buildPetProfileInlinePanel(),
+                      const SizedBox(height: 4),
+                    ],
+                  )
+                      : const SizedBox.shrink(),
+                ),
+
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   curve: Curves.easeInOutCubic,
@@ -510,6 +525,7 @@ class _PetScreenState extends State<PetScreen>
                     ),
                   ),
                 ),
+
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
@@ -1048,16 +1064,20 @@ class _PetScreenState extends State<PetScreen>
           height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFFAF8),
+            color: Colors.white.withOpacity(0.88),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: const Color(0xFFFF8E7C).withOpacity(0.22),
-              width: 1.2,
+              color: _showMyPetProfiles
+                  ? const Color(0xFFFFB3A7)
+                  : const Color(0xFFFFD8D0),
+              width: _showMyPetProfiles ? 1.5 : 1.2,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.035),
-                blurRadius: 6,
+                color: _showMyPetProfiles
+                    ? const Color(0xFFFF8E7C).withOpacity(0.10)
+                    : Colors.black.withOpacity(0.04),
+                blurRadius: _showMyPetProfiles ? 10 : 6,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -1070,6 +1090,10 @@ class _PetScreenState extends State<PetScreen>
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF1ED),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFFFFD9D1),
+                    width: 1,
+                  ),
                 ),
                 child: const Icon(
                   Icons.pets_rounded,
@@ -1079,26 +1103,68 @@ class _PetScreenState extends State<PetScreen>
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  pets.isEmpty
-                      ? (isCatTab ? '내 고양이 프로필 보기' : '내 강아지 프로필 보기')
-                      : (isCatTab
-                      ? '내 고양이 ${pets.length}마리 보기'
-                      : '내 강아지 ${pets.length}마리 보기'),
+                child: pets.isEmpty
+                    ? Text(
+                  isCatTab ? '내 고양이 프로필 보기' : '내 강아지 프로필 보기',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF4A4543),
-                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF3F3A37),
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+                    : RichText(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF3F3A37),
+                      fontWeight: FontWeight.w700,
+                    ),
+                    children: [
+                      TextSpan(text: isCatTab ? '내 고양이 ' : '내 강아지 '),
+                      TextSpan(
+                        text: '${pets.length}마리',
+                        style: const TextStyle(
+                          color: Color(0xFFFF7A67),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const TextSpan(text: ' 보기'),
+                    ],
                   ),
                 ),
               ),
-              AnimatedRotation(
-                duration: const Duration(milliseconds: 200),
-                turns: _showMyPetProfiles ? 0.5 : 0,
-                child: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFF94A3B8),
-                  size: 22,
+              const SizedBox(width: 8),
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: _showMyPetProfiles
+                      ? const Color(0xFFFFF1ED)
+                      : const Color(0xFFF8FAFC),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _showMyPetProfiles
+                        ? const Color(0xFFFFD8D0)
+                        : const Color(0xFFE5E7EB),
+                    width: 1,
+                  ),
+                ),
+                child: Center(
+                  child: AnimatedRotation(
+                    duration: const Duration(milliseconds: 200),
+                    turns: _showMyPetProfiles ? 0.5 : 0,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: _showMyPetProfiles
+                          ? const Color(0xFFFF8E7C)
+                          : const Color(0xFF94A3B8),
+                      size: 16,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1246,20 +1312,6 @@ class _PetScreenState extends State<PetScreen>
           ),
           padding: const EdgeInsets.only(bottom: 120),
           children: [
-            AnimatedSize(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeInOut,
-              alignment: Alignment.topCenter,
-              child: _showMyPetProfiles
-                  ? Column(
-                children: [
-                  const SizedBox(height: 8),
-                  _buildPetSummaryList(),
-                  const SizedBox(height: 8),
-                ],
-              )
-                  : const SizedBox.shrink(),
-            ),
             if (isCat)
               _buildPetGridContent()
             else
@@ -1275,6 +1327,19 @@ class _PetScreenState extends State<PetScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPetProfileInlinePanel() {
+    final bool isCatTab = _tabController.index == 0;
+    final List<Pet> filteredPets =
+    _allPets.where((p) => p.isCat == isCatTab).toList();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: filteredPets.isEmpty
+          ? _buildEmptyPetPlaceholder(isCatTab)
+          : _buildPetSummaryList(),
     );
   }
 

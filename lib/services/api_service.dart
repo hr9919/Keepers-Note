@@ -39,4 +39,24 @@ class ApiService {
       rethrow;
     }
   }
+
+  static Future<void> createSpawnPoint({
+    required double lng,
+    required double lat,
+    required String resourceType,
+  }) async {
+    final response = await http.post(
+      Uri.parse('http://161.33.30.40:8080/api/map/spawn-point'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'lng': lng,
+        'lat': lat,
+        'resourceType': resourceType,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception(response.body);
+    }
+  }
 }

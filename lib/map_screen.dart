@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'data/place_labels.dart';
@@ -33,6 +34,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Set<String> _enabledResources = {};
   bool _showAllNpcs = true;
   bool _showAllAnimals = false;
+
+  bool _showVoteNoticeBar = false;
+  bool _hasShownVoteNoticeOnce = false;
+  Timer? _voteNoticeTimer;
 
   final Color seaColor = const Color(0xFF6CA0B3);
   final Color accentColor = const Color(0xFFFF8E7C);
@@ -73,6 +78,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _voteNoticeTimer?.cancel();
+
     final controller = _zoomAnimationController;
     _zoomAnimationController = null;
     _zoomAnimation = null;
@@ -160,73 +167,49 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _showVoteNoticeTemporarily() {
+    _voteNoticeTimer?.cancel();
+
+    if (!mounted) return;
+
+    setState(() {
+      _showVoteNoticeBar = true;
+    });
+
+    _voteNoticeTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() {
+        _showVoteNoticeBar = false;
+      });
+    });
+  }
+
   void _showSpawnPointDetail(SpawnPointModel point) {
-    final double bottomPadding = MediaQuery.of(context).padding.bottom;
     final oak = point.oak;
     final fluorite = point.fluorite;
-
-    Widget buildVoteButton(SpawnResourceModel res) {
-      final bool canVote = !res.isVerified && !res.alreadyVotedSameType;
-
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: OutlinedButton.icon(
-          onPressed: canVote ? () => _handleVote(res) : null,
-          icon: Image.asset(
-            res.iconPath,
-            width: 22,
-            height: 22,
-            errorBuilder: (c, e, s) =>
-            const Icon(Icons.help_outline, size: 18),
-          ),
-          label: Text(
-            res.isVerified
-                ? '${res.koName} 확정됨'
-                : canVote
-                ? '${res.koName} 여기 있어요! (${res.voteCount})'
-                : '${res.koName} 이미 투표했어요',
-          ),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-            foregroundColor: canVote ? accentColor : Colors.grey,
-            side: BorderSide(
-              color: canVote ? accentColor : Colors.grey.shade400,
-            ),
-          ),
-        ),
-      );
-    }
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding + 12),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-        ),
+      isScrollControlled: true,
+      builder: (context) => _buildUnifiedSheet(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+            _buildSheetHandle(),
             Row(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 50,
+                  height: 50,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
+                    color: const Color(0xFFFFF4F1),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFFFE1D9),
+                    ),
                   ),
                   child: _buildSpawnPointBottomSheetIcon(point),
                 ),
@@ -236,10 +219,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        point.isOakOnly ? '참나무 후보 위치' : '공용 후보 위치',
+                        point.isOakOnly ? '참나무 후보 위치' : '참나무/형광석 후보 위치',
                         style: const TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2D3436),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -249,7 +233,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             : '게임에서 확인한 위치에 투표해 주세요.',
                         style: const TextStyle(
                           fontSize: 13,
-                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF7A8A9A),
                         ),
                       ),
                     ],
@@ -257,21 +242,27 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            if (oak != null) buildVoteButton(oak),
-            if (fluorite != null) buildVoteButton(fluorite),
-            const SizedBox(height: 6),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  foregroundColor: Colors.white,
+            const SizedBox(height: 16),
+            if (oak != null) buildVoteCard(oak),
+            if (fluorite != null) buildVoteCard(fluorite),
+            if (oak == null && fluorite == null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFE7EDF5)),
                 ),
-                child: const Text('확인'),
+                child: const Text(
+                  '표시할 후보 자원이 없어요.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -310,18 +301,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         'fluorite',
       };
 
+      final bool shouldShowVoteNotice =
+          !_hasShownVoteNoticeOnce && data.spawnPoints.isNotEmpty;
+
       setState(() {
         _fixedResources = data.fixedResources;
         _spawnPoints = data.spawnPoints;
 
         if (_enabledResources.isEmpty) {
-          // 첫 로딩: 기본값 ON
           _enabledResources = {
             ...availableKeys,
             ...defaultVoteKeys,
           };
         } else {
-          // 이후 로딩: 기존 사용자 선택 유지 + 투표 자원 칩은 항상 목록에 남게
           _enabledResources = {
             ..._enabledResources,
             ...defaultVoteKeys,
@@ -331,7 +323,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         _showAllNpcs = true;
         _showAllAnimals = false;
         _isLoading = false;
+
+        if (shouldShowVoteNotice) {
+          _hasShownVoteNoticeOnce = true;
+        }
       });
+
+      if (shouldShowVoteNotice) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future.delayed(const Duration(milliseconds: 150), () {
+            if (!mounted) return;
+            _showVoteNoticeTemporarily();
+          });
+        });
+      }
 
       _openDrawerIfNeeded();
     } catch (e) {
@@ -365,32 +370,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _didOpenDrawerOnStart = true;
       _scaffoldKey.currentState?.openEndDrawer();
     });
-  }
-
-  double _spawnPointOpacity(SpawnPointModel point) {
-    if (point.hasAnyVotedByMe) return 1.0;
-    if (point.isOakVerified || point.isFluoriteVerified) return 1.0;
-
-    final int maxVote = point.resources.isEmpty
-        ? 0
-        : point.resources
-        .map((r) => r.voteCount)
-        .reduce((a, b) => a > b ? a : b);
-
-    switch (maxVote) {
-      case 0:
-        return 0.32;
-      case 1:
-        return 0.46;
-      case 2:
-        return 0.60;
-      case 3:
-        return 0.76;
-      case 4:
-        return 0.90;
-      default:
-        return 1.0;
-    }
   }
 
   double _clampScale(double scale) {
@@ -600,77 +579,108 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   void _showFixedResourceDetail(ResourceModel res) {
-    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+    final bool isNpc = res.category == 'npc';
+    final bool isAnimal = res.category == 'animal';
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding + 12),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-        ),
+      isScrollControlled: true,
+      builder: (context) => _buildUnifiedSheet(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+            _buildSheetHandle(),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
+                  width: 52,
+                  height: 52,
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(12),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isAnimal
+                          ? const Color(0xFFD9EEFF)
+                          : const Color(0xFFFFDDD7),
+                      width: 1.4,
+                    ),
                   ),
-                  child: Image.asset(
-                    res.iconPath,
-                    width: 26,
-                    height: 26,
-                    errorBuilder: (c, e, s) =>
-                    const Icon(Icons.image_not_supported_outlined),
+                  child: ClipOval(
+                    child: Image.asset(
+                      res.iconPath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) =>
+                      const Icon(Icons.image_not_supported_outlined),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 15),
+                const SizedBox(width: 14),
                 Expanded(
-                  child: Text(
-                    res.koName,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        res.koName,
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isAnimal
+                              ? const Color(0xFFEFF8FF)
+                              : const Color(0xFFFFF4F1),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          isAnimal
+                              ? '동물 친구'
+                              : isNpc
+                              ? '마을 주민'
+                              : '위치 정보',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isAnimal
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFFFF8E7C),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                res.description ?? "정보가 없습니다.",
-                style: const TextStyle(fontSize: 15),
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
+            const SizedBox(height: 18),
+            Container(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  foregroundColor: Colors.white,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE7EDF5)),
+              ),
+              child: Text(
+                (res.description ?? '').trim().isEmpty
+                    ? '아직 등록된 설명이 없어요.'
+                    : res.description!.trim(),
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  height: 1.5,
+                  color: Color(0xFF334155),
                 ),
-                child: const Text("확인"),
               ),
             ),
           ],
@@ -805,164 +815,411 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       List<ResourceModel> items, {
         required ResourceModel tapped,
       }) {
-    // 하단 안전 영역 및 내비게이션 바 높이 계산
-    final double bottomPadding = MediaQuery.of(context).padding.bottom;
-    final double navBarHeight = 80.0;
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true, // 내용이 많을 경우 높이 조절 허용
-      builder: (context) {
-        return Container(
-          // 하단 패딩: 시스템 패딩 + 내비바 높이 + 여유 여백(12)
-          padding: EdgeInsets.fromLTRB(20, 20, 20, bottomPadding + navBarHeight + 12),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      isScrollControlled: true,
+      builder: (context) => _buildUnifiedSheet(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.62,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 상단 핸들러
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '겹쳐 있는 캐릭터',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
+              _buildSheetHandle(),
+              const Text(
+                '겹쳐 있는 캐릭터',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
                 ),
               ),
               const SizedBox(height: 6),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '선택할 캐릭터를 눌러 주세요.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF64748B),
-                  ),
+              const Text(
+                '선택할 캐릭터를 눌러 주세요.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF64748B),
                 ),
               ),
               const SizedBox(height: 16),
-
-              // 캐릭터 리스트가 길어질 경우를 대비해 Flexible + ScrollView 적용
               Flexible(
-                child: SingleChildScrollView(
+                child: ListView.separated(
+                  shrinkWrap: true,
                   physics: const BouncingScrollPhysics(),
-                  child: Column(
-                    children: items.map((res) {
-                      final bool isAnimal = res.category == 'animal';
-                      final bool isTapped = res.id == tapped.id;
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final res = items[index];
+                    final bool isAnimal = res.category == 'animal';
+                    final bool isTapped = res.id == tapped.id;
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () {
-                            Navigator.pop(context);
-                            setState(() {
-                              _selectedFixedResourceId = res.id;
-                            });
-                            _showFixedResourceDetail(res);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () {
+                          Navigator.pop(context);
+                          setState(() {
+                            _selectedFixedResourceId = res.id;
+                          });
+                          _showFixedResourceDetail(res);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isTapped
+                                ? const Color(0xFFFFF7F5)
+                                : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
                               color: isTapped
-                                  ? const Color(0xFFFFF7F5)
-                                  : const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isTapped
-                                    ? accentColor.withOpacity(0.35)
-                                    : const Color(0xFFE2E8F0),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 42,
-                                  height: 42,
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isAnimal
-                                          ? Colors.lightBlue
-                                          : const Color(0xFFFFD7D1),
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: ClipOval(
-                                    child: Image.asset(
-                                      res.iconPath,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (c, e, s) => const Icon(
-                                        Icons.image_not_supported_outlined,
-                                        size: 18,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        res.koName,
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF0F172A),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        isAnimal ? '동물 친구' : '마을 주민',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF64748B),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right_rounded,
-                                  color: Color(0xFF94A3B8),
-                                ),
-                              ],
+                                  ? accentColor.withOpacity(0.35)
+                                  : const Color(0xFFE2E8F0),
                             ),
                           ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isAnimal
+                                        ? const Color(0xFFD9EEFF)
+                                        : const Color(0xFFFFDDD7),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: ClipOval(
+                                  child: Image.asset(
+                                    res.iconPath,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => const Icon(
+                                      Icons.image_not_supported_outlined,
+                                      size: 18,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      res.koName,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      isAnimal ? '동물 친구' : '마을 주민',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ],
+                          ),
                         ),
-                      );
-                    }).toList(),
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  static const List<BoxShadow> _softShadow = [
+    BoxShadow(
+      color: Color(0x14000000),
+      blurRadius: 18,
+      offset: Offset(0, 8),
+    ),
+  ];
+
+  Widget _buildGlassIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    bool isAccent = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Ink(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: isAccent
+                ? const Color(0xFFFF8E7C)
+                : Colors.white.withOpacity(0.90),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isAccent
+                  ? const Color(0xFFFF8E7C)
+                  : Colors.white.withOpacity(0.75),
+              width: 1,
+            ),
+            boxShadow: _softShadow,
+          ),
+          child: Icon(
+            icon,
+            size: 22,
+            color: isAccent ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapHeaderButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Ink(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.9),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            size: 21,
+            color: const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUnifiedSheet({required Widget child}) {
+    final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white.withOpacity(0.98),
+              const Color(0xFFFFFBFA),
+            ],
+          ),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(32),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 30,
+              offset: const Offset(0, -8),
+            ),
+            BoxShadow(
+              color: const Color(0xFFFF8E7C).withOpacity(0.08),
+              blurRadius: 24,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildVoteCard(SpawnResourceModel res) {
+    final bool canVote = !res.isVerified && !res.alreadyVotedSameType;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            const Color(0xFFFFFAF8),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFFFE7E1),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF8E7C).withOpacity(0.07),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF3EF),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFFFFDED6),
+              ),
+            ),
+            child: Image.asset(
+              res.iconPath,
+              fit: BoxFit.contain,
+              errorBuilder: (c, e, s) =>
+              const Icon(Icons.help_outline_rounded, size: 18),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  res.koName,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2D3436),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  res.isVerified
+                      ? '오늘 위치가 확정되었어요'
+                      : res.alreadyVotedSameType
+                      ? '이미 같은 종류에 투표했어요'
+                      : '현재 ${res.voteCount}표 모였어요',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF7A8A9A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: canVote ? () => _handleVote(res) : null,
+              child: Ink(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                  color: canVote
+                      ? const Color(0xFFFF8E7C)
+                      : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: canVote
+                      ? [
+                    BoxShadow(
+                      color: const Color(0xFFFF8E7C).withOpacity(0.24),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                      : null,
+                ),
+                child: Text(
+                  res.isVerified
+                      ? '확정'
+                      : res.alreadyVotedSameType
+                      ? '완료'
+                      : '투표',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: canVote
+                        ? Colors.white
+                        : const Color(0xFF94A3B8),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSheetHandle() {
+    return Center(
+      child: Container(
+        width: 54,
+        height: 6,
+        margin: const EdgeInsets.only(bottom: 18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFFFD6CD),
+              const Color(0xFFFFB3A3),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
     );
   }
 
@@ -992,70 +1249,60 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: () => _toggleResource(resourceName),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 6,
+        ),
         decoration: BoxDecoration(
           color: isEnabled
               ? const Color(0xFFFFF4F1)
               : const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isEnabled
                 ? const Color(0xFFFF8E7C)
                 : const Color(0xFFE2E8F0),
+            width: 1,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 22,
-              height: 22,
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isEnabled
-                      ? const Color(0xFFFFD4CC)
-                      : const Color(0xFFE5E7EB),
-                ),
-              ),
-              child: sampleRes != null
-                  ? Image.asset(
-                sampleRes.iconPath,
-                fit: BoxFit.contain,
-                errorBuilder: (c, e, s) => const Icon(
-                  Icons.inventory_2_outlined,
-                  size: 12,
-                  color: Colors.grey,
+            if (sampleRes != null || fallbackIconPath != null)
+              Container(
+                width: 18,
+                height: 18,
+                alignment: Alignment.center,
+                child: Image.asset(
+                  sampleRes?.iconPath ?? fallbackIconPath!,
+                  width: 14,
+                  height: 14,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(
+                      Icons.image_not_supported_outlined,
+                      size: 14,
+                      color: Color(0xFF94A3B8),
+                    );
+                  },
                 ),
               )
-                  : fallbackIconPath != null
-                  ? Image.asset(
-                fallbackIconPath,
-                fit: BoxFit.contain,
-                errorBuilder: (c, e, s) => const Icon(
-                  Icons.inventory_2_outlined,
-                  size: 12,
-                  color: Colors.grey,
-                ),
-              )
-                  : const Icon(
+            else
+              const Icon(
                 Icons.inventory_2_outlined,
-                size: 12,
-                color: Colors.grey,
+                size: 14,
+                color: Color(0xFF94A3B8),
               ),
-            ),
-            const SizedBox(width: 7),
+            const SizedBox(width: 5),
             Text(
               _getDisplayName(resourceName),
               style: TextStyle(
                 fontSize: 12.5,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: isEnabled
-                    ? const Color(0xFF111827)
-                    : const Color(0xFF334155),
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF475569),
               ),
             ),
           ],
@@ -1074,12 +1321,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildDrawerSectionLabel(title),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: items.map(_buildMapFilterChip).toList(),
+          spacing: 6,
+          runSpacing: 6,
+          children: items.map((item) => _buildMapFilterChip(item)).toList(),
         ),
+        const SizedBox(height: 10),
       ],
     );
   }
@@ -1087,29 +1335,31 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Widget _buildFilterDrawer() {
     final double topPadding = MediaQuery.of(context).padding.top;
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
-    final double navBarHeight = 80.0; // 내비게이션 바 높이
+    const double navBarHeight = 80.0;
 
     final gatherItems = _getDistinctNamesByCategory([
-      'fruit', 'bubble', 'tree', 'material', 'mineral',
+      'fruit',
+      'bubble',
+      'tree',
+      'material',
+      'mineral',
     ]);
     final mushroomItems = _getDistinctNamesByCategory(['mushroom']);
 
     return Drawer(
-      // 1. 드로워 자체 배경을 투명하게 해서 마진이 보이게 함
       backgroundColor: Colors.transparent,
       elevation: 0,
-      width: MediaQuery.of(context).size.width * 0.82, // 너비 약간 조절
+      width: MediaQuery.of(context).size.width * 0.82,
       child: Container(
-        // 2. 상단바(topPadding + 헤더높이)와 하단바(bottomPadding + 내비높이)만큼 마진 추가
         margin: EdgeInsets.fromLTRB(
           0,
-          topPadding + 70, // 상단 플로팅 헤더보다 약간 아래에서 시작
-          12, // 오른쪽 여백
-          bottomPadding + navBarHeight + 12, // 내비게이션 바 바로 위에서 끝남
+          topPadding + 70,
+          12,
+          bottomPadding + navBarHeight + 12,
         ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(24), // 다른 드로워처럼 둥글게
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.15),
@@ -1120,7 +1370,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ),
         child: Column(
           children: [
-            // 드로워 내부 헤더
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 10, 12),
               child: Row(
@@ -1135,6 +1384,43 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () {
+                        _resetFiltersToDefault();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('필터가 기본값으로 초기화됐어요.'),
+                            duration: Duration(milliseconds: 1400),
+                          ),
+                        );
+                      },
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF4F1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: const Color(0xFFFF8E7C).withOpacity(0.25),
+                          ),
+                        ),
+                        child: const Text(
+                          '기본값',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFFF8E7C),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close_rounded, size: 22),
@@ -1144,8 +1430,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-            // 필터 리스트 영역
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -1166,9 +1450,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       onChanged: (val) => setState(() => _showAllAnimals = val),
                     ),
                     const SizedBox(height: 22),
-                    _buildMapFilterSection(title: '채집 자원', items: gatherItems),
+                    _buildMapFilterSection(
+                      title: '채집 자원',
+                      items: gatherItems,
+                    ),
                     const SizedBox(height: 18),
-                    _buildMapFilterSection(title: '버섯 종류', items: mushroomItems),
+                    _buildMapFilterSection(
+                      title: '버섯 종류',
+                      items: mushroomItems,
+                    ),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -1177,6 +1468,39 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ),
       ),
     );
+  }
+
+  void _resetFiltersToDefault() {
+    final fixedKeys = _fixedResources
+        .where(
+          (res) =>
+      res.category != 'npc' &&
+          res.category != 'animal' &&
+          res.category != 'location' &&
+          !res.isFixed &&
+          _normalizeFilterKey(res) != 'gold_bubble',
+    )
+        .map((res) => _normalizeFilterKey(res));
+
+    final spawnKeys = _spawnPoints
+        .expand((point) => point.resources)
+        .map((res) => _normalizeSpawnResourceKey(res));
+
+    const defaultVoteKeys = {
+      'roaming_oak',
+      'fluorite',
+    };
+
+    setState(() {
+      _enabledResources = {
+        ...fixedKeys,
+        ...spawnKeys,
+        ...defaultVoteKeys,
+      };
+
+      _showAllNpcs = true;
+      _showAllAnimals = false;
+    });
   }
 
   Widget _buildSpawnPointBottomSheetIcon(SpawnPointModel point) {
@@ -1350,155 +1674,265 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildFloatingMapHeader() {
-    return Container(
-      // 그림자를 더 넓고 부드럽게 (Soft Shadow)
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28), // 더 동글동글하게
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: const Color(0xFFF1F5F9), // 아주 연한 테두리
-              width: 1.5,
+    return Column(
+      children: [
+        Row(
+          children: [
+            _buildMapGlassIconButton(
+              icon: Icons.arrow_back_rounded,
+              onTap: () => Navigator.pop(context),
             ),
-          ),
-          child: Row(
-            children: [
-              // 뒤로가기 버튼 (연한 배경)
-              _buildHeaderIconButton(
-                icon: Icons.arrow_back_ios_new_rounded,
-                bgColor: const Color(0xFFF8FAFC),
-                iconColor: const Color(0xFF64748B),
-                onTap: () => Navigator.pop(context),
-              ),
+            const SizedBox(width: 10),
 
-              // 중앙 타이틀 (실험실 명찰 느낌)
-              Expanded(
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.08), // 타이틀에 살짝 배경
-                      borderRadius: BorderRadius.circular(20),
+            Expanded(
+              child: Container(
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withOpacity(0.88),
+                      const Color(0xFFFFF6F3).withOpacity(0.92),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFFFFE4DE),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_rounded, size: 16, color: accentColor),
-                        const SizedBox(width: 8),
-                        Text(
-                          '지도', // 실험실 느낌의 귀여운 타이틀
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900, // 더 두껍게
-                            color: const Color(0xFF1E293B),
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ],
+                    BoxShadow(
+                      color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  children: [
+                    SizedBox(width: 18),
+                    Spacer(),
+                    Icon(
+                      Icons.map_rounded,
+                      size: 18,
+                      color: Color(0xFFFF8E7C),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      '지도',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                    Spacer(),
+                    SizedBox(width: 18),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            _buildMapGlassIconButton(
+              icon: Icons.tune_rounded,
+              onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        _buildVoteNoticeFloatingBar(),
+      ],
+    );
+  }
+
+  Widget _buildVoteNoticeFloatingBar() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double fullWidth = constraints.maxWidth;
+
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(
+            begin: 0,
+            end: _showVoteNoticeBar ? 1 : 0,
+          ),
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeOutCubic,
+          builder: (context, factor, child) {
+            final double slideX = (1 - factor) * -18;
+            final double opacity = Curves.easeOut.transform(factor).clamp(0.0, 1.0);
+            final double scale = 0.985 + (0.015 * factor);
+
+            return ClipRect(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                widthFactor: factor,
+                child: Opacity(
+                  opacity: opacity,
+                  child: Transform.translate(
+                    offset: Offset(slideX, 0),
+                    child: Transform.scale(
+                      scale: scale,
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        width: fullWidth,
+                        child: child,
+                      ),
                     ),
                   ),
                 ),
               ),
-
-              // 필터 버튼 (포인트 컬러 배경)
-              _buildHeaderIconButton(
-                icon: Icons.tune_rounded,
-                bgColor: accentColor, // 메인 컬러로 강조
-                iconColor: Colors.white,
-                onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+            );
+          },
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withOpacity(0.88),
+                  const Color(0xFFFFF6F3).withOpacity(0.92),
+                ],
               ),
-            ],
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFFFFE4DE),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 14),
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF1ED),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: const Color(0xFFFFE1D9),
+                      width: 1,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.campaign_rounded,
+                    size: 14,
+                    color: Color(0xFFFF8E7C),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    '오늘의 위치에 투표해 주세요!',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _showVoteNoticeBar = false;
+                    });
+                  },
+                  child: const Text(
+                    '닫기',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFF8E7C),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildHeaderIconButton({
+  Widget _buildMapGlassIconButton({
     required IconData icon,
-    required Color bgColor,
-    required Color iconColor,
     required VoidCallback onTap,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 46,
-          height: 46,
+        child: Ink(
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(20),
-            // 필터 버튼처럼 배경이 있는 경우 살짝 그림자 추가
-            boxShadow: bgColor == accentColor
-                ? [BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
-                : [],
+            color: Colors.white.withOpacity(0.82),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: const Color(0xFFFFE4DE),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Icon(
             icon,
-            color: iconColor,
-            size: 20,
+            size: 22,
+            color: const Color(0xFFFF8E7C),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildNpcMarker(
-      ResourceModel res, {
-        required bool isAnimal,
-        required bool isSelected,
-      }) {
-    final Color borderColor = isSelected
-        ? accentColor
-        : (isAnimal ? Colors.lightBlue : const Color(0xFFFFD7D1));
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      width: 28,
-      height: 28,
+  Widget _buildNpcMarker(ResourceModel res, {bool isAnimal = false}) {
+    return _buildCircleMarker(
+      iconPath: res.iconPath,
+      borderColor: isAnimal
+          ? const Color(0xFF38BDF8) // 동물
+          : const Color(0xFF3B82F6), // NPC
+      isSelected: _selectedFixedResourceId == res.id,
+      size: 28,
+      fit: BoxFit.cover,
       padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: borderColor,
-          width: isSelected ? 2.6 : 2.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isSelected ? 0.20 : 0.14),
-            blurRadius: isSelected ? 12 : 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: ClipOval(
-        child: Image.asset(
-          res.iconPath,
-          fit: BoxFit.cover,
-          errorBuilder: (c, e, s) => const Icon(
-            Icons.image_not_supported_outlined,
-            size: 18,
-            color: Colors.grey,
-          ),
-        ),
-      ),
     );
   }
 
@@ -1558,66 +1992,183 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildZoomButtons(BoxConstraints constraints, double mapSize) {
-    return Column(
-      children: [
-        _buildRoundActionButton(
-          icon: Icons.add_rounded,
-          onTap: () {
-            final nextScale =
-            (_currentScale * 1.2).clamp(_minMapScale, _maxMapScale);
-            _animateToCenterScale(
-              constraints: constraints,
-              mapSize: mapSize,
-              scale: nextScale,
-            );
-          },
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(26),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          width: 58,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white.withOpacity(0.88),
+                const Color(0xFFFFF6F3).withOpacity(0.92),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.72),
+              width: 1.1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildMapZoomActionButton(
+                icon: Icons.add_rounded,
+                onTap: () {
+                  final nextScale =
+                  (_currentScale * 1.2).clamp(_minMapScale, _maxMapScale);
+                  _animateToCenterScale(
+                    constraints: constraints,
+                    mapSize: mapSize,
+                    scale: nextScale,
+                  );
+                },
+              ),
+              _buildZoomDivider(),
+              _buildMapZoomActionButton(
+                icon: Icons.remove_rounded,
+                onTap: () {
+                  final nextScale =
+                  (_currentScale / 1.2).clamp(_minMapScale, _maxMapScale);
+                  _animateToCenterScale(
+                    constraints: constraints,
+                    mapSize: mapSize,
+                    scale: nextScale,
+                  );
+                },
+              ),
+              _buildZoomDivider(),
+              _buildMapZoomActionButton(
+                icon: Icons.refresh_rounded,
+                onTap: () => _resetToMinimumScale(constraints, mapSize),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
-        _buildRoundActionButton(
-          icon: Icons.remove_rounded,
-          onTap: () {
-            final nextScale =
-            (_currentScale / 1.2).clamp(_minMapScale, _maxMapScale);
-            _animateToCenterScale(
-              constraints: constraints,
-              mapSize: mapSize,
-              scale: nextScale,
-            );
-          },
+      ),
+    );
+  }
+
+  Widget _buildMapZoomActionButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Ink(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.82),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: const Color(0xFFFFE4DE),
+              width: 1,
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: const Color(0xFF5F6F82),
+            size: 22,
+          ),
         ),
-        const SizedBox(height: 10),
-        _buildRoundActionButton(
-          icon: Icons.refresh_rounded,
-          onTap: () => _resetToMinimumScale(constraints, mapSize),
-        ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildZoomDivider() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      width: 24,
+      height: 1,
+      color: const Color(0xFFFFE6E0),
     );
   }
 
   Widget _buildSpawnPointMarker(SpawnPointModel point, double mapSize) {
-    const double pinWidth = 26;
-    const double pinHeight = 36;
+    const double markerSize = 36;
+    final double markerScale = (1 / _currentScale).clamp(0.3, 1.0);
 
-    final double pinScale = (1 / _currentScale).clamp(0.5, 1.1);
+    final bool hasOak = point.oak != null;
+    final bool hasFluorite = point.fluorite != null;
+    final bool isSelected = _selectedSpawnPointId == point.id;
+    final bool isVerified = point.isOakVerified || point.isFluoriteVerified;
+
+    final Color borderColor = isSelected
+        ? accentColor
+        : hasOak && hasFluorite
+        ? const Color(0xFFB794F4)
+        : hasOak
+        ? const Color(0xFF8BC34A)
+        : const Color(0xFF7E57C2);
+
+    final String iconPath = hasOak
+        ? point.oak!.iconPath
+        : hasFluorite
+        ? point.fluorite!.iconPath
+        : 'assets/images/default.png';
 
     return Positioned(
-      left: (point.x * mapSize) - (pinWidth / 2),
-      top: (point.y * mapSize) - pinHeight,
+      left: (point.x * mapSize) - (markerSize / 2),
+      top: (point.y * mapSize) - (markerSize / 2),
       child: GestureDetector(
         onTap: () {
           setState(() {
             _selectedSpawnPointId = point.id;
+            _selectedFixedResourceId = null;
           });
           _showSpawnPointDetail(point);
         },
         child: Transform.scale(
-          scale: pinScale,
-          alignment: Alignment.bottomCenter,
-          child: Opacity(
-            opacity: _spawnPointOpacity(point),
-            child: _buildPinMarker(
-              child: _buildSpawnPointPinImage(point),
-              isSelected: _selectedSpawnPointId == point.id,
+          scale: markerScale,
+          alignment: Alignment.center,
+          child: _buildCircleMarker(
+            borderColor: borderColor,
+            isSelected: isSelected,
+            size: 28,
+            fit: BoxFit.contain,
+            padding: const EdgeInsets.all(4),
+            child: (!isVerified && !isSelected)
+                ? Center(
+              child: Text(
+                '❓',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,   // ← 16 → 13로 줄임
+                  height: 1.0,    // ← 이게 핵심 (baseline 보정)
+                  fontWeight: FontWeight.w900,
+                  color: borderColor,
+                ),
+              ),
+            )
+                : Image.asset(
+              iconPath,
+              fit: BoxFit.contain,
+              errorBuilder: (c, e, s) => Icon(
+                Icons.help_outline_rounded,
+                size: 16,
+                color: borderColor,
+              ),
             ),
           ),
         ),
@@ -1626,53 +2177,42 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildFixedResourceMarker(ResourceModel res, double mapSize) {
-    final bool isNpc = res.category == 'npc';
-    final bool isAnimal = res.category == 'animal';
-
-    const double npcSize = 36;
-    const double pinWidth = 24;
-    const double pinHeight = 34;
-
-    final double npcScale = (1 / _currentScale).clamp(0.3, 1.0);
-    final double pinScale = (1 / _currentScale).clamp(0.5, 1.1);
-
-    if (isNpc || isAnimal) {
-      return Positioned(
-        left: (res.x * mapSize) - (npcSize / 2),
-        top: (res.y * mapSize) - (npcSize / 2),
-        child: GestureDetector(
-          onTap: () => _handleCharacterTap(res),
-          child: Transform.scale(
-            scale: npcScale,
-            alignment: Alignment.center,
-            child: _buildNpcMarker(
-              res,
-              isAnimal: isAnimal,
-              isSelected: _selectedFixedResourceId == res.id,
-            ),
-          ),
-        ),
-      );
-    }
+    const double markerSize = 36;
+    final double markerScale = (1 / _currentScale).clamp(0.3, 1.0);
 
     return Positioned(
-      left: (res.x * mapSize) - (pinWidth / 2),
-      top: (res.y * mapSize) - pinHeight,
+      left: (res.x * mapSize) - (markerSize / 2),
+      top: (res.y * mapSize) - (markerSize / 2),
       child: GestureDetector(
         onTap: () {
           setState(() {
             _selectedFixedResourceId = res.id;
+            _selectedSpawnPointId = null;
           });
-          _showFixedResourceDetail(res);
+
+          if (res.category == 'npc' || res.category == 'animal') {
+            _handleCharacterTap(res);
+          } else {
+            _showFixedResourceDetail(res);
+          }
         },
         child: Transform.scale(
-          scale: pinScale,
-          alignment: Alignment.bottomCenter,
-          child: Opacity(
-            opacity: 1.0,
-            child: _buildPinMarker(
+          scale: markerScale,
+          alignment: Alignment.center,
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 160),
+            scale: _selectedFixedResourceId == res.id ? 1.08 : 1.0,
+            child: res.category == 'npc'
+                ? _buildNpcMarker(res)
+                : res.category == 'animal'
+                ? _buildNpcMarker(res, isAnimal: true)
+                : _buildCircleMarker(
               iconPath: res.iconPath,
+              borderColor: const Color(0xFFFF8E7C), // 일반 자원
               isSelected: _selectedFixedResourceId == res.id,
+              size: 28,
+              fit: BoxFit.cover,
+              padding: const EdgeInsets.all(2),
             ),
           ),
         ),
@@ -1680,93 +2220,48 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPinMarker({
+  Widget _buildCircleMarker({
     String? iconPath,
     Widget? child,
+    required Color borderColor,
     required bool isSelected,
+    double size = 28,
+    BoxFit fit = BoxFit.cover,
+    EdgeInsets padding = const EdgeInsets.all(2),
   }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      width: 30,
-      height: 40,
+    return Container(
+      width: size,
+      height: size,
+      padding: padding,
       decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: borderColor,
+          width: isSelected ? 2.8 : 2.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isSelected ? 0.18 : 0.10),
-            blurRadius: isSelected ? 16 : 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(isSelected ? 0.22 : 0.14),
+            blurRadius: isSelected ? 12 : 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.bottomCenter,
-        children: [
-          CustomPaint(
-            size: const Size(30, 40),
-            painter: _ModernPinPainter(
-              color: isSelected
-                  ? const Color(0xFFFFF0EC)
-                  : Colors.white.withOpacity(0.98),
-              borderColor: isSelected
-                  ? const Color(0xFFFF8E7C)
-                  : const Color(0xFFE2E8F0),
-              shadowColor: Colors.transparent,
-            ),
-          ),
-          Positioned(
-            top: 5,
-            child: Container(
-              width: 20,
-              height: 20,
-              alignment: Alignment.center,
-              child: child ??
-                  (iconPath != null
-                      ? Image.asset(
-                    iconPath,
-                    width: 18,
-                    height: 18,
-                    errorBuilder: (c, e, s) => const Icon(
-                      Icons.image_not_supported_outlined,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                  )
-                      : const SizedBox.shrink()),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRoundActionButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.white.withOpacity(0.94),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
+      child: ClipOval(
         child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.10),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
+          color: Colors.white,
+          alignment: Alignment.center,
+          child: child ??
+              Image.asset(
+                iconPath ?? '',
+                fit: fit,
+                errorBuilder: (c, e, s) => const Icon(
+                  Icons.image_not_supported_outlined,
+                  size: 16,
+                  color: Colors.grey,
+                ),
               ),
-            ],
-          ),
-          child: Icon(
-            icon,
-            color: const Color(0xFF334155),
-          ),
         ),
       ),
     );
@@ -1784,10 +2279,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         drawerScrimColor: Colors.black.withOpacity(0.2),
         endDrawer: _buildFilterDrawer(),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+            ? const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        )
             : LayoutBuilder(
           builder: (context, constraints) {
-            final double mapSize = constraints.maxWidth * _baseMapWidthFactor;
+            final double mapSize =
+                constraints.maxWidth * _baseMapWidthFactor;
             _applyInitialTransform(constraints, mapSize);
 
             final visibleFixedResources = _fixedResources
@@ -1800,17 +2298,23 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
             debugPrint('map spawn total = ${_spawnPoints.length}');
             debugPrint('map enabled = $_enabledResources');
-            debugPrint('map visible spawn count = ${visibleSpawnPoints.length}');
+            debugPrint(
+              'map visible spawn count = ${visibleSpawnPoints.length}',
+            );
 
             visibleFixedResources.sort((a, b) {
-              final int aPriority = a.id == _selectedFixedResourceId ? 1 : 0;
-              final int bPriority = b.id == _selectedFixedResourceId ? 1 : 0;
+              final int aPriority =
+              a.id == _selectedFixedResourceId ? 1 : 0;
+              final int bPriority =
+              b.id == _selectedFixedResourceId ? 1 : 0;
               return aPriority.compareTo(bPriority);
             });
 
             visibleSpawnPoints.sort((a, b) {
-              final int aPriority = a.id == _selectedSpawnPointId ? 1 : 0;
-              final int bPriority = b.id == _selectedSpawnPointId ? 1 : 0;
+              final int aPriority =
+              a.id == _selectedSpawnPointId ? 1 : 0;
+              final int bPriority =
+              b.id == _selectedSpawnPointId ? 1 : 0;
               return aPriority.compareTo(bPriority);
             });
 
@@ -1820,10 +2324,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   child: ClipRect(
                     child: GestureDetector(
                       behavior: HitTestBehavior.translucent,
+
                       onDoubleTapDown: (details) {
                         _doubleTapDetails = details;
                       },
+
                       onDoubleTap: () => _handleDoubleTap(constraints, mapSize),
+
                       child: InteractiveViewer(
                         transformationController: _transformationController,
                         minScale: _minMapScale,
@@ -1834,10 +2341,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         clipBehavior: Clip.none,
                         onInteractionUpdate: (_) {
                           final matrix = _transformationController.value;
-                          final newScale = _clampScale(matrix.getMaxScaleOnAxis());
+                          final newScale = _clampScale(
+                            matrix.getMaxScaleOnAxis(),
+                          );
 
                           if ((newScale - _minMapScale).abs() < 0.001) {
-                            _forceCenterAtMinimumScale(constraints, mapSize);
+                            _forceCenterAtMinimumScale(
+                              constraints,
+                              mapSize,
+                            );
                             return;
                           }
 
@@ -1849,14 +2361,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         },
                         onInteractionEnd: (_) {
                           if ((_currentScale - _minMapScale).abs() < 0.001) {
-                            _forceCenterAtMinimumScale(constraints, mapSize);
+                            _forceCenterAtMinimumScale(
+                              constraints,
+                              mapSize,
+                            );
                           }
                         },
                         child: SizedBox(
                           width: mapSize,
                           height: mapSize,
                           child: Stack(
-                            clipBehavior: Clip.none,
                             children: [
                               Positioned.fill(
                                 child: Image.asset(
@@ -1866,10 +2380,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               ),
                               _buildPlaceLabels(mapSize),
                               ...visibleFixedResources.map(
-                                    (res) => _buildFixedResourceMarker(res, mapSize),
+                                    (res) => _buildFixedResourceMarker(
+                                  res,
+                                  mapSize,
+                                ),
                               ),
                               ...visibleSpawnPoints.map(
-                                    (point) => _buildSpawnPointMarker(point, mapSize),
+                                    (point) => _buildSpawnPointMarker(
+                                  point,
+                                  mapSize,
+                                ),
                               ),
                             ],
                           ),
