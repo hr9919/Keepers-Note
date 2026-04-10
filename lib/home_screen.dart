@@ -431,7 +431,7 @@ class _HomeScreenState extends State<HomeScreen>
       const defaultNames = <String>{
         'roaming_oak',
         'fluorite',
-        'black-truffle',
+        'black_truffle',
       };
 
       final allFixed = data.fixedResources;
@@ -447,20 +447,10 @@ class _HomeScreenState extends State<HomeScreen>
           };
         }
 
-        // 고정 자원 목록
         _allPreviewCandidates = allFixed;
-
-        // 후보 좌표 목록
         _previewSpawnPoints = allSpawn;
-
-        // 홈 프리뷰에서 기존 fixed 자원 마커용
         _mapPreviewResources = _getFilteredPreviewResources(allFixed);
-
         _isMapPreviewLoading = false;
-
-        debugPrint('preview spawn count = ${_previewSpawnPoints.length}');
-        debugPrint('preview enabled = $_previewEnabledResources');
-        debugPrint('preview visible spawn count = ${_getVisiblePreviewSpawnPoints().length}');
       });
     } catch (e) {
       if (!mounted) return;
@@ -839,6 +829,23 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String _normalizePreviewFilterKey(ResourceModel res) {
+    if (res.resourceName == 'fluorite' ||
+        res.resourceName == 'flawless_fluorite' ||
+        res.koName.contains('형광석')) {
+      return 'fluorite';
+    }
+
+    if (res.resourceName == 'roaming_oak' ||
+        res.koName.contains('참나무')) {
+      return 'roaming_oak';
+    }
+
+    if (res.resourceName == 'black_truffle' ||
+        res.resourceName == 'black-truffle' ||
+        res.koName.contains('트러플')) {
+      return 'black_truffle';
+    }
+
     return res.resourceName;
   }
 
@@ -1390,9 +1397,18 @@ class _HomeScreenState extends State<HomeScreen>
     return currentScale >= _previewPlaceRevealScale;
   }
 
-  String _getPreviewDisplayName(String resourceName) {
-    final sample = _getPreviewRepresentativeByResourceName(resourceName);
-    return sample?.koName ?? resourceName;
+  String _getPreviewDisplayName(String filterKey) {
+    switch (filterKey) {
+      case 'roaming_oak':
+        return '그 자리 참나무';
+      case 'fluorite':
+        return '완벽한 형광석';
+      case 'black_truffle':
+        return '검은 트러플';
+      default:
+        final sample = _getPreviewRepresentativeByResourceName(filterKey);
+        return sample?.koName ?? filterKey;
+    }
   }
 
   Widget _buildPreviewResourceChip(String resourceName) {
