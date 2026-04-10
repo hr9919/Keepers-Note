@@ -5,6 +5,9 @@ import 'package:http/http.dart' as http;
 import 'data/place_labels.dart';
 import 'models/place_label.dart';
 import 'models/resource_model.dart';
+import 'models/map_data_response.dart';
+import 'models/spawn_point_model.dart';
+import 'models/spawn_resource_model.dart';
 import 'services/api_service.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
@@ -23,7 +26,9 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  List<ResourceModel> _resources = [];
+  List<ResourceModel> _fixedResources = [];
+  List<SpawnPointModel> _spawnPoints = [];
+
   bool _isLoading = true;
   Set<String> _enabledResources = {};
   bool _showAllNpcs = true;
@@ -38,42 +43,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   double _currentScale = 1.0;
   bool _didSetInitialTransform = false;
   bool _didOpenDrawerOnStart = false;
-  int? _selectedResourceId;
+  int? _selectedFixedResourceId;
+  int? _selectedSpawnPointId;
 
   String _voterId = "";
-
-  bool _isProgressiveVotePin(ResourceModel res) {
-    final key = _normalizeFilterKey(res);
-    return key == 'roaming_oak' || key == 'fluorite';
-  }
-
-  bool _isVoteCompleted(ResourceModel res) {
-    return res.voteCount >= 5 || res.isFixed || res.isVerified;
-  }
-
-  double _votePinOpacity(ResourceModel res) {
-    if (!_isProgressiveVotePin(res)) return 1.0;
-
-    // 내가 투표해서 남아 있는 핀은 항상 완전 불투명
-    if (res.votedByMe) return 1.0;
-
-    if (_isVoteCompleted(res)) return 1.0;
-
-    switch (res.voteCount) {
-      case 0:
-        return 0.28;
-      case 1:
-        return 0.42;
-      case 2:
-        return 0.58;
-      case 3:
-        return 0.74;
-      case 4:
-        return 0.88;
-      default:
-        return 1.0;
-    }
-  }
 
   TapDownDetails? _doubleTapDetails;
   AnimationController? _zoomAnimationController;
@@ -123,8 +96,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _handleVote(ResourceModel res) async {
-    // 먼저 상세 팝업 닫기
+  Future<void> _handleVote(SpawnResourceModel res) async {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
     }
@@ -140,16 +112,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     if (res.alreadyVotedSameType) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('이미 이 자원 종류에 투표했어요.')),
+        SnackBar(content: Text('이미 ${res.koName}에 투표했어요.')),
       );
       return;
     }
 
     try {
-      final response = await http.post(
-        Uri.parse(
-          'http://161.33.30.40:8080/api/map/vote/${res.id}?voterId=$_voterId',
-        ),
+      final response = await ApiService.voteResource(
+        id: res.id,
+        voterId: _voterId,
       );
 
       await _loadResources();
@@ -189,25 +160,173 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _showSpawnPointDetail(SpawnPointModel point) {
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+    final oak = point.oak;
+    final fluorite = point.fluorite;
+
+    Widget buildVoteButton(SpawnResourceModel res) {
+      final bool canVote = !res.isVerified && !res.alreadyVotedSameType;
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: OutlinedButton.icon(
+          onPressed: canVote ? () => _handleVote(res) : null,
+          icon: Image.asset(
+            res.iconPath,
+            width: 22,
+            height: 22,
+            errorBuilder: (c, e, s) =>
+            const Icon(Icons.help_outline, size: 18),
+          ),
+          label: Text(
+            res.isVerified
+                ? '${res.koName} 확정됨'
+                : canVote
+                ? '${res.koName} 여기 있어요! (${res.voteCount})'
+                : '${res.koName} 이미 투표했어요',
+          ),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            foregroundColor: canVote ? accentColor : Colors.grey,
+            side: BorderSide(
+              color: canVote ? accentColor : Colors.grey.shade400,
+            ),
+          ),
+        ),
+      );
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding + 12),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: _buildSpawnPointBottomSheetIcon(point),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        point.isOakOnly ? '참나무 후보 위치' : '공용 후보 위치',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        point.isBothVerified
+                            ? '오늘 위치가 모두 확정되었어요.'
+                            : '게임에서 확인한 위치에 투표해 주세요.',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            if (oak != null) buildVoteButton(oak),
+            if (fluorite != null) buildVoteButton(fluorite),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('확인'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadResources() async {
     try {
-      final data = await ApiService.getResources(voterId: _voterId);
+      final MapDataResponse data =
+      await ApiService.getResources(voterId: _voterId);
+
       if (!mounted) return;
 
-      setState(() {
-        _resources = data;
+      final fixedFilterKeys = data.fixedResources
+          .where(
+            (res) =>
+        res.category != 'npc' &&
+            res.category != 'animal' &&
+            res.category != 'location' &&
+            !res.isFixed &&
+            _normalizeFilterKey(res) != 'gold_bubble',
+      )
+          .map((res) => _normalizeFilterKey(res));
 
-        _enabledResources = data
-            .where(
-              (res) =>
-          res.category != 'npc' &&
-              res.category != 'animal' &&
-              res.category != 'location' &&
-              !res.isFixed &&
-              _normalizeFilterKey(res) != 'gold_bubble',
-        )
-            .map((res) => _normalizeFilterKey(res))
-            .toSet();
+      final spawnFilterKeys = data.spawnPoints
+          .expand((point) => point.resources)
+          .map((res) => _normalizeSpawnResourceKey(res));
+
+      final Set<String> availableKeys = {
+        ...fixedFilterKeys,
+        ...spawnFilterKeys,
+      };
+
+      const Set<String> defaultVoteKeys = {
+        'roaming_oak',
+        'fluorite',
+      };
+
+      setState(() {
+        _fixedResources = data.fixedResources;
+        _spawnPoints = data.spawnPoints;
+
+        if (_enabledResources.isEmpty) {
+          // 첫 로딩: 기본값 ON
+          _enabledResources = {
+            ...availableKeys,
+            ...defaultVoteKeys,
+          };
+        } else {
+          // 이후 로딩: 기존 사용자 선택 유지 + 투표 자원 칩은 항상 목록에 남게
+          _enabledResources = {
+            ..._enabledResources,
+            ...defaultVoteKeys,
+          };
+        }
 
         _showAllNpcs = true;
         _showAllAnimals = false;
@@ -222,9 +341,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  String _normalizeSpawnResourceKey(SpawnResourceModel res) {
+    return res.resourceName;
+  }
+
   String _getDisplayName(String filterKey) {
-    final sample = _getRepresentativeByFilterKey(filterKey);
-    return sample?.koName ?? filterKey;
+    switch (filterKey) {
+      case 'roaming_oak':
+        return '그 자리 참나무';
+      case 'fluorite':
+        return '완벽한 형광석';
+      default:
+        final sample = _getRepresentativeByFilterKey(filterKey);
+        return sample?.koName ?? filterKey;
+    }
   }
 
   void _openDrawerIfNeeded() {
@@ -235,6 +365,32 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _didOpenDrawerOnStart = true;
       _scaffoldKey.currentState?.openEndDrawer();
     });
+  }
+
+  double _spawnPointOpacity(SpawnPointModel point) {
+    if (point.hasAnyVotedByMe) return 1.0;
+    if (point.isOakVerified || point.isFluoriteVerified) return 1.0;
+
+    final int maxVote = point.resources.isEmpty
+        ? 0
+        : point.resources
+        .map((r) => r.voteCount)
+        .reduce((a, b) => a > b ? a : b);
+
+    switch (maxVote) {
+      case 0:
+        return 0.32;
+      case 1:
+        return 0.46;
+      case 2:
+        return 0.60;
+      case 3:
+        return 0.76;
+      case 4:
+        return 0.90;
+      default:
+        return 1.0;
+    }
   }
 
   double _clampScale(double scale) {
@@ -443,14 +599,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _animateToMatrix(targetMatrix);
   }
 
-  void _showResourceDetail(ResourceModel res) {
-    final bool isVoteTarget = _isProgressiveVotePin(res);
-    final bool isActuallyVerified = _isVoteCompleted(res);
-    final bool isAlreadyVoted = res.alreadyVotedSameType;
-
-    final bool showVoteButton = isVoteTarget && !isActuallyVerified;
-    final bool canVote = showVoteButton && !isAlreadyVoted;
-
+  void _showFixedResourceDetail(ResourceModel res) {
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
 
     showModalBottomSheet(
@@ -475,35 +624,32 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Image.asset(
-                        res.iconPath,
-                        width: 26,
-                        height: 26,
-                        errorBuilder: (c, e, s) =>
-                        const Icon(Icons.pets, color: Colors.orange),
-                      ),
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Image.asset(
+                    res.iconPath,
+                    width: 26,
+                    height: 26,
+                    errorBuilder: (c, e, s) =>
+                    const Icon(Icons.image_not_supported_outlined),
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Text(
+                    res.koName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(width: 15),
-                    Text(
-                      res.koName,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -515,40 +661,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 style: const TextStyle(fontSize: 15),
               ),
             ),
-            const SizedBox(height: 30),
-            Row(
-              children: [
-                if (showVoteButton) ...[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _handleVote(res),
-                      icon: const Icon(Icons.thumb_up_outlined),
-                      label: Text(
-                        canVote
-                            ? "여기 있어요! (${res.voteCount})"
-                            : "이미 투표했어요",
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: canVote ? accentColor : Colors.grey,
-                        side: BorderSide(
-                          color: canVote ? accentColor : Colors.grey.shade400,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentColor,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text("확인"),
-                  ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
                 ),
-              ],
+                child: const Text("확인"),
+              ),
             ),
           ],
         ),
@@ -558,7 +681,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   ResourceModel? _getRepresentativeByFilterKey(String filterKey) {
     try {
-      return _resources.firstWhere(
+      return _fixedResources.firstWhere(
             (r) => _normalizeFilterKey(r) == filterKey,
       );
     } catch (_) {
@@ -567,32 +690,41 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   List<String> _getDistinctNamesByCategory(List<String> categories) {
-    return _resources
+    final fixedKeys = _fixedResources
         .where((res) => categories.contains(res.category))
-        .map((res) => _normalizeFilterKey(res))
-        .toSet()
-        .toList()
+        .map((res) => _normalizeFilterKey(res));
+
+    final spawnKeys = _spawnPoints
+        .expand((point) => point.resources)
+        .where((res) {
+      if (categories.contains('tree') && res.resourceName == 'roaming_oak') {
+        return true;
+      }
+      if (categories.contains('mineral') && res.resourceName == 'fluorite') {
+        return true;
+      }
+      return false;
+    })
+        .map((res) => _normalizeSpawnResourceKey(res));
+
+    final Set<String> result = {
+      ...fixedKeys,
+      ...spawnKeys,
+    };
+
+    // ✅ 응답 상태와 상관없이 필터 칩은 항상 보이게
+    if (categories.contains('tree')) {
+      result.add('roaming_oak');
+    }
+    if (categories.contains('mineral')) {
+      result.add('fluorite');
+    }
+
+    return result.toList()
       ..sort((a, b) => _getDisplayName(a).compareTo(_getDisplayName(b)));
   }
 
   String _normalizeFilterKey(ResourceModel res) {
-    if (res.resourceName == 'fluorite' ||
-        res.resourceName == 'flawless_fluorite' ||
-        res.koName.contains('형광석')) {
-      return 'fluorite';
-    }
-
-    if (res.resourceName == 'roaming_oak' ||
-        res.koName.contains('참나무')) {
-      return 'roaming_oak';
-    }
-
-    if (res.resourceName == 'black_truffle' ||
-        res.resourceName == 'black-truffle' ||
-        res.koName.contains('트러플')) {
-      return 'black_truffle';
-    }
-
     return res.resourceName;
   }
 
@@ -606,9 +738,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     });
   }
 
-  bool _isVisibleOnMap(ResourceModel res) {
-    if (_shouldHideOtherSameTypePins(res)) return false;
+  bool _isSpawnPointVisible(SpawnPointModel point) {
+    if (!point.hasAnyActiveResource) return false;
 
+    final hasVisibleResource = point.resources.any((res) {
+      final key = _normalizeSpawnResourceKey(res);
+      return _enabledResources.contains(key);
+    });
+
+    return hasVisibleResource;
+  }
+
+  bool _isVisibleOnMap(ResourceModel res) {
     if (res.category == 'npc') return _showAllNpcs;
     if (res.category == 'animal') return _showAllAnimals;
     if (res.category == 'location') return false;
@@ -620,7 +761,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       ResourceModel target, {
         double threshold = 0.022,
       }) {
-    final List<ResourceModel> nearby = _resources.where((res) {
+    final List<ResourceModel> nearby = _fixedResources.where((res) {
       final bool isCharacter = res.category == 'npc' || res.category == 'animal';
       if (!isCharacter) return false;
       if (!_isVisibleOnMap(res)) return false;
@@ -632,10 +773,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }).toList();
 
     nearby.sort((a, b) {
-      final double da = math.pow(a.x - target.x, 2).toDouble() +
-          math.pow(a.y - target.y, 2).toDouble();
-      final double db = math.pow(b.x - target.x, 2).toDouble() +
-          math.pow(b.y - target.y, 2).toDouble();
+      final double da =
+          math.pow(a.x - target.x, 2).toDouble() +
+              math.pow(a.y - target.y, 2).toDouble();
+      final double db =
+          math.pow(b.x - target.x, 2).toDouble() +
+              math.pow(b.y - target.y, 2).toDouble();
 
       if (da != db) return da.compareTo(db);
       return a.koName.compareTo(b.koName);
@@ -649,9 +792,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     if (nearby.length <= 1) {
       setState(() {
-        _selectedResourceId = res.id;
+        _selectedFixedResourceId = res.id;
       });
-      _showResourceDetail(res);
+      _showFixedResourceDetail(res);
       return;
     }
 
@@ -731,9 +874,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           onTap: () {
                             Navigator.pop(context);
                             setState(() {
-                              _selectedResourceId = res.id;
+                              _selectedFixedResourceId = res.id;
                             });
-                            _showResourceDetail(res);
+                            _showFixedResourceDetail(res);
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -839,6 +982,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     final bool isEnabled = _enabledResources.contains(resourceName);
     final ResourceModel? sampleRes = _getRepresentativeByFilterKey(resourceName);
 
+    String? fallbackIconPath;
+    if (resourceName == 'roaming_oak') {
+      fallbackIconPath = 'assets/images/resources/oak.png';
+    } else if (resourceName == 'fluorite') {
+      fallbackIconPath = 'assets/images/resources/fluorite.png';
+    }
+
     return GestureDetector(
       onTap: () => _toggleResource(resourceName),
       child: AnimatedContainer(
@@ -871,13 +1021,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       : const Color(0xFFE5E7EB),
                 ),
               ),
-              child: sampleRes == null
-                  ? const Icon(
-                Icons.inventory_2_outlined,
-                size: 12,
-                color: Colors.grey,
-              )
-                  : Image.asset(
+              child: sampleRes != null
+                  ? Image.asset(
                 sampleRes.iconPath,
                 fit: BoxFit.contain,
                 errorBuilder: (c, e, s) => const Icon(
@@ -885,6 +1030,21 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   size: 12,
                   color: Colors.grey,
                 ),
+              )
+                  : fallbackIconPath != null
+                  ? Image.asset(
+                fallbackIconPath,
+                fit: BoxFit.contain,
+                errorBuilder: (c, e, s) => const Icon(
+                  Icons.inventory_2_outlined,
+                  size: 12,
+                  color: Colors.grey,
+                ),
+              )
+                  : const Icon(
+                Icons.inventory_2_outlined,
+                size: 12,
+                color: Colors.grey,
               ),
             ),
             const SizedBox(width: 7),
@@ -1018,6 +1178,104 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       ),
     );
   }
+
+  Widget _buildSpawnPointBottomSheetIcon(SpawnPointModel point) {
+    if (point.isBothVerified) {
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          const Icon(
+            Icons.location_on_rounded,
+            size: 28,
+            color: Color(0xFFFF8E7C),
+          ),
+          Positioned(
+            left: 2,
+            bottom: 2,
+            child: Image.asset(
+              'assets/images/resources/oak.png',
+              width: 16,
+              height: 16,
+            ),
+          ),
+          Positioned(
+            right: 2,
+            top: 2,
+            child: Image.asset(
+              'assets/images/resources/fluorite.png',
+              width: 16,
+              height: 16,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (point.isOakVerified && point.oak != null) {
+      return Image.asset(point.oak!.iconPath, width: 28, height: 28);
+    }
+
+    if (point.isFluoriteVerified && point.fluorite != null) {
+      return Image.asset(point.fluorite!.iconPath, width: 28, height: 28);
+    }
+
+    return const Icon(
+      Icons.question_mark_rounded,
+      size: 22,
+      color: Color(0xFFFF8E7C),
+    );
+  }
+
+    Widget _buildSpawnPointPinImage(SpawnPointModel point) {
+      // 둘 다 확정
+      if (point.isBothVerified) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            const Icon(
+              Icons.location_on_rounded,
+              size: 30,
+              color: Color(0xFFFF8E7C),
+            ),
+            Positioned(
+              left: 1,
+              bottom: 2,
+              child: Image.asset(
+                'assets/images/resources/oak.png',
+                width: 16,
+                height: 16,
+              ),
+            ),
+            Positioned(
+              right: 1,
+              top: 2,
+              child: Image.asset(
+                'assets/images/resources/fluorite.png',
+                width: 16,
+                height: 16,
+              ),
+            ),
+          ],
+        );
+      }
+
+      // 참나무 확정
+      if (point.isOakVerified && point.oak != null) {
+        return Image.asset(point.oak!.iconPath, width: 28, height: 28);
+      }
+
+      // 형광석 확정
+      if (point.isFluoriteVerified && point.fluorite != null) {
+        return Image.asset(point.fluorite!.iconPath, width: 28, height: 28);
+      }
+
+      // ⭐ 투표 전 (물음표 아이콘)
+      return const Icon(
+        Icons.question_mark_rounded,
+        size: 26,
+        color: Color(0xFFFF8E7C),
+      );
+    }
 
   Widget _buildToggleRow({
     required IconData icon,
@@ -1201,63 +1459,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildMapMarker(ResourceModel res, double mapSize) {
-    const double markerSize = 24;
-
-    // 줌인해도 핀이 너무 커 보이지 않게 더 작게 유지
-    final double visualScale = (1 / (_currentScale * 1.18)).clamp(0.42, 0.92);
-
-    return Positioned(
-      left: (res.x * mapSize) - (markerSize / 2),
-      top: (res.y * mapSize) - (markerSize / 2),
-      child: GestureDetector(
-        onTap: () {
-          final bool isCharacter =
-              res.category == 'npc' || res.category == 'animal';
-
-          if (isCharacter) {
-            _handleCharacterTap(res);
-          } else {
-            setState(() {
-              _selectedResourceId = res.id;
-            });
-            _showResourceDetail(res);
-          }
-        },
-        child: Transform.scale(
-          scale: visualScale,
-          alignment: Alignment.center,
-          child: Opacity(
-            opacity: _votePinOpacity(res),
-            child: _buildCircleMarker(
-              res,
-              isAnimal: res.category == 'animal',
-              isNpc: res.category == 'npc',
-              isSelected: _selectedResourceId == res.id,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCircleMarker(
+  Widget _buildNpcMarker(
       ResourceModel res, {
         required bool isAnimal,
-        required bool isNpc,
         required bool isSelected,
       }) {
-    Color borderColor;
-
-    if (isSelected) {
-      borderColor = accentColor;
-    } else if (isAnimal) {
-      borderColor = Colors.lightBlue;
-    } else if (isNpc) {
-      borderColor = const Color(0xFFFFD7D1);
-    } else {
-      borderColor = const Color(0xFFFF8E7C);
-    }
+    final Color borderColor = isSelected
+        ? accentColor
+        : (isAnimal ? Colors.lightBlue : const Color(0xFFFFD7D1));
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
@@ -1296,21 +1505,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   bool _shouldShowPlaceLabel(PlaceLabel place) {
     if (place.showFromBaseZoom) return true;
     return _currentScale >= _placeRevealScale;
-  }
-
-  bool _shouldHideOtherSameTypePins(ResourceModel res) {
-    final String key = _normalizeFilterKey(res);
-    final bool isVoteTarget = key == 'roaming_oak' || key == 'fluorite';
-
-    if (!isVoteTarget) return false;
-
-    final bool hasMyVoteInSameType = _resources.any((r) {
-      return _normalizeFilterKey(r) == key && r.votedByMe;
-    });
-
-    if (!hasMyVoteInSameType) return false;
-
-    return !res.votedByMe;
   }
 
   Widget _buildPlaceLabels(double mapSize) {
@@ -1400,6 +1594,152 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildSpawnPointMarker(SpawnPointModel point, double mapSize) {
+    const double pinWidth = 26;
+    const double pinHeight = 36;
+
+    final double pinScale = (1 / _currentScale).clamp(0.5, 1.1);
+
+    return Positioned(
+      left: (point.x * mapSize) - (pinWidth / 2),
+      top: (point.y * mapSize) - pinHeight,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedSpawnPointId = point.id;
+          });
+          _showSpawnPointDetail(point);
+        },
+        child: Transform.scale(
+          scale: pinScale,
+          alignment: Alignment.bottomCenter,
+          child: Opacity(
+            opacity: _spawnPointOpacity(point),
+            child: _buildPinMarker(
+              child: _buildSpawnPointPinImage(point),
+              isSelected: _selectedSpawnPointId == point.id,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFixedResourceMarker(ResourceModel res, double mapSize) {
+    final bool isNpc = res.category == 'npc';
+    final bool isAnimal = res.category == 'animal';
+
+    const double npcSize = 36;
+    const double pinWidth = 24;
+    const double pinHeight = 34;
+
+    final double npcScale = (1 / _currentScale).clamp(0.3, 1.0);
+    final double pinScale = (1 / _currentScale).clamp(0.5, 1.1);
+
+    if (isNpc || isAnimal) {
+      return Positioned(
+        left: (res.x * mapSize) - (npcSize / 2),
+        top: (res.y * mapSize) - (npcSize / 2),
+        child: GestureDetector(
+          onTap: () => _handleCharacterTap(res),
+          child: Transform.scale(
+            scale: npcScale,
+            alignment: Alignment.center,
+            child: _buildNpcMarker(
+              res,
+              isAnimal: isAnimal,
+              isSelected: _selectedFixedResourceId == res.id,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Positioned(
+      left: (res.x * mapSize) - (pinWidth / 2),
+      top: (res.y * mapSize) - pinHeight,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedFixedResourceId = res.id;
+          });
+          _showFixedResourceDetail(res);
+        },
+        child: Transform.scale(
+          scale: pinScale,
+          alignment: Alignment.bottomCenter,
+          child: Opacity(
+            opacity: 1.0,
+            child: _buildPinMarker(
+              iconPath: res.iconPath,
+              isSelected: _selectedFixedResourceId == res.id,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPinMarker({
+    String? iconPath,
+    Widget? child,
+    required bool isSelected,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 30,
+      height: 40,
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isSelected ? 0.18 : 0.10),
+            blurRadius: isSelected ? 16 : 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
+        children: [
+          CustomPaint(
+            size: const Size(30, 40),
+            painter: _ModernPinPainter(
+              color: isSelected
+                  ? const Color(0xFFFFF0EC)
+                  : Colors.white.withOpacity(0.98),
+              borderColor: isSelected
+                  ? const Color(0xFFFF8E7C)
+                  : const Color(0xFFE2E8F0),
+              shadowColor: Colors.transparent,
+            ),
+          ),
+          Positioned(
+            top: 5,
+            child: Container(
+              width: 20,
+              height: 20,
+              alignment: Alignment.center,
+              child: child ??
+                  (iconPath != null
+                      ? Image.asset(
+                    iconPath,
+                    width: 18,
+                    height: 18,
+                    errorBuilder: (c, e, s) => const Icon(
+                      Icons.image_not_supported_outlined,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                  )
+                      : const SizedBox.shrink()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRoundActionButton({
     required IconData icon,
     required VoidCallback onTap,
@@ -1434,7 +1774,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // 하단 안전 영역(홈바 등) 높이 계산
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return PopScope(
@@ -1451,29 +1790,27 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             final double mapSize = constraints.maxWidth * _baseMapWidthFactor;
             _applyInitialTransform(constraints, mapSize);
 
-            final visibleResources = _resources.where((res) {
-              final hidden = _shouldHideOtherSameTypePins(res);
+            final visibleFixedResources = _fixedResources
+                .where((res) => _isVisibleOnMap(res))
+                .toList();
 
-              if (hidden) {
-                debugPrint('❌ HIDE ${res.id} ${res.resourceName}');
-                return false;
-              }
+            final visibleSpawnPoints = _spawnPoints
+                .where((point) => _isSpawnPointVisible(point))
+                .toList();
 
-              final visible = _isVisibleOnMap(res);
+            debugPrint('map spawn total = ${_spawnPoints.length}');
+            debugPrint('map enabled = $_enabledResources');
+            debugPrint('map visible spawn count = ${visibleSpawnPoints.length}');
 
-              debugPrint(
-                '✅ CHECK ${res.id} ${res.resourceName} '
-                    'visible=$visible '
-                    'sameType=${res.alreadyVotedSameType} '
-                    'votedByMe=${res.votedByMe}',
-              );
+            visibleFixedResources.sort((a, b) {
+              final int aPriority = a.id == _selectedFixedResourceId ? 1 : 0;
+              final int bPriority = b.id == _selectedFixedResourceId ? 1 : 0;
+              return aPriority.compareTo(bPriority);
+            });
 
-              return visible;
-            }).toList();
-
-            visibleResources.sort((a, b) {
-              final int aPriority = a.id == _selectedResourceId ? 1 : 0;
-              final int bPriority = b.id == _selectedResourceId ? 1 : 0;
+            visibleSpawnPoints.sort((a, b) {
+              final int aPriority = a.id == _selectedSpawnPointId ? 1 : 0;
+              final int bPriority = b.id == _selectedSpawnPointId ? 1 : 0;
               return aPriority.compareTo(bPriority);
             });
 
@@ -1497,8 +1834,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         clipBehavior: Clip.none,
                         onInteractionUpdate: (_) {
                           final matrix = _transformationController.value;
-                          final newScale =
-                          _clampScale(matrix.getMaxScaleOnAxis());
+                          final newScale = _clampScale(matrix.getMaxScaleOnAxis());
 
                           if ((newScale - _minMapScale).abs() < 0.001) {
                             _forceCenterAtMinimumScale(constraints, mapSize);
@@ -1529,8 +1865,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 ),
                               ),
                               _buildPlaceLabels(mapSize),
-                              ...visibleResources
-                                  .map((res) => _buildMapMarker(res, mapSize)),
+                              ...visibleFixedResources.map(
+                                    (res) => _buildFixedResourceMarker(res, mapSize),
+                              ),
+                              ...visibleSpawnPoints.map(
+                                    (point) => _buildSpawnPointMarker(point, mapSize),
+                              ),
                             ],
                           ),
                         ),
@@ -1548,8 +1888,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   right: 16,
                   bottom: bottomPadding + 20,
                   child: _buildZoomButtons(constraints, mapSize),
-            ),
-            ],
+                ),
+              ],
             );
           },
         ),

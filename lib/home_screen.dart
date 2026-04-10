@@ -3,12 +3,13 @@ import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'data/place_labels.dart';
 import 'models/place_label.dart';
 import 'models/resource_model.dart';
+import 'models/spawn_point_model.dart';
+import 'models/spawn_resource_model.dart';
 import 'services/api_service.dart';
 import 'setting_screen.dart';
 import 'map_screen.dart';
@@ -71,6 +72,164 @@ class _HomeScreenState extends State<HomeScreen>
   Timer? _eventResumeTimer;
   bool _isUserInteracting = false;
   int _currentEventIndex = 0;
+
+  Future<void> _handlePreviewSpawnVote(SpawnResourceModel res) async {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+
+    if (_voterId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다.')),
+      );
+      return;
+    }
+
+    if (res.alreadyVotedSameType) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('이미 ${res.koName}에 투표했어요.')),
+      );
+      return;
+    }
+
+    try {
+      final response = await ApiService.voteResource(
+        id: res.id,
+        voterId: _voterId,
+      );
+
+      await _loadMapPreviewResources();
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${res.koName}에 투표했습니다!')),
+        );
+        return;
+      }
+
+      if (response.statusCode == 409) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              response.body.isNotEmpty ? response.body : '이미 이 자원 종류에 투표했어요.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            response.body.isNotEmpty ? response.body : '투표 실패',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('오류: $e')),
+      );
+    }
+  }
+
+  String _normalizeSpawnPreviewFilterKey(SpawnResourceModel res) {
+    return res.resourceName;
+  }
+
+  double _previewSpawnPointOpacity(SpawnPointModel point) {
+    if (point.hasAnyVotedByMe) return 1.0;
+    if (point.isOakVerified || point.isFluoriteVerified) return 1.0;
+
+    final int maxVote = point.resources.isEmpty
+        ? 0
+        : point.resources
+        .map((r) => r.voteCount)
+        .reduce((a, b) => a > b ? a : b);
+
+    switch (maxVote) {
+      case 0:
+        return 0.32;
+      case 1:
+        return 0.46;
+      case 2:
+        return 0.60;
+      case 3:
+        return 0.76;
+      case 4:
+        return 0.90;
+      default:
+        return 1.0;
+    }
+  }
+
+  Widget _buildPreviewSpawnPin(SpawnPointModel point) {
+    final bool isSelected = false;
+
+    return IgnorePointer(
+      child: SizedBox(
+        width: 26,
+        height: 34,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.topCenter,
+          children: [
+            Positioned(
+              top: 0,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFFFF8E7C),
+                    width: isSelected ? 2.4 : 1.8,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.16),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  point.isOakOnly ? '🌳' : '💎',
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 18,
+              child: CustomPaint(
+                size: const Size(10, 14),
+                painter: _PreviewSpawnTailPainter(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<SpawnPointModel> _getVisiblePreviewSpawnPoints() {
+    return _previewSpawnPoints.where((point) {
+      if (point.resources.isEmpty) return false;
+
+      return point.resources.any((res) {
+        final key = _normalizeSpawnPreviewFilterKey(res);
+        return _previewEnabledResources.contains(key);
+      });
+    }).toList();
+  }
+
+  List<SpawnPointModel> _previewSpawnPoints = [];
 
   final Color snackAccent = const Color(0xFFFF8E7C);
 
@@ -262,6 +421,53 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     return 'http://161.33.30.40:8080$raw';
+  }
+
+  Future<void> _loadMapPreviewResources() async {
+    try {
+      final data = await ApiService.getResources(voterId: _voterId);
+      if (!mounted) return;
+
+      const defaultNames = <String>{
+        'roaming_oak',
+        'fluorite',
+        'black-truffle',
+      };
+
+      final allFixed = data.fixedResources;
+      final allSpawn = data.spawnPoints;
+
+      setState(() {
+        if (_previewEnabledResources.isEmpty) {
+          _previewEnabledResources = {...defaultNames};
+        } else {
+          _previewEnabledResources = {
+            ..._previewEnabledResources,
+            ...defaultNames,
+          };
+        }
+
+        // 고정 자원 목록
+        _allPreviewCandidates = allFixed;
+
+        // 후보 좌표 목록
+        _previewSpawnPoints = allSpawn;
+
+        // 홈 프리뷰에서 기존 fixed 자원 마커용
+        _mapPreviewResources = _getFilteredPreviewResources(allFixed);
+
+        _isMapPreviewLoading = false;
+
+        debugPrint('preview spawn count = ${_previewSpawnPoints.length}');
+        debugPrint('preview enabled = $_previewEnabledResources');
+        debugPrint('preview visible spawn count = ${_getVisiblePreviewSpawnPoints().length}');
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isMapPreviewLoading = false;
+      });
+    }
   }
 
   Future<void> _openEventLink(String rawUrl, int eventId) async {
@@ -633,24 +839,8 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String _normalizePreviewFilterKey(ResourceModel res) {
-    if (res.resourceName.contains('fluorite') ||
-        res.koName.contains('형광석')) {
-      return 'fluorite';
-    }
-
-    if (res.resourceName.contains('oak') ||
-        res.koName.contains('참나무')) {
-      return 'roaming_oak';
-    }
-
-    if (res.resourceName.contains('truffle') ||
-        res.koName.contains('트러플')) {
-      return 'black_truffle';
-    }
-
     return res.resourceName;
   }
-
 
   Future<void> _loadVoterId() async {
     try {
@@ -717,39 +907,22 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _loadMapPreviewResources() async {
-    try {
-      final data = await ApiService.getResources(voterId: _voterId);
-      if (!mounted) return;
+  Set<String> _getPreviewFilterKeys() {
+    final fixedKeys = _allPreviewCandidates
+        .map((res) => _normalizePreviewFilterKey(res))
+        .toSet();
 
-      final defaultNames = <String>{};
+    final spawnKeys = _previewSpawnPoints
+        .expand((point) => point.resources)
+        .map((res) => _normalizeSpawnPreviewFilterKey(res))
+        .toSet();
 
-      for (final res in data) {
-        final key = _normalizePreviewFilterKey(res);
-
-        if (key == 'roaming_oak' ||
-            key == 'fluorite' ||
-            key == 'black_truffle') {
-          defaultNames.add(key);
-        }
-      }
-
-      setState(() {
-        _allPreviewCandidates = data;
-
-        if (_previewEnabledResources.isEmpty) {
-          _previewEnabledResources = defaultNames;
-        }
-
-        _mapPreviewResources = _getFilteredPreviewResources(data);
-        _isMapPreviewLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isMapPreviewLoading = false;
-      });
-    }
+    return {
+      ...fixedKeys,
+      ...spawnKeys,
+      'roaming_oak',
+      'fluorite',
+    };
   }
 
   List<ResourceModel> _getFilteredPreviewResources(List<ResourceModel> source) {
@@ -994,7 +1167,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     final key = _normalizePreviewFilterKey(res);
                                     if (key == 'roaming_oak' ||
                                         key == 'fluorite' ||
-                                        key == 'black_truffle') {
+                                        key == 'black-truffle') {
                                       tempResources.add(key);
                                     }
                                   }
@@ -1696,145 +1869,145 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildAnimatedWeatherBackground(String weather) {
-    return Positioned.fill(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: AnimatedBuilder(
-          animation: _weatherController,
-          builder: (context, child) {
-            final t = _weatherController.value;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: AnimatedBuilder(
+        animation: _weatherController,
+        builder: (context, child) {
+          final t = _weatherController.value;
 
-            switch (weather) {
-              case '맑음':
-                final skyOffset = lerpDouble(-30, 30, t)!;
-                final cloudOffset = lerpDouble(24, -24, t)!;
-                return Stack(
-                  children: [
-                    Transform.translate(
-                      offset: Offset(skyOffset, 0),
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Color(0x6698E2FF),
-                              Color(0x3398E2FF),
-                              Color(0x0098E2FF),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 18,
-                      left: cloudOffset,
-                      child: _weatherBlob(
-                        width: 68,
-                        height: 24,
-                        color: Colors.white.withOpacity(0.28),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 26,
-                      right: 24 - cloudOffset * 0.25,
-                      child: _weatherBlob(
-                        width: 58,
-                        height: 20,
-                        color: Colors.white.withOpacity(0.16),
-                      ),
-                    ),
-                  ],
-                );
-
-              case '흐림':
-                final dx1 = lerpDouble(-40, 20, t)!;
-                final dx2 = lerpDouble(30, -20, t)!;
-                return Stack(
-                  children: [
-                    Positioned(
-                      top: 22,
-                      left: dx1,
-                      child: _weatherBlob(
-                        width: 96,
-                        height: 34,
-                        color: Colors.white.withOpacity(0.18),
-                      ),
-                    ),
-                    Positioned(
-                      top: 54,
-                      right: dx2,
-                      child: _weatherBlob(
-                        width: 74,
-                        height: 28,
-                        color: Colors.white.withOpacity(0.14),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 18,
-                      left: 18 + dx2 * 0.2,
-                      child: _weatherBlob(
-                        width: 82,
-                        height: 26,
-                        color: Colors.white.withOpacity(0.1),
-                      ),
-                    ),
-                  ],
-                );
-
-              case '비':
-                return CustomPaint(
-                  painter: _RainPainter(progress: t),
-                );
-
-              case '눈':
-                return CustomPaint(
-                  painter: _SnowPainter(progress: t),
-                );
-
-              case '무지개':
-                final glow = 0.65 + (0.35 * (0.5 - (t - 0.5).abs()) * 2);
-                return Stack(
-                  children: [
-                    Positioned(
-                      left: -12,
-                      right: -12,
-                      bottom: -22,
-                      child: Opacity(
-                        opacity: glow,
-                        child: CustomPaint(
-                          size: const Size(double.infinity, 120),
-                          painter: _RainbowPainter(),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 18,
-                      right: 24,
-                      child: Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.white.withOpacity(0.28 * glow),
-                              blurRadius: 22,
-                              spreadRadius: 8,
-                            ),
+          switch (weather) {
+            case '맑음':
+              final skyOffset = lerpDouble(-30, 30, t)!;
+              final cloudOffset = lerpDouble(24, -24, t)!;
+              return Stack(
+                children: [
+                  Transform.translate(
+                    offset: Offset(skyOffset, 0),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0x6698E2FF),
+                            Color(0x3398E2FF),
+                            Color(0x0098E2FF),
                           ],
                         ),
                       ),
                     ),
-                  ],
-                );
+                  ),
+                  Positioned(
+                    top: 18,
+                    left: cloudOffset,
+                    child: _weatherBlob(
+                      width: 68,
+                      height: 24,
+                      color: Colors.white.withOpacity(0.28),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 26,
+                    right: 24 - cloudOffset * 0.25,
+                    child: _weatherBlob(
+                      width: 58,
+                      height: 20,
+                      color: Colors.white.withOpacity(0.16),
+                    ),
+                  ),
+                ],
+              );
 
-              default:
-                return const SizedBox.shrink();
-            }
-          },
-        ),
+            case '흐림':
+              final dx1 = lerpDouble(-40, 20, t)!;
+              final dx2 = lerpDouble(30, -20, t)!;
+              return Stack(
+                children: [
+                  Positioned(
+                    top: 22,
+                    left: dx1,
+                    child: _weatherBlob(
+                      width: 96,
+                      height: 34,
+                      color: Colors.white.withOpacity(0.18),
+                    ),
+                  ),
+                  Positioned(
+                    top: 54,
+                    right: dx2,
+                    child: _weatherBlob(
+                      width: 74,
+                      height: 28,
+                      color: Colors.white.withOpacity(0.14),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 18,
+                    left: 18 + dx2 * 0.2,
+                    child: _weatherBlob(
+                      width: 82,
+                      height: 26,
+                      color: Colors.white.withOpacity(0.1),
+                    ),
+                  ),
+                ],
+              );
+
+            case '비':
+              return CustomPaint(
+                painter: _RainPainter(progress: t),
+                child: const SizedBox.expand(),
+              );
+
+            case '눈':
+              return CustomPaint(
+                painter: _SnowPainter(progress: t),
+                child: const SizedBox.expand(),
+              );
+
+            case '무지개':
+              final glow = 0.65 + (0.35 * (0.5 - (t - 0.5).abs()) * 2);
+              return Stack(
+                children: [
+                  Positioned(
+                    left: -12,
+                    right: -12,
+                    bottom: -22,
+                    child: Opacity(
+                      opacity: glow,
+                      child: CustomPaint(
+                        size: const Size(double.infinity, 120),
+                        painter: _RainbowPainter(),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 18,
+                    right: 24,
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.white.withOpacity(0.28 * glow),
+                            blurRadius: 22,
+                            spreadRadius: 8,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+
+            default:
+              return const SizedBox.expand();
+          }
+        },
       ),
     );
   }
@@ -2974,7 +3147,22 @@ class _HomeScreenState extends State<HomeScreen>
                               Positioned.fill(child: Image.asset('assets/images/map_background.png', fit: BoxFit.cover)),
                               _buildPreviewPlaceLabels(constraints.maxWidth),
                               if (_isMapPreviewLoading) const Center(child: CircularProgressIndicator(color: Color(0xFFFF8E7C)))
-                              else ..._mapPreviewResources.map((res) => _buildHomeMapPreviewMarker(res, constraints.maxWidth, constraints.maxHeight)),
+                              else ...[
+                                ..._mapPreviewResources.map(
+                                      (res) => _buildHomeMapPreviewMarker(
+                                    res,
+                                    constraints.maxWidth,
+                                    constraints.maxHeight,
+                                  ),
+                                ),
+                                ..._getVisiblePreviewSpawnPoints().map(
+                                      (point) => _buildHomeSpawnPreviewMarker(
+                                    point,
+                                    constraints.maxWidth,
+                                    constraints.maxHeight,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -3012,6 +3200,86 @@ class _HomeScreenState extends State<HomeScreen>
               );
             },
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeSpawnPreviewMarker(
+      SpawnPointModel point,
+      double width,
+      double height,
+      ) {
+    final double currentScale =
+    _previewTransformController.value.getMaxScaleOnAxis();
+
+    const double pinWidth = 24;
+    const double pinHeight = 32;
+    final double visualScale = (1 / currentScale).clamp(0.5, 1.0);
+
+    return Positioned(
+      left: (point.x * width) - (pinWidth / 2),
+      top: (point.y * height) - pinHeight,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _showPreviewSpawnPointDetail(point),
+        child: Transform.scale(
+          scale: visualScale,
+          alignment: Alignment.bottomCenter,
+          child: Opacity(
+            opacity: _previewSpawnPointOpacity(point),
+            child: _buildPreviewSpawnPin(point),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPreviewSpawnPointDetail(SpawnPointModel point) {
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+    final oak = point.oak;
+    final fluorite = point.fluorite;
+
+    Widget buildVoteButton(SpawnResourceModel res) {
+      final bool canVote = !res.isVerified && !res.alreadyVotedSameType;
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: OutlinedButton.icon(
+          onPressed: canVote ? () => _handlePreviewSpawnVote(res) : null,
+          icon: Image.asset(
+            res.iconPath,
+            width: 22,
+            height: 22,
+            errorBuilder: (c, e, s) =>
+            const Icon(Icons.help_outline, size: 18),
+          ),
+          label: Text(
+            res.isVerified
+                ? '${res.koName} 확정됨'
+                : canVote
+                ? '${res.koName} 여기 있어요! (${res.voteCount})'
+                : '${res.koName} 이미 투표했어요',
+          ),
+        ),
+      );
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding + 12),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (oak != null) buildVoteButton(oak),
+            if (fluorite != null) buildVoteButton(fluorite),
+          ],
         ),
       ),
     );
@@ -3577,6 +3845,24 @@ class _RainbowPainter extends CustomPainter {
         paint,
       );
     }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _PreviewSpawnTailPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFFFF8E7C);
+
+    final path = Path()
+      ..moveTo(size.width / 2, size.height)
+      ..quadraticBezierTo(0, size.height * 0.45, size.width / 2, 0)
+      ..quadraticBezierTo(size.width, size.height * 0.45, size.width / 2, size.height)
+      ..close();
+
+    canvas.drawPath(path, paint);
   }
 
   @override
