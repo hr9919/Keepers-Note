@@ -628,7 +628,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
             Positioned.fill(
               child: Column(
                 children: [
-                  SizedBox(height: appBarHeight - 3),
+                  SizedBox(height: appBarHeight - 22),
                   Expanded(
                     child: TabBarView(
                       controller: _tabController,
@@ -976,7 +976,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
             : ListView.builder(
           controller: _recipeScrollController,
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 180),
+          padding: const EdgeInsets.fromLTRB(16, 28, 16, 180),
           itemCount: _visibleRecipeList.length,
           itemBuilder: (context, index) => _buildRecipeCard(_visibleRecipeList[index]),
         ),
@@ -1088,7 +1088,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 180),
+          padding: const EdgeInsets.fromLTRB(16, 28, 16, 180),
           itemCount: _visibleMaterialList.length,
           itemBuilder: (context, index) =>
               _buildMaterialCard(_visibleMaterialList[index]),

@@ -1109,7 +1109,7 @@ class _GatheringScreenState extends State<GatheringScreen>
             Positioned.fill(
               child: Column(
                 children: [
-                  SizedBox(height: appBarHeight - 3),
+                  SizedBox(height: appBarHeight - 22),
                   Expanded(
                     child: TabBarView(
                       controller: _tabController,
@@ -1423,7 +1423,7 @@ class _GatheringScreenState extends State<GatheringScreen>
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 180),
+          padding: const EdgeInsets.fromLTRB(16, 28, 16, 180),
           itemCount: list.length,
           itemBuilder: (context, index) => buildCard(list[index]),
         ),

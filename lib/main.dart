@@ -3,27 +3,161 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'onboarding_screen.dart';
-import 'home_screen.dart';
 import 'main_wrapper.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. 카카오 SDK 초기화
   KakaoSdk.init(nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0');
 
-  // 자동 로그인 및 서버 동기화 체크
-  bool isLoggedIn = false;
+  runApp(const KeepersNoteApp());
+}
 
-  try {
-    // 카카오 토큰이 있는지 확인
-    if (await AuthApi.instance.hasToken()) {
+class KeepersNoteApp extends StatelessWidget {
+  const KeepersNoteApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: "Keeper's Note",
+      theme: ThemeData(useMaterial3: true),
+      home: const SplashScreen(),
+    );
+  }
+}
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  static const Duration _minimumSplashDuration = Duration(milliseconds: 1400);
+
+  late final AnimationController _animationController;
+
+  late final Animation<double> _screenFade;
+  late final Animation<double> _titleFade;
+  late final Animation<Offset> _titleSlide;
+  late final Animation<double> _bookFade;
+  late final Animation<Offset> _bookSlide;
+  late final Animation<double> _captionFade;
+  late final Animation<Offset> _captionSlide;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+
+    _screenFade = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
+
+    _titleFade = CurvedAnimation(
+      parent: _animationController,
+      curve: const Interval(0.00, 0.45, curve: Curves.easeOutCubic),
+    );
+
+    _titleSlide = Tween<Offset>(
+      begin: const Offset(0, 0.035),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.00, 0.45, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _bookFade = CurvedAnimation(
+      parent: _animationController,
+      curve: const Interval(0.18, 0.72, curve: Curves.easeOutCubic),
+    );
+
+    _bookSlide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.18, 0.72, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _captionFade = CurvedAnimation(
+      parent: _animationController,
+      curve: const Interval(0.42, 0.88, curve: Curves.easeOutCubic),
+    );
+
+    _captionSlide = Tween<Offset>(
+      begin: const Offset(0, 0.03),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.42, 0.88, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _animationController.forward();
+    _prepareAndNavigate();
+  }
+
+  Future<void> _prepareAndNavigate() async {
+    final stopwatch = Stopwatch()..start();
+
+    final bool isLoggedIn = await _checkLoginStatus();
+    stopwatch.stop();
+
+    final elapsed = stopwatch.elapsed;
+    if (elapsed < _minimumSplashDuration) {
+      await Future.delayed(_minimumSplashDuration - elapsed);
+    }
+
+    if (!mounted) return;
+
+    final Widget nextScreen =
+    isLoggedIn ? const MainWrapper() : const OnboardingScreen();
+
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 700),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
+        pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          );
+
+          return FadeTransition(
+            opacity: curved,
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+
+  Future<bool> _checkLoginStatus() async {
+    try {
+      if (!await AuthApi.instance.hasToken()) {
+        return false;
+      }
+
       try {
-        // 2. 카카오에서 내 정보 가져오기
-        User kakaoUser = await UserApi.instance.me();
+        final User kakaoUser = await UserApi.instance.me();
 
-        // 3. ★ 우리 백엔드 서버에 로그인/회원가입 요청 보내기
         final response = await http.post(
           Uri.parse('http://161.33.30.40:8080/api/user/login'),
           headers: {"Content-Type": "application/json"},
@@ -34,152 +168,168 @@ void main() async {
         );
 
         if (response.statusCode == 200) {
-          print("서버 동기화 성공!");
-          isLoggedIn = true; // 서버까지 확인 완료되어야 진짜 로그인 성공
+          debugPrint("서버 동기화 성공");
+          return true;
         } else {
-          print("서버 응답 에러: ${response.statusCode}");
+          debugPrint("서버 응답 에러: ${response.statusCode}");
+          return false;
         }
       } catch (e) {
-        // 토큰이 만료되었거나 서버 통신 실패 시 로그아웃 처리
-        print("상세 체크 실패: $e");
+        debugPrint("상세 체크 실패: $e");
         await TokenManagerProvider.instance.manager.clear();
+        return false;
       }
+    } catch (e) {
+      debugPrint("로그인 상태 체크 에러: $e");
+      return false;
     }
-  } catch (e) {
-    print("로그인 상태 체크 에러: $e");
   }
 
-  runApp(KeepersNoteApp(isLoggedIn: isLoggedIn));
-}
-
-class KeepersNoteApp extends StatelessWidget {
-  final bool isLoggedIn;
-  const KeepersNoteApp({super.key, required this.isLoggedIn});
-
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: "Keeper's Note",
-      theme: ThemeData(useMaterial3: true),
-      home: SplashScreen(isLoggedIn: isLoggedIn),
-    );
-  }
-}
-
-class SplashScreen extends StatefulWidget {
-  final bool isLoggedIn;
-  const SplashScreen({super.key, required this.isLoggedIn});
-
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen> {
-  @override
-  void initState() {
-    super.initState();
-
-    Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-
-      // ★ 수정 포인트: 로그인 성공 시 HomeScreen이 아닌 MainWrapper로 보냅니다!
-      Widget nextScreen = widget.isLoggedIn
-          ? const MainWrapper()       // <- 내비게이션 바가 살아납니다.
-          : const OnboardingScreen();
-
-      Navigator.pushReplacement(
-        context,
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 1000),
-          pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-        ),
-      );
-    });
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // ★ 스플래시 UI 복구: 배경 그라데이션 + 중앙 캐릭터 + 텍스트
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/bg_gradient.png'),
-            fit: BoxFit.cover,
+      body: FadeTransition(
+        opacity: _screenFade,
+        child: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/images/bg_gradient.png'),
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IntrinsicWidth(
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'Town\n',
-                          style: TextStyle(
-                            color: Color(0xFF868686),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            height: 2.5,
+                  const Spacer(flex: 7),
+
+                  SlideTransition(
+                    position: _titleSlide,
+                    child: FadeTransition(
+                      opacity: _titleFade,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.50),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.56),
+                                width: 1,
+                              ),
+                            ),
+                            child: const Text(
+                              'TOWN',
+                              style: TextStyle(
+                                color: Color(0xFFA8A8A8),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.4,
+                                height: 1.0,
+                              ),
+                            ),
                           ),
-                        ),
-                        TextSpan(
-                          text: 'Keeper’s Note\n',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 44,
-                            fontWeight: FontWeight.w600,
-                            height: 1.02,
+                          const SizedBox(height: 14),
+                          const Text(
+                            "Keeper’s Note",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFF252525),
+                              fontSize: 34,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.6,
+                              height: 1.0,
+                            ),
                           ),
-                        ),
-                        TextSpan(
-                          text: '키퍼노트',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 32,
-                            fontWeight: FontWeight.w600,
-                            height: 1.41,
+                          const SizedBox(height: 6),
+                          const Text(
+                            '키퍼노트',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFF6B6B6B),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.2,
+                              height: 1.08,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
+
+                  const SizedBox(height: 24),
+
+                  SlideTransition(
+                    position: _bookSlide,
+                    child: FadeTransition(
+                      opacity: _bookFade,
+                      child: Container(
+                        width: 244,
+                        height: 258,
+                        decoration: const BoxDecoration(
+                          image: DecorationImage(
+                            image: AssetImage("assets/images/splash_art_shadow.png"),
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  SlideTransition(
+                    position: _captionSlide,
+                    child: FadeTransition(
+                      opacity: _captionFade,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 9,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.44),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.50),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Text(
+                          '타운 키퍼를 위한 가이드북',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFF707070),
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.15,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const Spacer(flex: 8),
                 ],
               ),
             ),
-            const SizedBox(height: 40),
-            Container(
-              width: 252,
-              height: 268,
-              decoration: const BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage("assets/images/splash_art_shadow.png"),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              '타운 키퍼를 위한 가이드북',
-              style: TextStyle(
-                color: Color(0xFF616161),
-                fontSize: 18,
-                fontWeight: FontWeight.w400,
-                letterSpacing: -0.5,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

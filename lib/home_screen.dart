@@ -1906,7 +1906,7 @@ class _HomeScreenState extends State<HomeScreen>
     final topPadding = MediaQuery.of(context).padding.top;
 
     const double appBarBodyHeight = 108;
-    const double appBarBottomGap = 14; // 앱바 아래 고정 여백
+    const double appBarBottomGap = 2; // 앱바 아래 고정 여백
     final double refreshTop = topPadding + appBarBodyHeight + appBarBottomGap;
 
     return Scaffold(
@@ -2031,30 +2031,6 @@ class _HomeScreenState extends State<HomeScreen>
                 child: _buildSearchSuggestionsOverlay(),
               ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHomeStyleBottomSheet({
-    required Widget child,
-    EdgeInsets? padding,
-  }) {
-    final media = MediaQuery.of(context);
-    final bottomInset = media.viewPadding.bottom > 0
-        ? media.viewPadding.bottom
-        : media.padding.bottom;
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: padding ?? EdgeInsets.fromLTRB(20, 14, 20, bottomInset + 14),
-          child: child,
         ),
       ),
     );
@@ -3193,151 +3169,6 @@ class _HomeScreenState extends State<HomeScreen>
           );
         },
       ),
-    );
-  }
-
-  Widget _buildTodoSection() {
-    const int displayLimit = 6;
-    final int displayCount =
-    widget.todoList.length > displayLimit ? displayLimit : widget.todoList
-        .length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('오늘의 할 일'),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GestureDetector(
-            behavior: HitTestBehavior.deferToChild,
-            onTapDown: (_) {
-              if (_isInnerTap) return;
-              setState(() {
-                _isTodoCardPressed = true;
-              });
-            },
-            onTapCancel: () {
-              if (!mounted) return;
-              setState(() {
-                _isTodoCardPressed = false;
-              });
-            },
-            onTapUp: (_) async {
-              if (_isInnerTap) return;
-
-              // 손을 뗀 뒤에도 잠깐 눌림 유지
-              await Future.delayed(const Duration(milliseconds: 95));
-              if (!mounted) return;
-
-              setState(() {
-                _isTodoCardPressed = false;
-              });
-
-              // 끊기지 않게 아주 조금 더 텀
-              await Future.delayed(const Duration(milliseconds: 35));
-              if (!mounted) return;
-
-              widget.openEndDrawer?.call();
-            },
-            child: Stack(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 70),
-                  padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
-                  decoration: ShapeDecoration(
-                    color: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    shadows: _kCommonShadow,
-                  ),
-                  child: Stack(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: 28),
-                        child: widget.todoList.isEmpty
-                            ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4),
-                          child: Text(
-                            "오늘의 할 일을 등록해보세요! 🌿",
-                            style: TextStyle(
-                              color: Color(0xFF94A3B8),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        )
-                            : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ...List.generate(displayCount, (index) {
-                              final todo = widget.todoList[index];
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: index == displayCount - 1 ? 0 : 10,
-                                ),
-                                child: _buildTodoRow(
-                                  index: index,
-                                  text: todo['taskName'] ?? "",
-                                  isDone: todo['completed'] ?? false,
-                                  onCheckTap: () =>
-                                      widget.onTodoToggle?.call(index),
-                                ),
-                              );
-                            }),
-                            if (widget.todoList.length > displayLimit)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                    top: 4, bottom: 2),
-                                child: Text(
-                                  "+ ${widget.todoList.length -
-                                      displayLimit}개 더보기",
-                                  style: const TextStyle(
-                                    fontSize: 11.5,
-                                    color: Color(0xFFFF8E7C),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const Positioned(
-                        top: 0,
-                        right: 0,
-                        child: Padding(
-                          padding: EdgeInsets.all(2),
-                          child: Icon(
-                            Icons.chevron_right_rounded,
-                            size: 20,
-                            color: Color(0xFFCBD5E1),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 90),
-                      opacity: _isTodoCardPressed ? 1.0 : 0.0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF334155).withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 

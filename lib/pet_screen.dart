@@ -307,29 +307,35 @@ class _PetScreenState extends State<PetScreen>
   }
 
   void _attachScrollListener(ScrollController controller) {
+    double lastOffset = 0;
+
     controller.addListener(() {
       if (!mounted || !controller.hasClients) return;
 
-      final offset = controller.offset;
+      final double offset = controller.offset;
       final bool showBtn = offset > 100;
 
       if (showBtn != _showTopBtn) {
         setState(() => _showTopBtn = showBtn);
       }
 
-      if (offset <= 5 && !_isFilterVisible) {
+      if (offset <= 8) {
+        if (!_isFilterVisible) {
+          setState(() => _isFilterVisible = true);
+        }
+        lastOffset = offset;
+        return;
+      }
+
+      final double delta = offset - lastOffset;
+
+      if (delta > 4 && _isFilterVisible) {
+        setState(() => _isFilterVisible = false);
+      } else if (delta < -4 && !_isFilterVisible) {
         setState(() => _isFilterVisible = true);
       }
-    });
-  }
 
-  void _togglePetCardLike(String id) {
-    setState(() {
-      if (_likedPetCardIds.contains(id)) {
-        _likedPetCardIds.remove(id);
-      } else {
-        _likedPetCardIds.add(id);
-      }
+      lastOffset = offset;
     });
   }
 
@@ -479,8 +485,8 @@ class _PetScreenState extends State<PetScreen>
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
     final double safeBottom = MediaQuery.of(context).padding.bottom;
-    final double appBarHeight = topPadding + 166;
     final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final double appBarHeight = topPadding + 170;
 
     final double scrollTopBottom = keyboardInset > 0
         ? 24
@@ -502,7 +508,7 @@ class _PetScreenState extends State<PetScreen>
           Positioned.fill(
             child: Column(
               children: [
-                SizedBox(height: appBarHeight - 8),
+                SizedBox(height: appBarHeight - 22),
 
                 AnimatedSize(
                   duration: const Duration(milliseconds: 220),
@@ -516,20 +522,6 @@ class _PetScreenState extends State<PetScreen>
                     ],
                   )
                       : const SizedBox.shrink(),
-                ),
-
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOutCubic,
-                  height: _isFilterVisible ? 70 : 0,
-                  child: SingleChildScrollView(
-                    physics: const NeverScrollableScrollPhysics(),
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 200),
-                      opacity: _isFilterVisible ? 1.0 : 0.0,
-                      child: _buildFilterBarArea(),
-                    ),
-                  ),
                 ),
 
                 Expanded(
@@ -619,76 +611,348 @@ class _PetScreenState extends State<PetScreen>
     }).toList();
   }
 
+  Widget _buildPetFilterActionButton() {
+    final bool hasColorFilter = _selectedColor != '전체';
+    final bool hasEyeFilter = _selectedEyeType != '전체';
+    final bool hasAnyFilter = hasColorFilter || hasEyeFilter;
 
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        bool isPressed = false;
 
-  Widget _buildOrangeFilterChip({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFFFF8E7C).withOpacity(0.12)
-              : Colors.white.withOpacity(0.58),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFFFF8E7C).withOpacity(0.38)
-                : Colors.black.withOpacity(0.05),
-            width: 1.1,
+        void setPressed(bool value) {
+          setLocalState(() {
+            isPressed = value;
+          });
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => setPressed(true),
+          onTapCancel: () => setPressed(false),
+          onTapUp: (_) {
+            setPressed(false);
+            _showPetFilterSheet();
+          },
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 90),
+            curve: Curves.easeOut,
+            scale: isPressed ? 0.97 : 1.0,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: hasAnyFilter
+                    ? const Color(0xFFFFF3F0).withOpacity(isPressed ? 0.98 : 0.95)
+                    : Colors.white.withOpacity(isPressed ? 0.98 : 0.92),
+                borderRadius: BorderRadius.circular(20),
+
+                // 👇 항상 코랄 테두리
+                border: Border.all(
+                  color: const Color(0xFFFFD6CC),
+                  width: 1,
+                ),
+
+                boxShadow: [
+                  BoxShadow(
+                    color: hasAnyFilter
+                        ? const Color(0xFFFF8E7C).withOpacity(
+                      isPressed ? 0.06 : 0.12,
+                    )
+                        : const Color(0xFFFF8E7C).withOpacity(
+                      isPressed ? 0.03 : 0.06,
+                    ),
+                    blurRadius: isPressed ? 6 : 10,
+                    offset: Offset(0, isPressed ? 1 : 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: hasAnyFilter
+                          ? const Color(0xFFFFE8E2)
+                          : const Color(0xFFFFF6F3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFFFFD4C9),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.tune_rounded,
+                      size: 14,
+                      color: hasAnyFilter
+                          ? const Color(0xFFFF8E7C)
+                          : const Color(0xFFE58F7C),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    hasAnyFilter ? '필터 적용됨' : '필터 설정',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: hasAnyFilter
+                          ? const Color(0xFFFF8E7C)
+                          : const Color(0xFFE58F7C),
+                    ),
+                  ),
+                  if (hasAnyFilter) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8E7C).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'ON',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFFF8E7C),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected
-                ? const Color(0xFFFF8E7C)
-                : const Color(0xFF64748B),
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildBlueFilterChip({
+  void _showPetFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        String tempColor = _selectedColor;
+        String tempEyeType = _selectedEyeType;
+
+        final colorFilters = ['전체', '화이트', '블랙', '치즈', '얼룩', '삼색'];
+        final eyeFilters = ['전체', '콩눈', '땡눈'];
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          '필터',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF2D3436),
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          splashRadius: 20,
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '색상',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: colorFilters.map((filter) {
+                        final isSelected = tempColor == filter;
+                        return _buildPopupFilterChip(
+                          label: filter,
+                          isSelected: isSelected,
+                          onTap: () {
+                            setSheetState(() {
+                              tempColor = filter;
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      '눈 모양',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: eyeFilters.map((filter) {
+                        final isSelected = tempEyeType == filter;
+                        return _buildPopupFilterChip(
+                          label: filter,
+                          isSelected: isSelected,
+                          onTap: () {
+                            setSheetState(() {
+                              tempEyeType = filter;
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedColor = '전체';
+                                _selectedEyeType = '전체';
+                              });
+                              Navigator.pop(context);
+                            },
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              side: const BorderSide(
+                                color: Color(0xFFE9EEF4),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: const Text(
+                              '초기화',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedColor = tempColor;
+                                _selectedEyeType = tempEyeType;
+                              });
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              elevation: 0,
+                              backgroundColor: const Color(0xFFFF8E7C),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: const Text(
+                              '적용',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPopupFilterChip({
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF8EC9FF).withOpacity(0.16)
-              : Colors.white.withOpacity(0.58),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF8EC9FF).withOpacity(0.42)
-                : Colors.black.withOpacity(0.05),
-            width: 1.1,
+                ? const Color(0xFFFFF1EC)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFFFDDD4)
+                  : const Color(0xFFE9EEF4),
+              width: 1,
+            ),
+            boxShadow: isSelected
+                ? [
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ]
+                : [],
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected
-                ? const Color(0xFF4E9FEF)
-                : const Color(0xFF64748B),
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.8,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              color: isSelected
+                  ? const Color(0xFFFF8E7C)
+                  : const Color(0xFF667085),
+            ),
           ),
         ),
       ),
@@ -901,142 +1165,110 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
-
-  Widget _buildFilterBarArea() {
-    final colorFilters = ['전체', '화이트', '블랙', '치즈', '얼룩', '삼색'];
-    final eyeFilters = ['전체', '콩눈', '땡눈'];
-
-    return Padding(
-      padding: EdgeInsets.zero,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _buildFilterSectionLabel('색'),
-              Expanded(
-                child: ShaderMask(
-                  shaderCallback: (Rect rect) => const LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [Colors.black, Colors.transparent],
-                    stops: [0.92, 1.0],
-                  ).createShader(rect),
-                  blendMode: BlendMode.dstIn,
-                  child: SizedBox(
-                    height: 32,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(left: 4, right: 20),
-                      children: colorFilters.map((filter) {
-                        return _buildOrangeFilterChip(
-                          label: filter,
-                          isSelected: _selectedColor == filter,
-                          onTap: () {
-                            setState(() {
-                              _selectedColor = filter;
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _buildFilterSectionLabel(
-                '눈',
-              ),
-              Expanded(
-                child: ShaderMask(
-                  shaderCallback: (Rect rect) => const LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [Colors.black, Colors.transparent],
-                    stops: [0.92, 1.0],
-                  ).createShader(rect),
-                  blendMode: BlendMode.dstIn,
-                  child: SizedBox(
-                    height: 32,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(left: 4, right: 20),
-                      children: eyeFilters.map((filter) {
-                        return _buildBlueFilterChip(
-                          label: filter,
-                          isSelected: _selectedEyeType == filter,
-                          onTap: () {
-                            setState(() {
-                              _selectedEyeType = filter;
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildIntegratedAppBar(BuildContext context, double topPadding) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          stops: const [0.0, 0.42, 1.0],
-          colors: [
-            const Color(0xFFFF8E7C).withOpacity(0.12),
-            const Color(0xFFFFCFC7).withOpacity(0.05),
-            const Color(0xFFFFFAF8),
-          ],
-        ),
+        color: Colors.white.withOpacity(0.88),
         borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(24),
         ),
+        border: Border(
+          bottom: BorderSide(
+            color: const Color(0xFFFF8E7C).withOpacity(0.08),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_menu.svg',
-                onTap: widget.openDrawer ?? () {},
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF8E7C).withOpacity(0.03),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(24),
               ),
-              const Spacer(),
-              _buildAppTitle(),
-              const Spacer(),
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_settings.svg',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SettingsScreen(),
+            ),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_menu.svg',
+                            onTap: widget.openDrawer ?? () {},
+                          ),
+                          const Spacer(),
+                          _buildAppTitle(),
+                          const Spacer(),
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_settings.svg',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SettingsScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildTabBar(),
+                      const SizedBox(height: 8),
+                      _buildPetProfileDropdown(),
+                      const SizedBox(height: 8),
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 180),
+                          opacity: _isFilterVisible ? 1.0 : 0.0,
+                          child: _isFilterVisible
+                              ? Align(
+                            alignment: Alignment.centerLeft,
+                            child: _buildPetFilterActionButton(),
+                          )
+                              : const SizedBox.shrink(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                Positioned(
+                  top: 0,
+                  left: 18,
+                  right: 18,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8E7C).withOpacity(0.62),
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          _buildTabBar(),
-          const SizedBox(height: 8),
-          _buildPetProfileDropdown(),
-        ],
+        ),
       ),
     );
   }
@@ -1227,14 +1459,13 @@ class _PetScreenState extends State<PetScreen>
 
   Widget _buildTabBar() {
     return Container(
-      height: 38,
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.all(3),
+      height: 44,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4F1),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.25),
+          color: const Color(0xFFF3D8D1),
           width: 1,
         ),
       ),
@@ -1242,7 +1473,8 @@ class _PetScreenState extends State<PetScreen>
         controller: _tabController,
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
-        splashFactory: NoSplash.splashFactory,
+        labelPadding: EdgeInsets.zero,
+        splashBorderRadius: BorderRadius.circular(18),
         indicatorAnimation: TabIndicatorAnimation.elastic,
         overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
           if (states.contains(WidgetState.pressed)) {
@@ -1251,15 +1483,12 @@ class _PetScreenState extends State<PetScreen>
           return Colors.transparent;
         }),
         indicator: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: const Color(0xFFFFF1EC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFFFDDD4),
+            width: 1,
+          ),
         ),
         labelColor: const Color(0xFFFF8E7C),
         unselectedLabelColor: const Color(0xFF94A3B8),
@@ -1318,7 +1547,10 @@ class _PetScreenState extends State<PetScreen>
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          padding: const EdgeInsets.only(bottom: 120),
+          padding: const EdgeInsets.only(
+            top: 64,
+            bottom: 120,
+          ),
           children: [
             if (isCat)
               _buildPetGridContent()
@@ -2907,6 +3139,7 @@ class _PetScreenState extends State<PetScreen>
                       : ListView.separated(
                     controller: _snackFishScrollController,
                     physics: const BouncingScrollPhysics(),
+
                     itemCount: visibleFishList.length,
                     separatorBuilder: (_, __) =>
                     const SizedBox(height: 10),

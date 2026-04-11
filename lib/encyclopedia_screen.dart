@@ -892,7 +892,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
+          padding: const EdgeInsets.fromLTRB(16, 28, 16, 180),
           itemCount: dummyTitles.length,
           itemBuilder: (context, index) {
             return Padding(
@@ -941,7 +941,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
+          padding: const EdgeInsets.fromLTRB(16, 28, 16, 180),
           itemCount: 20,
           itemBuilder: (context, index) {
             return Padding(
