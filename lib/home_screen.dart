@@ -4363,18 +4363,18 @@ class _HomeScreenState extends State<HomeScreen>
           "Keeper's Note",
           style: TextStyle(
             fontSize: 18,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
             color: Color(0xFF2D3436),
-            letterSpacing: -0.6,
+            letterSpacing: -0.3,
             fontFamily: 'SF Pro',
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 3),
         Container(
           width: 12,
           height: 3,
           decoration: BoxDecoration(
-            color: snackAccent,
+            color: const Color(0xFFFF8E7C).withOpacity(0.78),
             borderRadius: BorderRadius.circular(10),
           ),
         ),
@@ -4386,16 +4386,16 @@ class _HomeScreenState extends State<HomeScreen>
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFAF8),
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withOpacity(0.78),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.22),
-          width: 1.2,
+          color: const Color(0xFFF1DED8),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 6,
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -4406,7 +4406,7 @@ class _HomeScreenState extends State<HomeScreen>
         textAlignVertical: TextAlignVertical.center,
         style: const TextStyle(
           fontSize: 14,
-          color: Color(0xFF4A4543),
+          color: Color(0xFF2D3436),
           fontWeight: FontWeight.w600,
         ),
         onTapOutside: (_) {
@@ -4423,21 +4423,22 @@ class _HomeScreenState extends State<HomeScreen>
             child: Icon(
               Icons.search_rounded,
               size: 20,
-              color: Color(0xFFFF8E7C),
+              color: Color(0xFFE58F7C),
             ),
           ),
           hintText: '찾는 아이템을 검색해보세요.',
           hintStyle: const TextStyle(
-            color: Color(0xFFA8A29E),
+            color: Color(0xFF9AA4B2),
             fontSize: 14,
+            fontWeight: FontWeight.w600,
           ),
           contentPadding: const EdgeInsets.fromLTRB(0, 0, 16, 0),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
             icon: const Icon(
-              Icons.close,
+              Icons.close_rounded,
               size: 18,
-              color: Color(0xFFA8A29E),
+              color: Color(0xFFB0B8C4),
             ),
             onPressed: () {
               _searchController.clear();
@@ -4456,24 +4457,21 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildCustomAppBar(BuildContext context, double topPadding) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          stops: const [0.0, 0.42, 1.0],
-          colors: [
-            const Color(0xFFFFC2B8).withOpacity(0.45),
-            const Color(0xFFFFECE8).withOpacity(0.30),
-            const Color(0xFFFFFAF8),
-          ],
-        ),
+        color: Colors.white.withOpacity(0.88),
         borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(24),
         ),
+        border: Border(
+          bottom: BorderSide(
+            color: const Color(0xFFFF8E7C).withOpacity(0.08),
+            width: 1,
+          ),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -4483,33 +4481,62 @@ class _HomeScreenState extends State<HomeScreen>
         ),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 14),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF8E7C).withOpacity(0.03),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(24),
+              ),
+            ),
+            child: Stack(
               children: [
-                Row(
-                  children: [
-                    _buildAppBarButton(
-                      icon: 'assets/icons/ic_menu.svg',
-                      onTap: widget.openDrawer ?? () {},
-                    ),
-                    const Spacer(),
-                    _buildAppTitle(),
-                    const Spacer(),
-                    _buildAppBarButton(
-                      icon: 'assets/icons/ic_settings.svg',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SettingsScreen(),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_menu.svg',
+                            onTap: widget.openDrawer ?? () {},
+                          ),
+                          const Spacer(),
+                          _buildAppTitle(),
+                          const Spacer(),
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_settings.svg',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SettingsScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildIntegratedSearchBar(),
+                    ],
+                  ),
+                ),
+
+                Positioned(
+                  top: 0,
+                  left: 18,
+                  right: 18,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8E7C).withOpacity(0.62),
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(3),
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                _buildIntegratedSearchBar(),
               ],
             ),
           ),

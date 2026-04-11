@@ -1,8 +1,63 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:http/http.dart' as http;
+import 'dart:ui';
 import 'setting_screen.dart';
 import 'models/global_search_item.dart';
-import 'dart:ui';
+
+class AchievementItem {
+  final String id;
+  final String title;
+  final String image;
+  final String condition;
+  final bool isHidden;
+
+  AchievementItem({
+    required this.id,
+    required this.title,
+    required this.image,
+    required this.condition,
+    required this.isHidden,
+  });
+
+  factory AchievementItem.fromJson(Map<String, dynamic> json) {
+    String readString(List<String> keys, {String fallback = ''}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value != null && value.toString().trim().isNotEmpty) {
+          return value.toString().trim();
+        }
+      }
+      return fallback;
+    }
+
+    bool readBool(List<String> keys, {bool fallback = false}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is bool) return value;
+        if (value is num) return value != 0;
+        if (value is String) {
+          final lower = value.toLowerCase();
+          if (lower == 'true' || lower == 'y' || lower == 'yes') return true;
+          if (lower == 'false' || lower == 'n' || lower == 'no') return false;
+        }
+      }
+      return fallback;
+    }
+
+    return AchievementItem(
+      id: readString(['id'], fallback: UniqueKey().toString()),
+      title: readString(['name', 'nameKo', 'title'], fallback: '이름 없음'),
+      image: readString(['image', 'imageUrl', 'icon']),
+      condition: readString(
+        ['condition', 'achievementCondition', 'description', 'unlockCondition'],
+        fallback: '',
+      ),
+      isHidden: readBool(['isHidden', 'hidden'], fallback: false),
+    );
+  }
+}
 
 class EncyclopediaScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
@@ -21,12 +76,16 @@ class EncyclopediaScreen extends StatefulWidget {
 class _EncyclopediaScreenState extends State<EncyclopediaScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _selectedFilter = '금토리 전시회';
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
+  String _selectedFilter = '주방 가구';
+  String _searchQuery = '';
   GlobalSearchItem? _pendingSearchItem;
 
-  final ScrollController _outfitScrollController = ScrollController();
-  final ScrollController _furnitureScrollController = ScrollController();
   final ScrollController _achievementScrollController = ScrollController();
+  final ScrollController _furnitureScrollController = ScrollController();
+  final ScrollController _outfitScrollController = ScrollController();
 
   bool _showTopBtn = false;
   bool _isFilterVisible = true;
@@ -34,21 +93,41 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
 
   final Color snackAccent = const Color(0xFFFF8E7C);
 
+  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _achievementEndpoint = '$_baseUrl/api/achievements';
+
+  bool _isAchievementLoading = false;
+  String? _achievementError;
+  List<AchievementItem> _achievementItems = [];
+
   @override
   void initState() {
     super.initState();
+
     _tabController = TabController(length: 3, vsync: this);
 
     _tabController.addListener(() {
       if (!mounted) return;
+      _dismissSearchFocus();
+      _syncFilterForCurrentTab();
       setState(() {});
     });
 
-    _attachScrollListener(_outfitScrollController);
-    _attachScrollListener(_furnitureScrollController);
+    _searchController.addListener(() {
+      if (!mounted) return;
+      setState(() {
+        _searchQuery = _searchController.text.trim();
+      });
+    });
+
     _attachScrollListener(_achievementScrollController);
+    _attachScrollListener(_furnitureScrollController);
+    _attachScrollListener(_outfitScrollController);
+
+    _fetchAchievements();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncFilterForCurrentTab();
       if (widget.initialSearchItem != null) {
         _applySearchItem(widget.initialSearchItem!);
       }
@@ -69,113 +148,259 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   @override
   void dispose() {
     _tabController.dispose();
-    _outfitScrollController.dispose();
-    _furnitureScrollController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     _achievementScrollController.dispose();
+    _furnitureScrollController.dispose();
+    _outfitScrollController.dispose();
     super.dispose();
   }
 
   void _attachScrollListener(ScrollController controller) {
+    double lastOffset = 0;
+
     controller.addListener(() {
       if (!mounted || !controller.hasClients) return;
 
-      final bool showBtn = controller.offset > 100;
+      final double offset = controller.offset;
+      final bool showBtn = offset > 100;
+
       if (showBtn != _showTopBtn) {
         setState(() => _showTopBtn = showBtn);
       }
 
-      if (controller.offset <= 5 && !_isFilterVisible) {
+      if (_isAchievementTab) {
+        lastOffset = offset;
+        return;
+      }
+
+      if (offset <= 8) {
+        if (!_isFilterVisible) {
+          setState(() => _isFilterVisible = true);
+        }
+        lastOffset = offset;
+        return;
+      }
+
+      final double delta = offset - lastOffset;
+
+      if (delta > 4 && _isFilterVisible) {
+        setState(() => _isFilterVisible = false);
+      } else if (delta < -4 && !_isFilterVisible) {
         setState(() => _isFilterVisible = true);
       }
+
+      lastOffset = offset;
     });
+  }
+
+  Future<void> _fetchAchievements({bool showLoading = true}) async {
+    if (!mounted) return;
+
+    if (showLoading) {
+      setState(() {
+        _isAchievementLoading = true;
+        _achievementError = null;
+      });
+    } else {
+      setState(() {
+        _achievementError = null;
+      });
+    }
+
+    try {
+      final response = await http.get(Uri.parse(_achievementEndpoint));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('업적 API 호출 실패 (${response.statusCode})');
+      }
+
+      final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      List<dynamic> rawList = [];
+
+      if (decoded is List) {
+        rawList = decoded;
+      } else if (decoded is Map<String, dynamic>) {
+        final dynamic candidates =
+            decoded['data'] ??
+                decoded['items'] ??
+                decoded['content'] ??
+                decoded['achievements'] ??
+                decoded['result'];
+
+        if (candidates is List) {
+          rawList = candidates;
+        }
+      }
+
+      final parsed = rawList
+          .whereType<Map>()
+          .map((e) => AchievementItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        _achievementItems = parsed;
+        _isAchievementLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _achievementError = e.toString();
+        _isAchievementLoading = false;
+      });
+    }
   }
 
   ScrollController _getCurrentController() {
     final index = _tabController.index.clamp(0, 2);
-    if (index == 0) return _outfitScrollController;
+    if (index == 0) return _achievementScrollController;
     if (index == 1) return _furnitureScrollController;
-    return _achievementScrollController;
+    return _outfitScrollController;
   }
 
   String _getCurrentTabType() {
     final index = _tabController.index.clamp(0, 2);
-    if (index == 0) return '옷';
+    if (index == 0) return '업적';
     if (index == 1) return '가구';
-    return '업적';
+    return '옷';
   }
 
-  @override
+  List<String> _getCurrentFilterList() {
+    if (_tabController.index == 1) {
+      return ['주방 가구', '침실 가구', '거실 가구', '야외 장식', '테마 가구'];
+    }
+    return ['몰린 옷가게', '금토리 전시회', '축제 패키지', '한정 상품', '이벤트 아이템'];
+  }
+
+  void _dismissSearchFocus() {
+    if (_searchFocusNode.hasFocus) {
+      _searchFocusNode.unfocus();
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  void _syncFilterForCurrentTab() {
+    if (_tabController.index == 0) return;
+
+    final filters = _getCurrentFilterList();
+    if (filters.isEmpty) return;
+
+    if (!filters.contains(_selectedFilter)) {
+      _selectedFilter = filters.first;
+    }
+  }
+
+  bool get _isAchievementTab => _tabController.index == 0;
+
+  String _resolveAchievementImagePath(String? imagePath) {
+    if (imagePath == null || imagePath.trim().isEmpty) return '';
+
+    final raw = imagePath.trim();
+    if (raw.startsWith('assets/')) return raw;
+    return 'assets/$raw';
+  }
+
+  Widget _buildAchievementImage({
+    required String title,
+    required String? imagePath,
+    double padding = 6,
+    double iconSize = 24,
+    BoxFit fit = BoxFit.contain,
+  }) {
+    final resolvedPath = _resolveAchievementImagePath(imagePath);
+
+    if (resolvedPath.isNotEmpty) {
+      return Padding(
+        padding: EdgeInsets.all(padding),
+        child: Image.asset(
+          resolvedPath,
+          fit: fit,
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.emoji_events_outlined,
+            size: iconSize,
+            color: const Color(0xFFFF8E7C),
+          ),
+        ),
+      );
+    }
+
+    return Center(
+      child: Icon(
+        Icons.emoji_events_outlined,
+        size: iconSize,
+        color: const Color(0xFFFF8E7C),
+      ),
+    );
+  }
+
+  List<AchievementItem> _getFilteredAchievements() {
+    return _achievementItems.where((item) {
+      final query = _searchQuery.toLowerCase();
+      return query.isEmpty || item.title.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  @override@override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
-    final double appBarHeight = topPadding + 166;
+
+    final bool showFilterInAppBar = !_isAchievementTab && _isFilterVisible;
+    final double appBarHeight = topPadding +
+        (_isAchievementTab
+            ? 190
+            : showFilterInAppBar
+            ? 214
+            : 170);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/bg_gradient.png',
-              fit: BoxFit.cover,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _dismissSearchFocus,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/bg_gradient.png',
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-          Positioned.fill(
-            child: Column(
-              children: [
-                SizedBox(height: appBarHeight - 8),
-                AnimatedBuilder(
-                  animation: _tabController,
-                  builder: (context, child) {
-                    final controller = _getCurrentController();
-                    final double offset =
-                    controller.hasClients ? controller.offset : 0;
-
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOutCubic,
-                      height: (_isFilterVisible || offset < 20) ? 40 : 0,
-                      child: SingleChildScrollView(
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 200),
-                          opacity:
-                          (_isFilterVisible || offset < 20) ? 1.0 : 0.0,
-                          child:
-                          _buildFilterAndSortHeader(_getCurrentTabType()),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    physics: const BouncingScrollPhysics(),
-                    children: [
-                      _buildOutfitContent(),
-                      _buildFurnitureContent(),
-                      _buildAchievementContent(),
-                    ],
+            Positioned.fill(
+              child: Column(
+                children: [
+                  SizedBox(height: appBarHeight - 24),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      physics: const BouncingScrollPhysics(),
+                      children: [
+                        _buildAchievementContent(),
+                        _buildFurnitureContent(),
+                        _buildOutfitContent(),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildIntegratedAppBar(context, topPadding),
-          ),
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            right: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? 24 : 140,
-            child: _buildScrollToTopButton(),
-          ),
-        ],
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildIntegratedAppBar(context, topPadding),
+            ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              right: 20,
+              bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? 24 : 140,
+              child: _buildScrollToTopButton(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -222,53 +447,108 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   Widget _buildIntegratedAppBar(BuildContext context, double topPadding) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          stops: const [0.0, 0.42, 1.0],
-          colors: [
-            const Color(0xFFFF8E7C).withOpacity(0.12),
-            const Color(0xFFFFCFC7).withOpacity(0.05),
-            const Color(0xFFFFFAF8),
-          ],
-        ),
+        color: Colors.white.withOpacity(0.88),
         borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(24),
         ),
+        border: Border(
+          bottom: BorderSide(
+            color: const Color(0xFFFF8E7C).withOpacity(0.08),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_menu.svg',
-                onTap: widget.openDrawer ?? () {},
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF8E7C).withOpacity(0.03),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(24),
               ),
-              const Spacer(),
-              _buildAppTitle(),
-              const Spacer(),
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_settings.svg',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SettingsScreen(),
+            ),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_menu.svg',
+                            onTap: widget.openDrawer ?? () {},
+                          ),
+                          const Spacer(),
+                          _buildAppTitle(),
+                          const Spacer(),
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_settings.svg',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SettingsScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildTabBar(),
+                      const SizedBox(height: 8),
+                      _buildIntegratedSearchBar(),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeOutCubic,
+                        child: (!_isAchievementTab && _isFilterVisible)
+                            ? Padding(
+                          key: const ValueKey('filter_visible'),
+                          padding: const EdgeInsets.only(top: 10),
+                          child: _buildFilterAndSortHeader(
+                            _getCurrentTabType(),
+                          ),
+                        )
+                            : const SizedBox(
+                          key: ValueKey('filter_hidden'),
+                          height: 0,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                Positioned(
+                  top: 0,
+                  left: 18,
+                  right: 18,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8E7C).withOpacity(0.62),
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-
-          const SizedBox(height: 10),
-
-          _buildTabBar(),
-
-          const SizedBox(height: 8),
-
-          _buildIntegratedSearchBar(),
-        ],
+        ),
       ),
     );
   }
@@ -288,7 +568,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          width: 40, // 🔥 40 → 34
+          width: 40,
           height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
@@ -302,7 +582,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
           ),
           child: SvgPicture.asset(
             icon,
-            width: 17, // 🔥 20 → 17
+            width: 17,
             height: 17,
             colorFilter: ColorFilter.mode(
               isMenu
@@ -332,90 +612,245 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFAF8), // ✅ 추천 색상
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withOpacity(0.78),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.22),
-          width: 1.2,
+          color: const Color(0xFFF1DED8),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: const TextField(
-        textAlignVertical: TextAlignVertical.center,
-        style: TextStyle(
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        textInputAction: TextInputAction.search,
+        style: const TextStyle(
           fontSize: 14,
-          color: Color(0xFF4A4543),
           fontWeight: FontWeight.w600,
+          color: Color(0xFF2D3436),
         ),
         decoration: InputDecoration(
-          isDense: true,
-          border: InputBorder.none,
-          prefixIcon: Padding(
-            padding: EdgeInsets.all(12),
-            child: Icon(
-              Icons.search_rounded,
-              size: 20,
-              color: Color(0xFFFF8E7C),
-            ),
-          ),
-          hintText: '아이템을 검색해보세요.',
-          hintStyle: TextStyle(
-            color: Color(0xFFA8A29E),
+          hintText: _isAchievementTab ? '업적을 검색해보세요.' : '아이템을 검색해보세요.',
+          hintStyle: const TextStyle(
             fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF9AA4B2),
           ),
-          contentPadding: EdgeInsets.fromLTRB(0, 0, 16, 0),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            color: Color(0xFFE58F7C),
+            size: 24,
+          ),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+            splashRadius: 18,
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Color(0xFFB0B8C4),
+              size: 20,
+            ),
+            onPressed: () {
+              _searchController.clear();
+              _dismissSearchFocus();
+              setState(() {
+                _searchQuery = '';
+              });
+            },
+          )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: 13,
+          ),
         ),
+        onTapOutside: (_) => _dismissSearchFocus(),
       ),
     );
   }
 
-  Widget _buildOutfitContent() {
-    return NotificationListener<ScrollUpdateNotification>(
-      onNotification: (notification) {
-        if (notification.metrics.axis != Axis.vertical) return false;
+  Widget _buildAchievementContent() {
+    final items = _getFilteredAchievements();
 
-        final controller = _outfitScrollController;
-        if (!controller.hasClients) return false;
-
-        if (controller.offset < 20 || _isRefreshing) {
-          if (!_isFilterVisible) setState(() => _isFilterVisible = true);
-          return false;
-        }
-
-        if ((notification.scrollDelta ?? 0) > 2 && _isFilterVisible) {
-          setState(() => _isFilterVisible = false);
-        } else if ((notification.scrollDelta ?? 0) < -2 && !_isFilterVisible) {
-          setState(() => _isFilterVisible = true);
-        }
-        return false;
-      },
-      child: RefreshIndicator(
-        onRefresh: () async {
-          setState(() => _isRefreshing = true);
-          await Future.delayed(const Duration(seconds: 1));
-          if (mounted) setState(() => _isRefreshing = false);
-        },
-        color: snackAccent,
-        child: ListView.builder(
-          controller: _outfitScrollController,
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 180),
-          itemCount: 20,
-          itemBuilder: (context, index) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _buildSeriesCard('숲의 주문 (${index + 1})'),
-            );
-          },
+    return RefreshIndicator(
+      key: const PageStorageKey('achievement_tab'),
+      onRefresh: () => _fetchAchievements(showLoading: false),
+      color: snackAccent,
+      child: _isAchievementLoading && _achievementItems.isEmpty
+          ? ListView(
+        controller: _achievementScrollController,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
         ),
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
+        children: const [
+          Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFFFF8E7C),
+            ),
+          ),
+        ],
+      )
+          : _achievementError != null && _achievementItems.isEmpty
+          ? ListView(
+        controller: _achievementScrollController,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
+        children: [
+          _buildAchievementErrorCard(),
+        ],
+      )
+          : items.isEmpty
+          ? ListView(
+        controller: _achievementScrollController,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
+        children: [
+          _buildAchievementEmptyCard(),
+        ],
+      )
+          : GridView.builder(
+        controller: _achievementScrollController,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 180),
+        itemCount: items.length,
+        gridDelegate:
+        const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.66,
+        ),
+        itemBuilder: (context, index) {
+          return _buildAchievementCard(items[index]);
+        },
+      ),
+    );
+  }
+
+  Widget _buildAchievementCard(AchievementItem item) {
+    return _AchievementPressableCard(
+      item: item,
+      baseUrl: _baseUrl,
+      onDismissSearchFocus: _dismissSearchFocus,
+      imageBuilder: ({
+        required String title,
+        required String? imagePath,
+        double padding = 6,
+        double iconSize = 24,
+        BoxFit fit = BoxFit.contain,
+      }) {
+        return _buildAchievementImage(
+          title: title,
+          imagePath: imagePath,
+          padding: padding,
+          iconSize: iconSize,
+          fit: fit,
+        );
+      },
+    );
+  }
+
+  Widget _buildAchievementErrorCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFFF8E7C).withOpacity(0.18),
+        ),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.cloud_off_rounded,
+            size: 34,
+            color: Color(0xFFFF8E7C),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            '업적 목록을 불러오지 못했어요',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF2D3436),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _achievementError ?? '',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF64748B),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          InkWell(
+            onTap: _fetchAchievements,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF8E7C),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text(
+                '다시 불러오기',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAchievementEmptyCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFFF8E7C).withOpacity(0.14),
+        ),
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.emoji_events_outlined,
+            size: 34,
+            color: Color(0xFFFF8E7C),
+          ),
+          SizedBox(height: 10),
+          Text(
+            '표시할 업적이 없어요',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF2D3436),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -430,17 +865,20 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
       onNotification: (notification) {
         if (notification.metrics.axis != Axis.vertical) return false;
 
-        final controller = _furnitureScrollController;
-        if (!controller.hasClients) return false;
+        _dismissSearchFocus();
 
-        if (controller.offset < 20 || _isRefreshing) {
-          if (!_isFilterVisible) setState(() => _isFilterVisible = true);
+        final double delta = notification.scrollDelta ?? 0;
+
+        if (notification.metrics.pixels <= 8) {
+          if (!_isFilterVisible) {
+            setState(() => _isFilterVisible = true);
+          }
           return false;
         }
 
-        if ((notification.scrollDelta ?? 0) > 2 && _isFilterVisible) {
+        if (delta > 2 && _isFilterVisible) {
           setState(() => _isFilterVisible = false);
-        } else if ((notification.scrollDelta ?? 0) < -2 && !_isFilterVisible) {
+        } else if (delta < -2 && !_isFilterVisible) {
           setState(() => _isFilterVisible = true);
         }
 
@@ -454,7 +892,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 180),
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
           itemCount: dummyTitles.length,
           itemBuilder: (context, index) {
             return Padding(
@@ -467,47 +905,48 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
     );
   }
 
-  Widget _buildAchievementContent() {
-    final List<String> dummyTitles = List.generate(
-      12,
-          (index) => '업적 세트 ${index + 1}',
-    );
-
+  Widget _buildOutfitContent() {
     return NotificationListener<ScrollUpdateNotification>(
       onNotification: (notification) {
         if (notification.metrics.axis != Axis.vertical) return false;
 
-        final controller = _achievementScrollController;
-        if (!controller.hasClients) return false;
+        _dismissSearchFocus();
 
-        if (controller.offset < 20 || _isRefreshing) {
-          if (!_isFilterVisible) setState(() => _isFilterVisible = true);
+        final double delta = notification.scrollDelta ?? 0;
+
+        if (notification.metrics.pixels <= 8) {
+          if (!_isFilterVisible) {
+            setState(() => _isFilterVisible = true);
+          }
           return false;
         }
 
-        if ((notification.scrollDelta ?? 0) > 2 && _isFilterVisible) {
+        if (delta > 2 && _isFilterVisible) {
           setState(() => _isFilterVisible = false);
-        } else if ((notification.scrollDelta ?? 0) < -2 && !_isFilterVisible) {
+        } else if (delta < -2 && !_isFilterVisible) {
           setState(() => _isFilterVisible = true);
         }
 
         return false;
       },
       child: RefreshIndicator(
-        key: const PageStorageKey('achievement_tab'),
-        onRefresh: () async {},
+        onRefresh: () async {
+          setState(() => _isRefreshing = true);
+          await Future.delayed(const Duration(seconds: 1));
+          if (mounted) setState(() => _isRefreshing = false);
+        },
         color: snackAccent,
         child: ListView.builder(
-          controller: _achievementScrollController,
+          controller: _outfitScrollController,
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 180),
-          itemCount: dummyTitles.length,
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
+          itemCount: 20,
           itemBuilder: (context, index) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: _buildSeriesCard(dummyTitles[index]),
+              child: _buildSeriesCard('숲의 주문 (${index + 1})'),
             );
           },
         ),
@@ -516,64 +955,54 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   }
 
   Widget _buildFilterAndSortHeader(String type) {
-    List<String> filterList = [];
+    final List<String> filterList = _getCurrentFilterList();
 
-    if (type == '옷') {
-      filterList = ['몰린 옷가게', '금토리 전시회', '축제 패키지', '한정 상품', '이벤트 아이템'];
-    } else if (type == '가구') {
-      filterList = ['주방 가구', '침실 가구', '거실 가구', '야외 장식', '테마 가구'];
-    } else {
-      filterList = ['일반 업적', '비밀 업적', '수집 업적', '성장 업적'];
+    if (!filterList.contains(_selectedFilter) && filterList.isNotEmpty) {
+      _selectedFilter = filterList.first;
     }
 
-    return Padding(
-      padding: EdgeInsets.zero,
+    return SizedBox(
+      height: 38,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: ShaderMask(
-              shaderCallback: (Rect rect) => const LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Colors.black, Colors.transparent],
-                stops: [0.92, 1.0],
-              ).createShader(rect),
-              blendMode: BlendMode.dstIn,
-              child: SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(left: 16, right: 20),
-                  children:
-                  filterList.map((label) => _buildFilterChip(label)).toList(),
-                ),
-              ),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(left: 4, right: 16),
+              itemCount: filterList.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                return _buildFilterChip(filterList[index]);
+              },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16, left: 4),
+          const SizedBox(width: 10),
+          Align(
+            alignment: Alignment.centerRight,
             child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {},
+              borderRadius: BorderRadius.circular(10),
+              onTap: () {
+                // TODO: 정렬 변경
+              },
               child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: EdgeInsets.only(left: 4, right: 4, top: 7, bottom: 7),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       '고가순',
                       style: TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 12.5,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
+                        color: Color(0xFF64748B),
                       ),
                     ),
+                    SizedBox(width: 2),
                     Icon(
                       Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: Color(0xFF64748B),
+                      size: 18,
+                      color: Color(0xFF94A3B8),
                     ),
                   ],
                 ),
@@ -755,14 +1184,13 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
 
   Widget _buildTabBar() {
     return Container(
-      height: 38,
-      margin: EdgeInsets.zero, // 검색창과 가로폭 완전 동일
-      padding: const EdgeInsets.all(3),
+      height: 44,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4F1),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.25),
+          color: const Color(0xFFF3D8D1),
           width: 1,
         ),
       ),
@@ -770,33 +1198,25 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
         controller: _tabController,
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
-        splashFactory: NoSplash.splashFactory,
-
-        // 살짝 밀리는 느낌
+        labelPadding: EdgeInsets.zero,
+        splashBorderRadius: BorderRadius.circular(18),
         indicatorAnimation: TabIndicatorAnimation.elastic,
-
         overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
           if (states.contains(WidgetState.pressed)) {
             return Colors.black.withOpacity(0.03);
           }
           return Colors.transparent;
         }),
-
         indicator: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: const Color(0xFFFFF1EC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFFFDDD4),
+            width: 1,
+          ),
         ),
-
         labelColor: const Color(0xFFFF8E7C),
         unselectedLabelColor: const Color(0xFF94A3B8),
-
         labelStyle: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w800,
@@ -807,11 +1227,10 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
           fontWeight: FontWeight.w600,
           fontFamily: 'SF Pro',
         ),
-
         tabs: const [
-          Tab(text: '옷'),
-          Tab(text: '가구'),
           Tab(text: '업적'),
+          Tab(text: '가구'),
+          Tab(text: '옷'),
         ],
       ),
     );
@@ -820,32 +1239,60 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   Widget _buildFilterChip(String label) {
     final bool isSelected = _selectedFilter == label;
 
-    return GestureDetector(
-      onTap: () => setState(() => _selectedFilter = label),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFFFF8E7C).withOpacity(0.12)
-              : Colors.white.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          if (_selectedFilter == label) return;
+          setState(() {
+            _selectedFilter = label;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFFFF8E7C).withOpacity(0.4)
-                : Colors.black.withOpacity(0.05),
-            width: 1.2,
+                ? const Color(0xFFFFF1EC)
+                : Colors.white.withOpacity(0.76),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFFFDDD4)
+                  : const Color(0xFFE9EEF4),
+              width: 1,
+            ),
+            boxShadow: isSelected
+                ? [
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ]
+                : [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.015),
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected
-                ? const Color(0xFFFF8E7C)
-                : const Color(0xFF64748B),
-            fontSize: 12.5,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.8,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF667085),
+                letterSpacing: -0.1,
+              ),
+            ),
           ),
         ),
       ),
@@ -856,16 +1303,429 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
     _pendingSearchItem = item;
     final title = item.title.toLowerCase();
 
-    if (title.contains('옷') || title.contains('코디')) {
+    if (title.contains('업적')) {
       _tabController.animateTo(0);
     } else if (title.contains('가구')) {
       _tabController.animateTo(1);
-    } else if (title.contains('업적')) {
+    } else if (title.contains('옷') || title.contains('코디')) {
       _tabController.animateTo(2);
     }
 
     setState(() {
-      _selectedFilter = item.title;
+      _searchController.text = item.title;
+      _searchController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _searchController.text.length),
+      );
+      _syncFilterForCurrentTab();
     });
+  }
+}
+
+class AchievementDetailScreen extends StatefulWidget {
+  final AchievementItem achievement;
+  final String baseUrl;
+
+  const AchievementDetailScreen({
+    super.key,
+    required this.achievement,
+    required this.baseUrl,
+  });
+
+  @override
+  State<AchievementDetailScreen> createState() => _AchievementDetailScreenState();
+}
+
+class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
+  late AchievementItem _detailItem;
+  bool _isLoading = true;
+  String? _error;
+
+  String _resolveAchievementImagePath(String path) {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) return '';
+    if (trimmed.startsWith('assets/')) return trimmed;
+    return 'assets/$trimmed';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _detailItem = widget.achievement;
+    _fetchDetail();
+  }
+
+  Future<void> _fetchDetail() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('${widget.baseUrl}/api/achievements/${widget.achievement.id}'),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+
+        if (decoded is Map<String, dynamic>) {
+          _detailItem = AchievementItem.fromJson(decoded);
+        } else if (decoded is Map) {
+          _detailItem =
+              AchievementItem.fromJson(Map<String, dynamic>.from(decoded));
+        }
+      } else {
+        _error = '상세 정보를 불러오지 못했어요.';
+      }
+    } catch (_) {
+      _error = '상세 정보를 불러오지 못했어요.';
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  Widget _buildAchievementImage({
+    required String? imagePath,
+    double iconSize = 48,
+  }) {
+    final assetPath = _resolveAchievementImagePath(imagePath ?? '');
+
+    if (assetPath.isNotEmpty) {
+      return Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => Icon(
+          Icons.emoji_events_outlined,
+          size: iconSize,
+          color: const Color(0xFFFF8E7C),
+        ),
+      );
+    }
+
+    return Center(
+      child: Icon(
+        Icons.emoji_events_outlined,
+        size: iconSize,
+        color: const Color(0xFFFF8E7C),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
+    required String title,
+    required String value,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFFFE0D9),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFFF8E7C),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF2D3436),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePath = _resolveAchievementImagePath(_detailItem.image);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFAF8),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFFFAF8),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF2D3436)),
+        title: const Text(
+          '업적 상세',
+          style: TextStyle(
+            color: Color(0xFF2D3436),
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: const Color(0xFFFFE0D9),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 180,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFAF8),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: const Color(0xFFFFE0D9),
+                          ),
+                        ),
+                        child: _buildAchievementImage(
+                          imagePath: imagePath,
+                          iconSize: 44,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      _detailItem.title,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2D3436),
+                        height: 1.3,
+                      ),
+                    ),
+                    if (_isLoading) ...[
+                      const SizedBox(height: 12),
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              _buildInfoCard(
+                title: '달성 조건',
+                value: _detailItem.condition.isNotEmpty
+                    ? _detailItem.condition
+                    : '아직 달성 조건 정보가 없어요.',
+              ),
+              const SizedBox(height: 12),
+              _buildInfoCard(
+                title: '히든 업적 여부',
+                value: _detailItem.isHidden ? '히든 업적' : '일반 업적',
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AchievementPressableCard extends StatefulWidget {
+  final AchievementItem item;
+  final String baseUrl;
+  final VoidCallback onDismissSearchFocus;
+  final Widget Function({
+  required String title,
+  required String? imagePath,
+  double padding,
+  double iconSize,
+  BoxFit fit,
+  }) imageBuilder;
+
+  const _AchievementPressableCard({
+    required this.item,
+    required this.baseUrl,
+    required this.onDismissSearchFocus,
+    required this.imageBuilder,
+  });
+
+  @override
+  State<_AchievementPressableCard> createState() =>
+      _AchievementPressableCardState();
+}
+
+class _AchievementPressableCardState extends State<_AchievementPressableCard> {
+  bool _isPressed = false;
+
+  void _setPressed(bool value) {
+    if (_isPressed == value) return;
+    setState(() => _isPressed = value);
+  }
+
+  Future<void> _handleTap() async {
+    widget.onDismissSearchFocus();
+
+    await Future.delayed(const Duration(milliseconds: 20));
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AchievementDetailScreen(
+          achievement: widget.item,
+          baseUrl: widget.baseUrl,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => _setPressed(true),
+      onPointerUp: (_) async {
+        await Future.delayed(const Duration(milliseconds: 70));
+        if (!mounted) return;
+        _setPressed(false);
+      },
+      onPointerCancel: (_) => _setPressed(false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _handleTap,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 90),
+          curve: Curves.easeOut,
+          scale: _isPressed ? 0.975 : 1.0,
+          child: Stack(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 90),
+                curve: Curves.easeOut,
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+                decoration: ShapeDecoration(
+                  color: _isPressed
+                      ? const Color(0xFFFFF6F3)
+                      : Colors.white.withOpacity(0.94),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    side: BorderSide(
+                      color: _isPressed
+                          ? const Color(0xFFFF8E7C).withOpacity(0.22)
+                          : const Color(0xFFFF8E7C).withOpacity(0.14),
+                      width: 1,
+                    ),
+                  ),
+                  shadows: _isPressed
+                      ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.025),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                      : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFAF8),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: const Color(0xFFFFE0D9),
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: widget.imageBuilder(
+                            title: widget.item.title,
+                            imagePath: widget.item.image,
+                            padding: 4,
+                            iconSize: 24,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: _isPressed
+                            ? const Color(0xFF2F3A45)
+                            : const Color(0xFF2D3436),
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

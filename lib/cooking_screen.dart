@@ -47,6 +47,15 @@ String _normalizeIngredientDisplayName(String raw) {
     'morel': '그물버섯',
     '그물 버섯': '그물버섯',
 
+    'tomato sauce': '케첩',
+    'tomato_sauce': '케첩',
+    'tomato-sauce': '케첩',
+
+    '토마토소스': '케첩',
+    '토마토 소스': '케첩',
+
+    '케찹': '케첩',
+
     'mushroom': '아무 버섯',
     '버섯': '아무 버섯',
   };
@@ -55,7 +64,7 @@ String _normalizeIngredientDisplayName(String raw) {
 }
 
 String _ingredientFallbackAssetPath(String ingredientName) {
-  final normalized = _normalizeIngredientDisplayName(ingredientName);
+  final normalized = _normalizeIngredientDisplayName(ingredientName).trim();
 
   const map = {
     // 과일류
@@ -84,16 +93,60 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '포도': 'assets/images/crops/grape.webp',
     '가지': 'assets/images/crops/eggplant.webp',
     '토마토': 'assets/images/crops/tomato.webp',
+    '양파': 'assets/images/crops/onion.webp',
+    '호박': 'assets/images/crops/pumpkin.webp',
+    '수박': 'assets/images/crops/watermelon.webp',
+    '무': 'assets/images/crops/white-radish.webp',
 
-    // 기타 재료
-    '달걀': 'assets/images/ingredient_egg.png',
-    '우유': 'assets/images/ingredient_milk.png',
-    '치즈': 'assets/images/ingredient_cheese.png',
-    '버터': 'assets/images/ingredient_butter.png',
-    '고기': 'assets/images/ingredient_meat.png',
-    '식용유': 'assets/images/ingredient_oil.png',
-    '커피 콩': 'assets/images/ingredient_coffee_bean.png',
-    '슈가파우더': 'assets/images/ingredient_sugar_powder.png',
+    // 상점구매 / ingredients 폴더
+    '버터': 'assets/images/ingredients/butter.webp',
+    '치즈': 'assets/images/ingredients/cheese.webp',
+    '커피 콩': 'assets/images/ingredients/coffee-beans.webp',
+    '커피콩': 'assets/images/ingredients/coffee-beans.webp',
+    '식용유': 'assets/images/ingredients/cooking-oil.webp',
+    '요리용 기름': 'assets/images/ingredients/cooking-oil.webp',
+    '달걀': 'assets/images/ingredients/egg.webp',
+    '계란': 'assets/images/ingredients/egg.webp',
+    '살균 달걀': 'assets/images/ingredients/pasteurized-egg.webp',
+    '우유': 'assets/images/ingredients/milk.webp',
+    '고기': 'assets/images/ingredients/meat.webp',
+    '슈가파우더': 'assets/images/ingredients/frosted.webp',
+    '설탕가루': 'assets/images/ingredients/frosted.webp',
+    '프로스티드': 'assets/images/ingredients/frosted.webp',
+    '말차가루': 'assets/images/ingredients/matcha-powder.webp',
+    '말차 파우더': 'assets/images/ingredients/matcha-powder.webp',
+    '쌀가루': 'assets/images/ingredients/rice-flour.webp',
+    '살사소스': 'assets/images/ingredients/salsa-sauce.webp',
+    '살사 소스': 'assets/images/ingredients/salsa-sauce.webp',
+    '찻잎': 'assets/images/ingredients/tea-leaves.webp',
+    '차잎': 'assets/images/ingredients/tea-leaves.webp',
+    '티트리': 'assets/images/ingredients/tea-leaves.webp',
+
+    // 색 사탕류
+    '노란색 사탕': 'assets/images/ingredients/yellow-sugar.webp',
+    '노랑 사탕': 'assets/images/ingredients/yellow-sugar.webp',
+    '초록색 사탕': 'assets/images/ingredients/green-sugar.webp',
+    '초록 사탕': 'assets/images/ingredients/green-sugar.webp',
+    '파란색 사탕': 'assets/images/ingredients/blue-sugar.webp',
+    '파랑 사탕': 'assets/images/ingredients/blue-sugar.webp',
+    '남색 사탕': 'assets/images/ingredients/indigo-sugar.webp',
+    '인디고 사탕': 'assets/images/ingredients/indigo-sugar.webp',
+    '보라색 사탕': 'assets/images/ingredients/violet-sugar.webp',
+    '보라 사탕': 'assets/images/ingredients/violet-sugar.webp',
+    '주황색 사탕': 'assets/images/ingredients/orange-sugar.webp',
+    '주황 사탕': 'assets/images/ingredients/orange-sugar.webp',
+    '빨간색 사탕': 'assets/images/ingredients/red-sugar.webp',
+    '빨강 사탕': 'assets/images/ingredients/red-sugar.webp',
+    '빨간 콩': 'assets/images/ingredients/red-bean.webp',
+    '레드빈': 'assets/images/ingredients/red-bean.webp',
+    '봄날 카라멜 슈가': 'assets/images/ingredients/springday-brown-sugar.webp',
+
+    // 완성 요리인데 다른 요리 재료로도 쓰이는 것들
+    '케첩': 'assets/images/gourmet/ketchup.png',
+    '마요': 'assets/images/gourmet/mayonnaise.png',
+    '잼': 'assets/images/gourmet/jam.png',
+    '토마토소스': 'assets/images/gourmet/tomato-sauce.png',
+    '토마토 소스': 'assets/images/gourmet/tomato-sauce.png',
 
     // 범용 아이콘
     '아무 채소': 'assets/images/icon_veg_any.png',
