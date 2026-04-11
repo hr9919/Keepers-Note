@@ -490,6 +490,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   final ScrollController _recipeScrollController = ScrollController();
   final ScrollController _materialScrollController = ScrollController();
 
+
   void _dismissSearchFocus() {
     if (_searchFocusNode.hasFocus) {
       _searchFocusNode.unfocus();
@@ -577,6 +578,9 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _recipeScrollController.addListener(() => _scrollListener(_recipeScrollController));
     _materialScrollController.addListener(() => _scrollListener(_materialScrollController));
 
+    _attachScrollListener(_recipeScrollController);
+    _attachScrollListener(_materialScrollController);
+
     _loadFavorites();
     _fetchRecipeData();
     _fetchMaterialData();
@@ -599,152 +603,164 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   }
 
   @override
-  void didUpdateWidget(covariant CookingScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (widget.initialSearchItem != null &&
-        widget.initialSearchItem != oldWidget.initialSearchItem) {
-      _pendingSearchItem = widget.initialSearchItem;
-      _applySearchItem(widget.initialSearchItem!);
-      return;
-    }
-
-    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
-      _clearSearchState();
-    }
-  }
-
-  // 🔥 에러 해결 핵심: 탭 전환 시 인덱스를 안전하게 계산하여 반환
-  ScrollController _getCurrentController() {
-    int index = _tabController.index.clamp(0, 1);
-    if (index == 0) return _recipeScrollController;
-    return _materialScrollController;
-  }
-
-  @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
-    final double appBarHeight = topPadding + 166;
     final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
+    final bool showFilterInAppBar = _isFilterVisible;
+    final double appBarHeight = topPadding +
+        (showFilterInAppBar ? 214 : 170);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/bg_gradient.png',
-              fit: BoxFit.cover,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _dismissSearchFocus,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/bg_gradient.png',
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-          Positioned.fill(
-            child: Column(
-              children: [
-                SizedBox(height: appBarHeight - 8),
-                AnimatedBuilder(
-                  animation: _tabController,
-                  builder: (context, child) {
-                    final controller = _getCurrentController();
-                    final double offset = controller.hasClients ? controller.offset : 0;
+            Positioned.fill(
+              child: Column(
+                children: [
+                  SizedBox(height: appBarHeight - 3),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      physics: const BouncingScrollPhysics(),
+                      children: [
+                        _buildRecipeTabContent(),
+                        _buildMaterialTabContent(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildIntegratedAppBar(context, topPadding),
+            ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              right: 20,
+              bottom: keyboardInset > 0 ? 24 : 140,
+              child: _buildScrollToTopButton(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOutCubic,
-                      height: (_isFilterVisible || offset < 20) ? 40 : 0,
-                      child: SingleChildScrollView(
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 200),
-                          opacity: (_isFilterVisible || offset < 20) ? 1.0 : 0.0,
-                          child: _buildFilterBarArea(),
+  ScrollController _getCurrentController() {
+    if (_tabController.index == 0) return _recipeScrollController;
+    return _materialScrollController;
+  }
+
+  // --- 통합 UI 함수 (도감 디자인) ---
+  Widget _buildIntegratedAppBar(BuildContext context, double topPadding) {
+    final bool showFilterInAppBar = _isFilterVisible;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.88),
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24),
+        ),
+        border: Border(
+          bottom: BorderSide(
+            color: const Color(0xFFFF8E7C).withOpacity(0.08),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF8E7C).withOpacity(0.03),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(24),
+              ),
+            ),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_menu.svg',
+                            onTap: widget.openDrawer ?? () {},
+                          ),
+                          const Spacer(),
+                          _buildAppTitle(),
+                          const Spacer(),
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_settings.svg',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SettingsScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildTabBar(),
+                      const SizedBox(height: 8),
+                      _buildIntegratedSearchBar(),
+                      if (showFilterInAppBar) ...[
+                        const SizedBox(height: 10),
+                        _buildFilterBarArea(),
+                      ],
+                    ],
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  left: 18,
+                  right: 18,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8E7C).withOpacity(0.62),
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(3),
                         ),
                       ),
-                    );
-                  },
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    physics: const BouncingScrollPhysics(),
-                    children: [
-                      _buildRecipeTabContent(),
-                      _buildMaterialTabContent(),
-                    ],
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildIntegratedAppBar(context, topPadding),
-          ),
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            right: 20,
-            bottom: keyboardInset > 0 ? 24 : 140,
-            child: _buildScrollToTopButton(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- 통합 UI 함수 (도감 디자인) ---
-  Widget _buildIntegratedAppBar(BuildContext context, double topPadding) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          stops: const [0.0, 0.42, 1.0],
-          colors: [
-            const Color(0xFFFF8E7C).withOpacity(0.12),
-            const Color(0xFFFFCFC7).withOpacity(0.05),
-            const Color(0xFFFFFAF8),
-          ],
         ),
-        borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(24),
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_menu.svg',
-                onTap: widget.openDrawer ?? () {},
-              ),
-              const Spacer(),
-              _buildAppTitle(),
-              const Spacer(),
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_settings.svg',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SettingsScreen(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          _buildTabBar(),
-
-          const SizedBox(height: 8),
-
-          _buildIntegratedSearchBar(),
-        ],
       ),
     );
   }
@@ -763,14 +779,13 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   Widget _buildTabBar() {
     return Container(
-      height: 38,
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.all(3),
+      height: 44,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4F1),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.25),
+          color: const Color(0xFFF3D8D1),
           width: 1,
         ),
       ),
@@ -778,7 +793,8 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         controller: _tabController,
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
-        splashFactory: NoSplash.splashFactory,
+        labelPadding: EdgeInsets.zero,
+        splashBorderRadius: BorderRadius.circular(18),
         indicatorAnimation: TabIndicatorAnimation.elastic,
         overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
           if (states.contains(WidgetState.pressed)) {
@@ -787,15 +803,12 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           return Colors.transparent;
         }),
         indicator: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: const Color(0xFFFFF1EC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFFFDDD4),
+            width: 1,
+          ),
         ),
         labelColor: const Color(0xFFFF8E7C),
         unselectedLabelColor: const Color(0xFF94A3B8),
@@ -821,16 +834,16 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFAF8),
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withOpacity(0.78),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.22),
-          width: 1.2,
+          color: const Color(0xFFF1DED8),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 6,
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -838,43 +851,47 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       child: TextField(
         controller: _searchController,
         focusNode: _searchFocusNode,
-        textAlignVertical: TextAlignVertical.center,
+        textInputAction: TextInputAction.search,
         style: const TextStyle(
           fontSize: 14,
-          color: Color(0xFF4A4543),
           fontWeight: FontWeight.w600,
+          color: Color(0xFF2D3436),
         ),
         decoration: InputDecoration(
-          isDense: true,
-          border: InputBorder.none,
-          prefixIcon: const Padding(
-            padding: EdgeInsets.all(12),
-            child: Icon(
-              Icons.search_rounded,
-              size: 20,
-              color: Color(0xFFFF8E7C),
-            ),
-          ),
           hintText: _tabController.index == 0
               ? '음식 이름을 검색해보세요.'
               : '요리 재료를 검색해보세요.',
           hintStyle: const TextStyle(
-            color: Color(0xFFA8A29E),
             fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF9AA4B2),
           ),
-          contentPadding: const EdgeInsets.fromLTRB(0, 0, 16, 0),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            color: Color(0xFFE58F7C),
+            size: 24,
+          ),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
-            icon: const Icon(Icons.close, size: 18),
+            splashRadius: 18,
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Color(0xFFB0B8C4),
+              size: 20,
+            ),
             onPressed: () {
               _searchController.clear();
               _dismissSearchFocus();
             },
           )
               : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: 13,
+          ),
         ),
         onTapOutside: (_) => _dismissSearchFocus(),
-        onSubmitted: (_) => _dismissSearchFocus(),
       ),
     );
   }
@@ -1165,19 +1182,32 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     );
   }
 
-  void _handleIngredientTapFromRecipeDetail(RecipeIngredientDetail ingredient) {
-    final String? targetId = ingredient.targetId;
-    if (targetId == null || targetId.isEmpty) return;
+  void _attachScrollListener(ScrollController controller) {
+    double lastOffset = 0;
 
-    final String? mapFilterKey =
-    _mapFilterKeyForMaterial(ingredient.ingredientNameKo);
+    controller.addListener(() {
+      if (!mounted || !controller.hasClients) return;
 
-    if (mapFilterKey != null) {
-      _openMapForMaterialResource(mapFilterKey);
-      return;
-    }
+      final offset = controller.offset;
 
-    _jumpToMaterialById(targetId);
+      if (offset <= 8) {
+        if (!_isFilterVisible) {
+          setState(() => _isFilterVisible = true);
+        }
+        lastOffset = offset;
+        return;
+      }
+
+      final delta = offset - lastOffset;
+
+      if (delta > 4 && _isFilterVisible) {
+        setState(() => _isFilterVisible = false);
+      } else if (delta < -4 && !_isFilterVisible) {
+        setState(() => _isFilterVisible = true);
+      }
+
+      lastOffset = offset;
+    });
   }
 
   void _openMapForMaterialResource(String resourceFilterKey) {
@@ -1384,175 +1414,169 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: ShapeDecoration(
-            color: isHighlighted
-                ? const Color(0xFFFFF4D8)
-                : Colors.white.withOpacity(0.92),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(
-                color: isHighlighted
-                    ? const Color(0xFFFFB27A).withOpacity(0.6)
-                    : const Color(0xFFFF8E7C).withOpacity(0.12),
-                width: 1,
-              ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
             ),
-            shadows: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+          ],
+        ),
+        child: Material(
+          color: isHighlighted
+              ? const Color(0xFFFFF4D8)
+              : Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(16),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             splashColor: const Color(0xFFFF8E7C).withOpacity(0.08),
             highlightColor: const Color(0xFFFF8E7C).withOpacity(0.04),
             onTap: () => _openRecipeDetail(item),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 116,
-                    height: 116,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFFAF8),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFFFF8E7C).withOpacity(0.15),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isHighlighted
+                      ? const Color(0xFFFFB27A).withOpacity(0.6)
+                      : const Color(0xFFFF8E7C).withOpacity(0.12),
+                  width: 1,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 116,
+                      height: 116,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFAF8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                        ),
                       ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: recipeImagePath.isNotEmpty
-                          ? Image.asset(
-                        recipeImagePath,
-                        fit: BoxFit.contain,
-                        errorBuilder: (c, e, s) => const Icon(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: recipeImagePath.isNotEmpty
+                            ? Image.asset(
+                          recipeImagePath,
+                          fit: BoxFit.contain,
+                          errorBuilder: (c, e, s) => const Icon(
+                            Icons.restaurant_menu,
+                            color: Colors.grey,
+                          ),
+                        )
+                            : const Icon(
                           Icons.restaurant_menu,
                           color: Colors.grey,
                         ),
-                      )
-                          : const Icon(
-                        Icons.restaurant_menu,
-                        color: Colors.grey,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 116),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 제목 + 하트
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 2, right: 8),
-                                  child: AutoSizeText(
-                                    _displayRecipeName(item),
-                                    maxLines: 2,
-                                    minFontSize: 12,
-                                    stepGranularity: 0.5,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF333333),
-                                      height: 1.2,
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 116),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 2, right: 8),
+                                    child: AutoSizeText(
+                                      _displayRecipeName(item),
+                                      maxLines: 2,
+                                      minFontSize: 12,
+                                      stepGranularity: 0.5,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF333333),
+                                        height: 1.2,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              GestureDetector(
-                                onTap: () => _toggleFavorite(item.id),
-                                behavior: HitTestBehavior.opaque,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 2,
+                                GestureDetector(
+                                  onTap: () => _toggleFavorite(item.id),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 2,
+                                    ),
+                                    child: Icon(
+                                      isFavorite
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      size: 24,
+                                      color: isFavorite
+                                          ? const Color(0xFFFF8E7C)
+                                          : const Color(0xFFD9D9D9),
+                                    ),
                                   ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: Wrap(
+                                    spacing: 5,
+                                    runSpacing: 4,
+                                    children: [
+                                      _buildSmallTag('요리 ${item.level}레벨'),
+                                      if (_isEventRecipe(item))
+                                        _buildSmallTag('이벤트', isEvent: true),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Padding(
+                                  padding: EdgeInsets.only(right: 2),
                                   child: Icon(
-                                    isFavorite
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    size: 24,
-                                    color: isFavorite
-                                        ? const Color(0xFFFF8E7C)
-                                        : const Color(0xFFD9D9D9),
+                                    Icons.chevron_right_rounded,
+                                    size: 22,
+                                    color: Color(0xFFB8C2CC),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          // 레벨칩 + 이벤트칩 + > 버튼
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: Wrap(
-                                  spacing: 5,
-                                  runSpacing: 4,
-                                  children: [
-                                    _buildSmallTag('요리 ${item.level}레벨'),
-                                    if (_isEventRecipe(item))
-                                      _buildSmallTag('이벤트', isEvent: true),
-                                  ],
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 34,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: item.ingredientSummaries.isNotEmpty
+                                      ? _buildIngredientSummaryIcons(
+                                    item.ingredientSummaries,
+                                  )
+                                      : _buildIngredientIcons(item.ingredients),
                                 ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Padding(
-                                padding: EdgeInsets.only(right: 2),
-                                child: Icon(
-                                  Icons.chevron_right_rounded,
-                                  size: 22,
-                                  color: Color(0xFFB8C2CC),
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          SizedBox(
-                            height: 34,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: item.ingredientSummaries.isNotEmpty
-                                    ? _buildIngredientSummaryIcons(
-                                  item.ingredientSummaries,
-                                )
-                                    : _buildIngredientIcons(item.ingredients),
                               ),
                             ),
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: _buildPriceButton(item.prices),
-                          ),
-                        ],
+                            const SizedBox(height: 6),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: _buildPriceButton(item.prices),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -1619,140 +1643,141 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: ShapeDecoration(
-            color: isHighlighted
-                ? const Color(0xFFFFF4D8)
-                : Colors.white.withOpacity(0.92),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(
-                color: isHighlighted
-                    ? const Color(0xFFFFB27A).withOpacity(0.55)
-                    : const Color(0xFFFF8E7C).withOpacity(0.12),
-                width: 1,
-              ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
             ),
-            shadows: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+          ],
+        ),
+        child: Material(
+          color: isHighlighted
+              ? const Color(0xFFFFF4D8)
+              : Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(16),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             splashColor: const Color(0xFFFF8E7C).withOpacity(0.08),
             highlightColor: const Color(0xFFFF8E7C).withOpacity(0.04),
             onTap: () => _openMaterialDetail(item),
-            child: IntrinsicHeight(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFFAF8),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
-                          width: 1,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isHighlighted
+                      ? const Color(0xFFFFB27A).withOpacity(0.55)
+                      : const Color(0xFFFF8E7C).withOpacity(0.12),
+                  width: 1,
+                ),
+              ),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 88,
+                        height: 88,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFAF8),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                            width: 1,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: _buildIngredientImage(
+                            ingredientNameKo: item.nameKo,
+                            imagePath: item.image,
+                            padding: 8,
+                            iconSize: 28,
+                          ),
                         ),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: _buildIngredientImage(
-                          ingredientNameKo: item.nameKo,
-                          imagePath: item.image,
-                          padding: 8,
-                          iconSize: 28,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    item.nameKo,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF333333),
-                                      height: 1.2,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      item.nameKo,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF333333),
+                                        height: 1.2,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              GestureDetector(
-                                onTap: () => _toggleFavorite(item.id),
-                                behavior: HitTestBehavior.opaque,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 2,
+                                const SizedBox(width: 10),
+                                GestureDetector(
+                                  onTap: () => _toggleFavorite(item.id),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 2,
+                                    ),
+                                    child: Icon(
+                                      isFavorite
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      size: 24,
+                                      color: isFavorite
+                                          ? const Color(0xFFFF8E7C)
+                                          : const Color(0xFFD9D9D9),
+                                    ),
                                   ),
+                                ),
+                                const SizedBox(width: 12),
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 2, right: 2),
                                   child: Icon(
-                                    isFavorite
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    size: 24,
-                                    color: isFavorite
-                                        ? const Color(0xFFFF8E7C)
-                                        : const Color(0xFFD9D9D9),
+                                    Icons.chevron_right_rounded,
+                                    size: 21,
+                                    color: Color(0xFFB8C2CC),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              const Padding(
-                                padding: EdgeInsets.only(top: 2, right: 2),
-                                child: Icon(
-                                  Icons.chevron_right_rounded,
-                                  size: 21,
-                                  color: Color(0xFFB8C2CC),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 4,
-                            runSpacing: 4,
-                            children: [
-                              if (!isShopItem)
-                                _buildSmallTag('원예 ${item.level}레벨'),
-
-                              _buildSmallTag(typeLabel, isEvent: isShopItem),
-                            ],
-                          ),
-                          const Spacer(),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: isShopItem
-                                ? _buildPurchasePriceButton(purchasePrice)
-                                : _buildPriceButton(item.prices),
-                          ),
-                        ],
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              children: [
+                                if (!isShopItem)
+                                  _buildSmallTag('원예 ${item.level}레벨'),
+                                _buildSmallTag(typeLabel, isEvent: isShopItem),
+                              ],
+                            ),
+                            const Spacer(),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: isShopItem
+                                  ? _buildPurchasePriceButton(purchasePrice)
+                                  : _buildPriceButton(item.prices),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2463,65 +2488,74 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   Widget _buildFilterBarArea() {
     final filters = _currentFilters();
 
-    return Padding(
-      padding: EdgeInsets.zero,
+    if (!filters.contains(_selectedFilter) && filters.isNotEmpty) {
+      _selectedFilter = filters.first;
+    }
+
+    return SizedBox(
+      height: 38,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: ShaderMask(
-              shaderCallback: (Rect rect) => const LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Colors.black, Colors.transparent],
-                stops: [0.92, 1.0],
-              ).createShader(rect),
-              blendMode: BlendMode.dstIn,
-              child: SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(left: 16, right: 20),
-                  children: filters.map((filter) => _buildFilterChip(filter)).toList(),
-                ),
-              ),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(left: 4, right: 16),
+              itemCount: filters.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                return _buildFilterChip(filters[index]);
+              },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16, left: 4),
+          const SizedBox(width: 10),
+          Align(
+            alignment: Alignment.centerRight,
             child: PopupMenuButton<String>(
               onSelected: _onSortSelected,
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: '이름순', child: Text('이름순')),
-                PopupMenuItem(value: '가격순', child: Text('가격순')),
-                PopupMenuItem(value: '좋아요순', child: Text('좋아요순')),
-              ],
-              offset: const Offset(0, 28),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
               color: Colors.white,
-              elevation: 8,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _selectedSort,
-                      style: const TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
+              elevation: 10,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(
+                  color: Color(0xFFE9EEF4),
+                  width: 1,
+                ),
+              ),
+              itemBuilder: (context) => [
+                _buildSortPopupItem('이름순'),
+                _buildSortPopupItem('가격순'),
+                _buildSortPopupItem('좋아요순'),
+              ],
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: null,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    left: 4,
+                    right: 4,
+                    top: 7,
+                    bottom: 7,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _selectedSort,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                        ),
                       ),
-                    ),
-                    const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: Color(0xFF64748B),
-                    ),
-                  ],
+                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2531,16 +2565,96 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     );
   }
 
+  PopupMenuItem<String> _buildSortPopupItem(String value) {
+    final bool isSelected = _selectedSort == value;
+
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                color: isSelected
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF5B5652),
+              ),
+            ),
+          ),
+          if (isSelected)
+            const Icon(
+              Icons.check_rounded,
+              size: 16,
+              color: Color(0xFFFF8E7C),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFilterChip(String label) {
-    bool isSelected = _selectedFilter == label;
-    return GestureDetector(
-      onTap: () { _dismissKeyboard(); setState(() => _selectedFilter = label); _applyFilters(); },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(color: isSelected ? const Color(0xFFFF8E7C).withOpacity(0.12) : Colors.white.withOpacity(0.6), borderRadius: BorderRadius.circular(20), border: Border.all(color: isSelected ? const Color(0xFFFF8E7C).withOpacity(0.4) : Colors.black.withOpacity(0.05), width: 1.2)),
-        child: Text(label, style: TextStyle(color: isSelected ? const Color(0xFFFF8E7C) : const Color(0xFF64748B), fontSize: 12.5, fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600)),
+    final bool isSelected = _selectedFilter == label;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          if (_selectedFilter == label) return;
+          setState(() {
+            _selectedFilter = label;
+          });
+          _applyFilters();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFFFFF1EC)
+                : Colors.white.withOpacity(0.76),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFFFDDD4)
+                  : const Color(0xFFE9EEF4),
+              width: 1,
+            ),
+            boxShadow: isSelected
+                ? [
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ]
+                : [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.015),
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.8,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF667085),
+                letterSpacing: -0.1,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

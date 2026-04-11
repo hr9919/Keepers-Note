@@ -342,7 +342,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
     }).toList();
   }
 
-  @override@override
+  @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
 
@@ -371,7 +371,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
             Positioned.fill(
               child: Column(
                 children: [
-                  SizedBox(height: appBarHeight - 24),
+                  SizedBox(height: appBarHeight - 22),
                   Expanded(
                     child: TabBarView(
                       controller: _tabController,
