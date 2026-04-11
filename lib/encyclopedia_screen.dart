@@ -168,9 +168,11 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
             right: 0,
             child: _buildIntegratedAppBar(context, topPadding),
           ),
-          Positioned(
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
             right: 20,
-            bottom: 140,
+            bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? 24 : 140,
             child: _buildScrollToTopButton(),
           ),
         ],

@@ -17,6 +17,15 @@ enum CookingTabType {
   material,
 }
 
+enum CookingMaterialCategoryType {
+  crop,
+  store,
+  mushroom,
+  fish,
+  insect,
+  etc,
+}
+
 class GlobalSearchItem {
   final String id;
   final String title;
@@ -25,6 +34,7 @@ class GlobalSearchItem {
   final SearchTargetScreen screen;
   final GatheringTabType? gatheringTab;
   final CookingTabType? cookingTab;
+  final CookingMaterialCategoryType? cookingMaterialCategory;
   final String keyword;
 
   const GlobalSearchItem({
@@ -35,6 +45,7 @@ class GlobalSearchItem {
     required this.screen,
     this.gatheringTab,
     this.cookingTab,
+    this.cookingMaterialCategory,
     required this.keyword,
   });
 }

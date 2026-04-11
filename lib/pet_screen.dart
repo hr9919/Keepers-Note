@@ -478,7 +478,13 @@ class _PetScreenState extends State<PetScreen>
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
+    final double safeBottom = MediaQuery.of(context).padding.bottom;
     final double appBarHeight = topPadding + 166;
+    final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
+    final double scrollTopBottom = keyboardInset > 0
+        ? 24
+        : safeBottom + 88;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -545,9 +551,11 @@ class _PetScreenState extends State<PetScreen>
             right: 0,
             child: _buildIntegratedAppBar(context, topPadding),
           ),
-          Positioned(
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
             right: 20,
-            bottom: 115,
+            bottom: scrollTopBottom,
             child: _buildScrollToTopButton(),
           ),
         ],
@@ -1105,7 +1113,7 @@ class _PetScreenState extends State<PetScreen>
               Expanded(
                 child: pets.isEmpty
                     ? Text(
-                  isCatTab ? '내 고양이 프로필 보기' : '내 강아지 프로필 보기',
+                  isCatTab ? '내 고양이 프로필을 추가해 보세요.' : '내 강아지 프로필을 추가해 보세요.',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

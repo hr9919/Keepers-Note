@@ -236,6 +236,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   String _selectedFilter = '전체';
   String _searchQuery = '';
@@ -287,6 +288,11 @@ class _GatheringScreenState extends State<GatheringScreen>
     if (index == 1) return ['전체', '숲', '호수', '바다', '도시근교'];
     if (index == 2) return ['전체', '숲', '들판', '호수', '바다'];
     return ['전체', '꽃밭', '숲', '농장', '온실'];
+  }
+
+  void _dismissKeyboard() {
+    _searchFocusNode.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   void _attachScrollListener(ScrollController controller) {
@@ -431,6 +437,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     _tabController.dispose();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _searchFocusNode.dispose();
 
     _fishScrollController.dispose();
     _birdScrollController.dispose();
@@ -833,6 +840,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   void _onFilterSelected(String filter) {
+    _dismissKeyboard();
     setState(() {
       _selectedFilter = filter;
     });
@@ -840,6 +848,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   void _onSortSelected(String sort) {
+    _dismissKeyboard();
     setState(() {
       _selectedSort = sort;
     });
@@ -1122,9 +1131,11 @@ class _GatheringScreenState extends State<GatheringScreen>
             right: 0,
             child: _buildIntegratedAppBar(context, topPadding),
           ),
-          Positioned(
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
             right: 20,
-            bottom: 140,
+            bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? 24 : 140,
             child: _buildScrollToTopButton(),
           ),
         ],
@@ -1208,6 +1219,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     return GestureDetector(
       onTap: () {
+        _dismissKeyboard();
         setState(() => _selectedFilter = label);
         _applyFilters();
       },
@@ -2001,7 +2013,7 @@ class _GatheringScreenState extends State<GatheringScreen>
           Tab(text: '낚시'),
           Tab(text: '새 관찰'),
           Tab(text: '곤충채집'),
-          Tab(text: '자연채집'),
+          Tab(text: '꽃'),
         ],
       ),
     );
@@ -2133,7 +2145,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         hintText = '곤충 이름을 검색해보세요.';
         break;
       case 3:
-        hintText = '자연채집 이름을 검색해보세요.';
+        hintText = '꽃 이름을 검색해보세요.';
         break;
     }
 
@@ -2156,6 +2168,7 @@ class _GatheringScreenState extends State<GatheringScreen>
       ),
       child: TextField(
         controller: _searchController,
+        focusNode: _searchFocusNode,
         textAlignVertical: TextAlignVertical.center,
         style: const TextStyle(
           fontSize: 14,
@@ -2182,7 +2195,10 @@ class _GatheringScreenState extends State<GatheringScreen>
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
             icon: const Icon(Icons.close, size: 18),
-            onPressed: () => _searchController.clear(),
+            onPressed: () {
+              _searchController.clear();
+              _dismissKeyboard();
+            },
           )
               : null,
         ),
@@ -2315,6 +2331,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   void _showPriceBottomSheet(List<int> prices) {
+    _dismissKeyboard();
     final visiblePrices = <Map<String, dynamic>>[];
 
     for (int i = 0; i < prices.length; i++) {

@@ -7,106 +7,15 @@ class GlobalSearchService {
 
   static Future<List<GlobalSearchItem>> loadAllItems() async {
     final List<GlobalSearchItem> results = [];
+    final Set<String> addedIds = {};
 
     try {
-      final fishRes = await http.get(Uri.parse('$_baseUrl/api/fish'));
-      if (fishRes.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(utf8.decode(fishRes.bodyBytes));
-        results.addAll(
-          data.map((e) => GlobalSearchItem(
-            id: 'fish_${e['id']}',
-            title: e['nameKo'] ?? e['name'] ?? '',
-            subtitle: '채집 · 낚시',
-            iconPath: _assetPath(e['image']),
-            screen: SearchTargetScreen.gathering,
-            gatheringTab: GatheringTabType.fish,
-            keyword: '${e['nameKo'] ?? ''} ${e['name'] ?? ''}'.toLowerCase(),
-          )),
-        );
-      }
-
-      final insectRes = await http.get(Uri.parse('$_baseUrl/api/insects'));
-      if (insectRes.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(utf8.decode(insectRes.bodyBytes));
-        results.addAll(
-          data.map((e) => GlobalSearchItem(
-            id: 'insect_${e['id']}',
-            title: e['nameKo'] ?? e['name'] ?? '',
-            subtitle: '채집 · 곤충 채집',
-            iconPath: _assetPath(e['image']),
-            screen: SearchTargetScreen.gathering,
-            gatheringTab: GatheringTabType.insect,
-            keyword: '${e['nameKo'] ?? ''} ${e['name'] ?? ''}'.toLowerCase(),
-          )),
-        );
-      }
-
-      final birdRes = await http.get(Uri.parse('$_baseUrl/api/birds'));
-      if (birdRes.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(utf8.decode(birdRes.bodyBytes));
-        results.addAll(
-          data.map((e) => GlobalSearchItem(
-            id: 'bird_${e['id']}',
-            title: e['nameKo'] ?? e['name'] ?? '',
-            subtitle: '채집 · 새 관찰',
-            iconPath: _assetPath(e['image']),
-            screen: SearchTargetScreen.gathering,
-            gatheringTab: GatheringTabType.bird,
-            keyword: '${e['nameKo'] ?? ''} ${e['name'] ?? ''}'.toLowerCase(),
-          )),
-        );
-      }
-
-      final plantRes = await http.get(Uri.parse('$_baseUrl/api/gardening'));
-      if (plantRes.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(utf8.decode(plantRes.bodyBytes));
-        results.addAll(
-          data.map((e) => GlobalSearchItem(
-            id: 'plant_${e['id']}',
-            title: e['nameKo'] ?? e['name'] ?? '',
-            subtitle: '채집 · 원예',
-            iconPath: _assetPath(e['image']),
-            screen: SearchTargetScreen.gathering,
-            gatheringTab: GatheringTabType.plant,
-            keyword: '${e['nameKo'] ?? ''} ${e['name'] ?? ''}'.toLowerCase(),
-          )),
-        );
-      }
-
-      // 요리 레시피만 추가
-      final gourmetRes = await http.get(Uri.parse('$_baseUrl/api/gourmet'));
-      if (gourmetRes.statusCode == 200) {
-        final List<dynamic> data =
-        jsonDecode(utf8.decode(gourmetRes.bodyBytes));
-
-        results.addAll(
-          data.map((e) {
-            final rawName = (e['nameKo'] ?? e['name_ko'] ?? e['name'] ?? '')
-                .toString()
-                .trim();
-
-            final displayName = rawName
-                .replaceAll(' (이벤트)', '')
-                .replaceAll('(이벤트)', '')
-                .trim();
-
-            final isEvent = rawName.contains('(이벤트)');
-
-            return GlobalSearchItem(
-              id: 'gourmet_${e['id']}',
-              title: displayName,
-              subtitle: isEvent ? '요리 · 레시피 · 이벤트' : '요리 · 레시피',
-              iconPath: _recipeAssetPath(e['image']),
-              screen: SearchTargetScreen.cooking,
-              cookingTab: CookingTabType.recipe,
-              keyword:
-              '$displayName $rawName ${e['name'] ?? ''}'.toLowerCase(),
-            );
-          }),
-        );
-      }
-
-      // crop api 만들어지면 여기다가 요리 재료 추가
+      await _loadFish(results, addedIds);
+      await _loadInsects(results, addedIds);
+      await _loadBirds(results, addedIds);
+      await _loadPlants(results, addedIds);
+      await _loadGourmetRecipes(results, addedIds);
+      await _loadCookingMaterials(results, addedIds);
     } catch (e) {
       print('전체 검색 데이터 로드 실패: $e');
     }
@@ -143,15 +52,325 @@ class GlobalSearchService {
     return filtered.take(8).toList();
   }
 
-  static String _assetPath(String? image) {
-    if (image == null || image.isEmpty) return 'assets/images/default.png';
+  static Future<void> _loadFish(
+      List<GlobalSearchItem> results,
+      Set<String> addedIds,
+      ) async {
+    final res = await http.get(Uri.parse('$_baseUrl/api/fish'));
+    if (res.statusCode != 200) return;
 
-    String fullPath = image.startsWith('assets/') ? image : 'assets/$image';
+    final List<dynamic> data = jsonDecode(utf8.decode(res.bodyBytes));
+    for (final e in data) {
+      final item = GlobalSearchItem(
+        id: 'fish_${e['id']}',
+        title: _displayName(e),
+        subtitle: '채집 · 낚시',
+        iconPath: _assetPath(e['image']),
+        screen: SearchTargetScreen.gathering,
+        gatheringTab: GatheringTabType.fish,
+        keyword: _keywordOf(e),
+      );
+      _addIfNotExists(results, addedIds, item);
+    }
+  }
 
-    if (!fullPath.endsWith('.png') &&
-        !fullPath.endsWith('.jpg') &&
-        !fullPath.endsWith('.jpeg') &&
-        !fullPath.endsWith('.webp')) {
+  static Future<void> _loadInsects(
+      List<GlobalSearchItem> results,
+      Set<String> addedIds,
+      ) async {
+    final res = await http.get(Uri.parse('$_baseUrl/api/insects'));
+    if (res.statusCode != 200) return;
+
+    final List<dynamic> data = jsonDecode(utf8.decode(res.bodyBytes));
+    for (final e in data) {
+      final item = GlobalSearchItem(
+        id: 'insect_${e['id']}',
+        title: _displayName(e),
+        subtitle: '채집 · 곤충 채집',
+        iconPath: _assetPath(e['image']),
+        screen: SearchTargetScreen.gathering,
+        gatheringTab: GatheringTabType.insect,
+        keyword: _keywordOf(e),
+      );
+      _addIfNotExists(results, addedIds, item);
+    }
+  }
+
+  static Future<void> _loadBirds(
+      List<GlobalSearchItem> results,
+      Set<String> addedIds,
+      ) async {
+    final res = await http.get(Uri.parse('$_baseUrl/api/birds'));
+    if (res.statusCode != 200) return;
+
+    final List<dynamic> data = jsonDecode(utf8.decode(res.bodyBytes));
+    for (final e in data) {
+      final item = GlobalSearchItem(
+        id: 'bird_${e['id']}',
+        title: _displayName(e),
+        subtitle: '채집 · 새 관찰',
+        iconPath: _assetPath(e['image']),
+        screen: SearchTargetScreen.gathering,
+        gatheringTab: GatheringTabType.bird,
+        keyword: _keywordOf(e),
+      );
+      _addIfNotExists(results, addedIds, item);
+    }
+  }
+
+  static Future<void> _loadPlants(
+      List<GlobalSearchItem> results,
+      Set<String> addedIds,
+      ) async {
+    final res = await http.get(Uri.parse('$_baseUrl/api/gardening'));
+    if (res.statusCode != 200) return;
+
+    final List<dynamic> data = jsonDecode(utf8.decode(res.bodyBytes));
+    for (final e in data) {
+      final item = GlobalSearchItem(
+        id: 'plant_${e['id']}',
+        title: _displayName(e),
+        subtitle: '채집 · 원예',
+        iconPath: _assetPath(e['image']),
+        screen: SearchTargetScreen.gathering,
+        gatheringTab: GatheringTabType.plant,
+        keyword: _keywordOf(e),
+      );
+      _addIfNotExists(results, addedIds, item);
+    }
+  }
+
+  static Future<void> _loadGourmetRecipes(
+      List<GlobalSearchItem> results,
+      Set<String> addedIds,
+      ) async {
+    final res = await http.get(Uri.parse('$_baseUrl/api/gourmet'));
+    if (res.statusCode != 200) return;
+
+    final List<dynamic> data = jsonDecode(utf8.decode(res.bodyBytes));
+
+    for (final e in data) {
+      final rawName = (e['nameKo'] ?? e['name_ko'] ?? e['name'] ?? '')
+          .toString()
+          .trim();
+
+      final displayName = rawName
+          .replaceAll(' (이벤트)', '')
+          .replaceAll('(이벤트)', '')
+          .trim();
+
+      final isEvent = rawName.contains('(이벤트)');
+
+      final item = GlobalSearchItem(
+        id: 'gourmet_${e['id']}',
+        title: displayName,
+        subtitle: isEvent ? '요리 · 레시피 · 이벤트' : '요리 · 레시피',
+        iconPath: _recipeAssetPath(e['image']),
+        screen: SearchTargetScreen.cooking,
+        cookingTab: CookingTabType.recipe,
+        keyword: '$displayName $rawName ${e['name'] ?? ''}'.toLowerCase(),
+      );
+
+      _addIfNotExists(results, addedIds, item);
+    }
+  }
+
+  static Future<void> _loadCookingMaterials(
+      List<GlobalSearchItem> results,
+      Set<String> addedIds,
+      ) async {
+    final res = await http.get(
+      Uri.parse('$_baseUrl/api/cooking/materials'),
+    );
+    if (res.statusCode != 200) return;
+
+    final List<dynamic> data = jsonDecode(utf8.decode(res.bodyBytes));
+
+    for (final e in data) {
+      final String idValue =
+      (e['id'] ?? e['name'] ?? e['nameKo'] ?? e['name_ko'] ?? '')
+          .toString();
+
+      final String displayName = _displayName(e);
+      final CookingMaterialCategoryType category =
+      _inferMaterialCategory(displayName);
+
+      final item = GlobalSearchItem(
+        id: 'material_$idValue',
+        title: displayName,
+        subtitle: _materialSubtitle(category),
+        iconPath: _assetPath(e['image']),
+        screen: SearchTargetScreen.cooking,
+        cookingTab: CookingTabType.material,
+        cookingMaterialCategory: category,
+        keyword: _keywordOf(e),
+      );
+
+      _addIfNotExists(results, addedIds, item);
+    }
+  }
+
+  static CookingMaterialCategoryType _inferMaterialCategory(String name) {
+    final normalized = name.trim().toLowerCase();
+
+    const cropKeywords = [
+      '감자',
+      '밀',
+      '상추',
+      '당근',
+      '옥수수',
+      '딸기',
+      '포도',
+      '가지',
+      '토마토',
+      '아보카도',
+      '사과',
+      '블루베리',
+      '라즈베리',
+      '오렌지',
+      '파인애플',
+      'apple',
+      'blueberry',
+      'raspberry',
+      'orange',
+      'pineapple',
+      'avocado',
+      'potato',
+      'wheat',
+      'lettuce',
+      'carrot',
+      'corn',
+      'strawberry',
+      'grape',
+      'eggplant',
+      'tomato',
+    ];
+
+    const mushroomKeywords = [
+      '버섯',
+      '트러플',
+      '표고',
+      '양송이',
+      '느타리',
+      '그물버섯',
+      'mushroom',
+      'truffle',
+      'shiitake',
+      'mousseron',
+      'oyster',
+      'porcini',
+      'penny bun',
+      'black truffle',
+    ];
+
+    const fishKeywords = [
+      '생선',
+      '물고기',
+      'fish',
+    ];
+
+    const insectKeywords = [
+      '곤충',
+      '벌레',
+      'insect',
+      'bug',
+    ];
+
+    const storeKeywords = [
+      '달걀',
+      '우유',
+      '치즈',
+      '버터',
+      '고기',
+      '식용유',
+      '커피',
+      '커피 콩',
+      '슈가파우더',
+      '설탕',
+      'egg',
+      'milk',
+      'cheese',
+      'butter',
+      'meat',
+      'oil',
+      'coffee',
+      'sugar',
+      'sugar powder',
+    ];
+
+    bool containsAny(List<String> keywords) {
+      return keywords.any((k) => normalized.contains(k));
+    }
+
+    if (containsAny(mushroomKeywords)) {
+      return CookingMaterialCategoryType.mushroom;
+    }
+    if (containsAny(fishKeywords)) {
+      return CookingMaterialCategoryType.fish;
+    }
+    if (containsAny(insectKeywords)) {
+      return CookingMaterialCategoryType.insect;
+    }
+    if (containsAny(storeKeywords)) {
+      return CookingMaterialCategoryType.store;
+    }
+    if (containsAny(cropKeywords)) {
+      return CookingMaterialCategoryType.crop;
+    }
+
+    return CookingMaterialCategoryType.etc;
+  }
+
+  static String _materialSubtitle(CookingMaterialCategoryType category) {
+    switch (category) {
+      case CookingMaterialCategoryType.crop:
+        return '요리 · 재료 · 작물';
+      case CookingMaterialCategoryType.store:
+        return '요리 · 재료 · 상점구매';
+      case CookingMaterialCategoryType.mushroom:
+        return '요리 · 재료 · 버섯';
+      case CookingMaterialCategoryType.fish:
+        return '요리 · 재료 · 물고기';
+      case CookingMaterialCategoryType.insect:
+        return '요리 · 재료 · 곤충';
+      case CookingMaterialCategoryType.etc:
+        return '요리 · 재료 · 기타';
+    }
+  }
+
+  static void _addIfNotExists(
+      List<GlobalSearchItem> results,
+      Set<String> addedIds,
+      GlobalSearchItem item,
+      ) {
+    if (addedIds.contains(item.id)) return;
+    addedIds.add(item.id);
+    results.add(item);
+  }
+
+  static String _displayName(Map<String, dynamic> e) {
+    return (e['nameKo'] ?? e['name_ko'] ?? e['name'] ?? '')
+        .toString()
+        .trim();
+  }
+
+  static String _keywordOf(Map<String, dynamic> e) {
+    final ko = (e['nameKo'] ?? e['name_ko'] ?? '').toString();
+    final en = (e['name'] ?? '').toString();
+    return '$ko $en'.toLowerCase();
+  }
+
+  static String _assetPath(dynamic image) {
+    final raw = (image ?? '').toString().trim();
+    if (raw.isEmpty) return 'assets/images/default.png';
+
+    String fullPath = raw.startsWith('assets/') ? raw : 'assets/$raw';
+
+    final lower = fullPath.toLowerCase();
+    if (!lower.endsWith('.png') &&
+        !lower.endsWith('.jpg') &&
+        !lower.endsWith('.jpeg') &&
+        !lower.endsWith('.webp')) {
       fullPath = '$fullPath.webp';
     }
 

@@ -14,10 +14,16 @@ import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
 class MapScreen extends StatefulWidget {
   final bool openFilterOnStart;
+  final Set<String>? initialEnabledResourceKeys;
+  final bool? initialShowAllNpcs;
+  final bool? initialShowAllAnimals;
 
   const MapScreen({
     super.key,
     this.openFilterOnStart = false,
+    this.initialEnabledResourceKeys,
+    this.initialShowAllNpcs,
+    this.initialShowAllAnimals,
   });
 
   @override
@@ -282,7 +288,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         res.category != 'npc' &&
             res.category != 'animal' &&
             res.category != 'location' &&
-            !res.isFixed &&
             _normalizeFilterKey(res) != 'gold_bubble',
       )
           .map((res) => _normalizeFilterKey(res));
@@ -296,9 +301,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ...spawnFilterKeys,
       };
 
-      const Set<String> defaultVoteKeys = {
-        'roaming_oak',
-        'fluorite',
+      final Set<String>? requestedKeys = widget.initialEnabledResourceKeys;
+      final bool useCustomInitialKeys =
+          requestedKeys != null && requestedKeys.isNotEmpty;
+
+      final Set<String> safeInitialKeys = useCustomInitialKeys
+          ? requestedKeys.where((key) => availableKeys.contains(key)).toSet()
+          : <String>{};
+
+      final Set<String> defaultInitialKeys = {
+        if (availableKeys.contains('roaming_oak')) 'roaming_oak',
+        if (availableKeys.contains('fluorite')) 'fluorite',
       };
 
       final bool shouldShowVoteNotice =
@@ -308,20 +321,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         _fixedResources = data.fixedResources;
         _spawnPoints = data.spawnPoints;
 
-        if (_enabledResources.isEmpty) {
-          _enabledResources = {
-            ...availableKeys,
-            ...defaultVoteKeys,
-          };
-        } else {
-          _enabledResources = {
-            ..._enabledResources,
-            ...defaultVoteKeys,
-          };
-        }
+        _enabledResources = useCustomInitialKeys
+            ? {...safeInitialKeys}
+            : {...defaultInitialKeys};
 
-        _showAllNpcs = true;
-        _showAllAnimals = false;
+        _showAllNpcs = widget.initialShowAllNpcs ?? !useCustomInitialKeys;
+        _showAllAnimals = widget.initialShowAllAnimals ?? false;
         _isLoading = false;
 
         if (shouldShowVoteNotice) {
