@@ -296,20 +296,35 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   void _attachScrollListener(ScrollController controller) {
+    double lastOffset = 0;
+
     controller.addListener(() {
       if (!mounted || !controller.hasClients) return;
 
-      final offset = controller.offset;
+      final double offset = controller.offset;
       final bool showBtn = offset > 100;
 
       if (showBtn != _showTopBtn) {
         setState(() => _showTopBtn = showBtn);
       }
 
-      // 맨 위 근처에 왔을 때만 필터바 복구
-      if (offset <= 5 && !_isFilterVisible) {
+      if (offset <= 8) {
+        if (!_isFilterVisible) {
+          setState(() => _isFilterVisible = true);
+        }
+        lastOffset = offset;
+        return;
+      }
+
+      final double delta = offset - lastOffset;
+
+      if (delta > 4 && _isFilterVisible) {
+        setState(() => _isFilterVisible = false);
+      } else if (delta < -4 && !_isFilterVisible) {
         setState(() => _isFilterVisible = true);
       }
+
+      lastOffset = offset;
     });
   }
 
@@ -1072,139 +1087,134 @@ class _GatheringScreenState extends State<GatheringScreen>
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
-    final double appBarHeight = topPadding + 166;
+    final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
+    final bool showFilterInAppBar = _isFilterVisible;
+    final double appBarHeight = topPadding + (showFilterInAppBar ? 214 : 170);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/bg_gradient.png',
-              fit: BoxFit.cover,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _dismissKeyboard,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/bg_gradient.png',
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-          Positioned.fill(
-            child: Column(
-              children: [
-                SizedBox(height: appBarHeight - 8),
-                AnimatedBuilder(
-                  animation: _tabController,
-                  builder: (context, child) {
-                    final controller = _getCurrentController();
-                    final offset = controller.hasClients ? controller.offset : 0.0;
-
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOutCubic,
-                      height: (_isFilterVisible || offset < 20) ? 40 : 0,
-                      child: SingleChildScrollView(
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 200),
-                          opacity: (_isFilterVisible || offset < 20) ? 1.0 : 0.0,
-                          child: _buildFilterBarArea(),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    physics: const BouncingScrollPhysics(),
-                    children: [
-                      _buildFishingTabContent(),
-                      _buildBirdTabContent(),
-                      _buildInsectTabContent(),
-                      _buildPlantTabContent(),
-                    ],
+            Positioned.fill(
+              child: Column(
+                children: [
+                  SizedBox(height: appBarHeight - 3),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      physics: const BouncingScrollPhysics(),
+                      children: [
+                        _buildFishingTabContent(),
+                        _buildBirdTabContent(),
+                        _buildInsectTabContent(),
+                        _buildPlantTabContent(),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildIntegratedAppBar(context, topPadding),
-          ),
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            right: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? 24 : 140,
-            child: _buildScrollToTopButton(),
-          ),
-        ],
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildIntegratedAppBar(context, topPadding),
+            ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              right: 20,
+              bottom: keyboardInset > 0 ? 24 : 140,
+              child: _buildScrollToTopButton(),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildFilterBarArea() {
-    final filters = _getCurrentFilterList(); // 요리는 _currentFilters()로만 바꿔주면 됨
+    final filters = _getCurrentFilterList();
 
-    return Padding(
-      padding: EdgeInsets.zero,
+    if (!filters.contains(_selectedFilter) && filters.isNotEmpty) {
+      _selectedFilter = filters.first;
+    }
+
+    return SizedBox(
+      height: 38,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: ShaderMask(
-              shaderCallback: (Rect rect) => const LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Colors.black, Colors.transparent],
-                stops: [0.92, 1.0],
-              ).createShader(rect),
-              blendMode: BlendMode.dstIn,
-              child: SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(left: 16, right: 20),
-                  children: filters.map((filter) => _buildFilterChip(filter)).toList(),
-                ),
-              ),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(left: 4, right: 16),
+              itemCount: filters.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                return _buildFilterChip(filters[index]);
+              },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16, left: 4),
+          const SizedBox(width: 10),
+          Align(
+            alignment: Alignment.centerRight,
             child: PopupMenuButton<String>(
               onSelected: _onSortSelected,
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: '이름순', child: Text('이름순')),
-                PopupMenuItem(value: '가격순', child: Text('가격순')),
-                PopupMenuItem(value: '좋아요순', child: Text('좋아요순')),
-              ],
-              offset: const Offset(0, 28),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
               color: Colors.white,
-              elevation: 8,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _selectedSort,
-                      style: const TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
+              elevation: 10,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(
+                  color: Color(0xFFE9EEF4),
+                  width: 1,
+                ),
+              ),
+              itemBuilder: (context) => [
+                _buildSortPopupItem('이름순'),
+                _buildSortPopupItem('가격순'),
+                _buildSortPopupItem('좋아요순'),
+              ],
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: null,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    left: 4,
+                    right: 4,
+                    top: 7,
+                    bottom: 7,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _selectedSort,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                        ),
                       ),
-                    ),
-                    const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: Color(0xFF64748B),
-                    ),
-                  ],
+                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1217,36 +1227,61 @@ class _GatheringScreenState extends State<GatheringScreen>
   Widget _buildFilterChip(String label) {
     final bool isSelected = _selectedFilter == label;
 
-    return GestureDetector(
-      onTap: () {
-        _dismissKeyboard();
-        setState(() => _selectedFilter = label);
-        _applyFilters();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFFFF8E7C).withOpacity(0.12)
-              : Colors.white.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          if (_selectedFilter == label) return;
+          setState(() {
+            _selectedFilter = label;
+          });
+          _applyFilters();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFFFF8E7C).withOpacity(0.4)
-                : Colors.black.withOpacity(0.05),
-            width: 1.2,
+                ? const Color(0xFFFFF1EC)
+                : Colors.white.withOpacity(0.76),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFFFDDD4)
+                  : const Color(0xFFE9EEF4),
+              width: 1,
+            ),
+            boxShadow: isSelected
+                ? [
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ]
+                : [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.015),
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected
-                ? const Color(0xFFFF8E7C)
-                : const Color(0xFF64748B),
-            fontSize: 12.5,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.8,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF667085),
+                letterSpacing: -0.1,
+              ),
+            ),
           ),
         ),
       ),
@@ -1908,69 +1943,112 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   Widget _buildIntegratedAppBar(BuildContext context, double topPadding) {
+    final bool showFilterInAppBar = _isFilterVisible;
+
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          stops: const [0.0, 0.42, 1.0],
-          colors: [
-            const Color(0xFFFF8E7C).withOpacity(0.12),
-            const Color(0xFFFFCFC7).withOpacity(0.05),
-            const Color(0xFFFFFAF8),
-          ],
-        ),
+        color: Colors.white.withOpacity(0.88),
         borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(24),
         ),
+        border: Border(
+          bottom: BorderSide(
+            color: const Color(0xFFFF8E7C).withOpacity(0.08),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_menu.svg',
-                onTap: widget.openDrawer ?? () {},
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF8E7C).withOpacity(0.03),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(24),
               ),
-              const Spacer(),
-              _buildAppTitle(),
-              const Spacer(),
-              _buildAppBarButton(
-                icon: 'assets/icons/ic_settings.svg',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SettingsScreen(),
+            ),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_menu.svg',
+                            onTap: widget.openDrawer ?? () {},
+                          ),
+                          const Spacer(),
+                          _buildAppTitle(),
+                          const Spacer(),
+                          _buildAppBarButton(
+                            icon: 'assets/icons/ic_settings.svg',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SettingsScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildTabBar(),
+                      const SizedBox(height: 8),
+                      _buildIntegratedSearchBar(),
+                      if (showFilterInAppBar) ...[
+                        const SizedBox(height: 10),
+                        _buildFilterBarArea(),
+                      ],
+                    ],
                   ),
                 ),
-              ),
-            ],
+                Positioned(
+                  top: 0,
+                  left: 18,
+                  right: 18,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8E7C).withOpacity(0.62),
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-
-          const SizedBox(height: 10),
-
-          _buildTabBar(),
-
-          const SizedBox(height: 8),
-
-          _buildIntegratedSearchBar(),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildTabBar() {
     return Container(
-      height: 38,
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.all(3),
+      height: 44,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4F1),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.25),
+          color: const Color(0xFFF3D8D1),
           width: 1,
         ),
       ),
@@ -1978,7 +2056,8 @@ class _GatheringScreenState extends State<GatheringScreen>
         controller: _tabController,
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
-        splashFactory: NoSplash.splashFactory,
+        labelPadding: EdgeInsets.zero,
+        splashBorderRadius: BorderRadius.circular(18),
         indicatorAnimation: TabIndicatorAnimation.elastic,
         overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
           if (states.contains(WidgetState.pressed)) {
@@ -1987,25 +2066,22 @@ class _GatheringScreenState extends State<GatheringScreen>
           return Colors.transparent;
         }),
         indicator: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: const Color(0xFFFFF1EC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFFFDDD4),
+            width: 1,
+          ),
         ),
         labelColor: const Color(0xFFFF8E7C),
         unselectedLabelColor: const Color(0xFF94A3B8),
         labelStyle: const TextStyle(
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: FontWeight.w800,
           fontFamily: 'SF Pro',
         ),
         unselectedLabelStyle: const TextStyle(
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: FontWeight.w600,
           fontFamily: 'SF Pro',
         ),
@@ -2074,94 +2150,20 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-  Widget _buildGatheringTopTabBar() {
-    return Container(
-      height: 38,
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF4F1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.25),
-          width: 1,
-        ),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        dividerColor: Colors.transparent,
-        indicatorSize: TabBarIndicatorSize.tab,
-        splashFactory: NoSplash.splashFactory,
-        indicatorAnimation: TabIndicatorAnimation.elastic,
-        overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-          if (states.contains(WidgetState.pressed)) {
-            return Colors.black.withOpacity(0.03);
-          }
-          return Colors.transparent;
-        }),
-        indicator: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        labelColor: const Color(0xFFFF8E7C),
-        unselectedLabelColor: const Color(0xFF94A3B8),
-        labelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-          fontFamily: 'SF Pro',
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'SF Pro',
-        ),
-        tabs: const [
-          Tab(text: '낚시'),
-          Tab(text: '새'),
-          Tab(text: '곤충'),
-          Tab(text: '원예'),
-        ],
-      ),
-    );
-  }
-
   Widget _buildIntegratedSearchBar() {
-    String hintText = '이름을 검색해보세요.';
-    switch (_tabController.index) {
-      case 0:
-        hintText = '물고기 이름을 검색해보세요.';
-        break;
-      case 1:
-        hintText = '새 이름을 검색해보세요.';
-        break;
-      case 2:
-        hintText = '곤충 이름을 검색해보세요.';
-        break;
-      case 3:
-        hintText = '꽃 이름을 검색해보세요.';
-        break;
-    }
-
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFAF8),
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withOpacity(0.78),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.22),
-          width: 1.2,
+          color: const Color(0xFFF1DED8),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 6,
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -2169,106 +2171,81 @@ class _GatheringScreenState extends State<GatheringScreen>
       child: TextField(
         controller: _searchController,
         focusNode: _searchFocusNode,
-        textAlignVertical: TextAlignVertical.center,
+        textInputAction: TextInputAction.search,
         style: const TextStyle(
           fontSize: 14,
-          color: Color(0xFF4A4543),
           fontWeight: FontWeight.w600,
+          color: Color(0xFF2D3436),
         ),
         decoration: InputDecoration(
-          isDense: true,
-          border: InputBorder.none,
-          prefixIcon: const Padding(
-            padding: EdgeInsets.all(12),
-            child: Icon(
-              Icons.search_rounded,
-              size: 20,
-              color: Color(0xFFFF8E7C),
-            ),
-          ),
-          hintText: hintText,
+          hintText: _tabController.index == 0
+              ? '물고기 이름을 검색해보세요.'
+              : _tabController.index == 1
+              ? '새 이름을 검색해보세요.'
+              : _tabController.index == 2
+              ? '곤충 이름을 검색해보세요.'
+              : '꽃 이름을 검색해보세요.',
           hintStyle: const TextStyle(
-            color: Color(0xFFA8A29E),
             fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF9AA4B2),
           ),
-          contentPadding: const EdgeInsets.fromLTRB(0, 0, 16, 0),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            color: Color(0xFFE58F7C),
+            size: 24,
+          ),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
-            icon: const Icon(Icons.close, size: 18),
+            splashRadius: 18,
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Color(0xFFB0B8C4),
+              size: 20,
+            ),
             onPressed: () {
               _searchController.clear();
               _dismissKeyboard();
             },
           )
               : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: 13,
+          ),
         ),
+        onTapOutside: (_) => _dismissKeyboard(),
       ),
     );
   }
 
-  Widget _buildFilterAndSortHeader() {
-    final filterList = _getCurrentFilterList();
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+  PopupMenuItem<String> _buildSortPopupItem(String value) {
+    final bool isSelected = _selectedSort == value;
+
+    return PopupMenuItem<String>(
+      value: value,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: ShaderMask(
-              shaderCallback: (Rect rect) => const LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Colors.black, Colors.transparent],
-                stops: [0.92, 1.0],
-              ).createShader(rect),
-              blendMode: BlendMode.dstIn,
-              child: SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(left: 16, right: 20),
-                  children: filterList.map((label) => _buildFilterChip(label)).toList(),
-                ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                color: isSelected
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF5B5652),
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16, left: 4),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                final next = _selectedSort == '이름순'
-                    ? '가격순'
-                    : _selectedSort == '가격순'
-                    ? '좋아요순'
-                    : '이름순';
-                _onSortSelected(next);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _selectedSort,
-                      style: const TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: Color(0xFF64748B),
-                    ),
-                  ],
-                ),
-              ),
+          if (isSelected)
+            const Icon(
+              Icons.check_rounded,
+              size: 16,
+              color: Color(0xFFFF8E7C),
             ),
-          ),
         ],
       ),
     );
