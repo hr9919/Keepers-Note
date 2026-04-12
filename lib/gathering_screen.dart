@@ -434,7 +434,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     if (index == 0) return ['전체', '강 물고기', '호수 물고기', '바다 물고기'];
     if (index == 1) return ['전체', '숲', '호수', '바다', '도시근교'];
     if (index == 2) return ['전체', '숲', '들판', '호수', '바다'];
-    return ['전체', '꽃밭', '숲', '농장', '온실'];
+    return ['전체'];
   }
 
   void _dismissKeyboard() {
@@ -1960,8 +1960,8 @@ class _GatheringScreenState extends State<GatheringScreen>
                       width: 116,
                       height: 116,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
+                        color: const Color(0xFFFFFAF8),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: Colors.black.withOpacity(0.05),
                         ),
@@ -3154,11 +3154,18 @@ class FlowerDetailPage extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Colors.white.withOpacity(0.92), // ✅ 카드 배경 통일
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                        color: const Color(0xFFFFE2DB),
+                        color: const Color(0xFFFF8E7C).withOpacity(0.12), // ✅ 테두리 통일
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -3167,7 +3174,7 @@ class FlowerDetailPage extends StatelessWidget {
                           width: 118,
                           height: 118,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFFAF8),
+                            color: const Color(0xFFFFFAF8), // ✅ 이미지 박스 통일
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
                               color: const Color(0xFFFF8E7C).withOpacity(0.15),

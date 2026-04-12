@@ -1487,7 +1487,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isHighlighted
-                      ? const Color(0xFFFFB27A).withOpacity(0.6)
+                      ? const Color(0xFFFFB27A).withOpacity(0.55)
                       : const Color(0xFFFF8E7C).withOpacity(0.12),
                   width: 1,
                 ),
@@ -1501,10 +1501,10 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                       width: 116,
                       height: 116,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: const Color(0xFFFFFAF8),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.black.withOpacity(0.05),
+                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
                         ),
                       ),
                       child: ClipRRect(
