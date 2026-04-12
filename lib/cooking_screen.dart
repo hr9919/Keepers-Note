@@ -1475,32 +1475,43 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Container(
                       width: 116,
                       height: 116,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFFAF8),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                          color: Colors.black.withOpacity(0.05),
                         ),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: recipeImagePath.isNotEmpty
-                            ? Image.asset(
-                          recipeImagePath,
-                          fit: BoxFit.contain,
-                          errorBuilder: (c, e, s) => const Icon(
-                            Icons.restaurant_menu,
-                            color: Colors.grey,
+                        child: Container(
+                          alignment: Alignment.center,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
+                            child: item.image != null &&
+                                item.image!.trim().isNotEmpty
+                                ? Image.asset(
+                              recipeImagePath,
+                              fit: BoxFit.contain,
+                              alignment: Alignment.center,
+                              errorBuilder: (c, e, s) => const Icon(
+                                Icons.restaurant_menu,
+                                color: Colors.grey,
+                              ),
+                            )
+                                : const Icon(
+                              Icons.restaurant_menu,
+                              color: Colors.grey,
+                            ),
                           ),
-                        )
-                            : const Icon(
-                          Icons.restaurant_menu,
-                          color: Colors.grey,
                         ),
                       ),
                     ),
@@ -1516,7 +1527,10 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                               children: [
                                 Expanded(
                                   child: Padding(
-                                    padding: const EdgeInsets.only(top: 2, right: 8),
+                                    padding: const EdgeInsets.only(
+                                      top: 2,
+                                      right: 8,
+                                    ),
                                     child: AutoSizeText(
                                       _displayRecipeName(item),
                                       maxLines: 2,
@@ -3190,22 +3204,39 @@ class CookingMaterialDetailPage extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
-                      width: 72,
-                      height: 72,
+                      width: 110,
+                      height: 110,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFF6D8),
-                        borderRadius: BorderRadius.circular(14),
+                        color: const Color(0xFFFFFAF8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                          width: 1,
+                        ),
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: recipeImagePath.isNotEmpty
-                            ? Image.asset(
-                          recipeImagePath,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.restaurant_menu_rounded),
-                        )
-                            : const Icon(Icons.restaurant_menu_rounded),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                            child: recipeImagePath.isNotEmpty
+                                ? Image.asset(
+                              recipeImagePath,
+                              fit: BoxFit.contain,
+                              alignment: Alignment.center,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.restaurant_menu_rounded,
+                                size: 36,
+                                color: Colors.grey,
+                              ),
+                            )
+                                : const Icon(
+                              Icons.restaurant_menu_rounded,
+                              size: 36,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),

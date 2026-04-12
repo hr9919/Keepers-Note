@@ -9,6 +9,114 @@ import 'setting_screen.dart';
 
 import 'models/global_search_item.dart';
 
+class FlowerColorDetail {
+  final String colorNameKo;
+  final String image;
+  final bool isBaseColor;
+  final bool isFinalColor;
+
+  FlowerColorDetail({
+    required this.colorNameKo,
+    required this.image,
+    required this.isBaseColor,
+    required this.isFinalColor,
+  });
+
+  factory FlowerColorDetail.fromJson(Map<String, dynamic> json) {
+    return FlowerColorDetail(
+      colorNameKo: (json['colorNameKo'] ?? json['color_name_ko'] ?? '').toString(),
+      image: (json['image'] ?? '').toString(),
+      isBaseColor: (json['isBaseColor'] ?? json['is_base_color'] ?? false) == true,
+      isFinalColor: (json['isFinalColor'] ?? json['is_final_color'] ?? false) == true,
+    );
+  }
+}
+
+class FlowerBreedingRule {
+  final String resultColorKo;
+  final String parentColorAKo;
+  final String parentColorBKo;
+  final String? note;
+  final bool isCatalogOnly;
+  final bool isFinalStep;
+
+  FlowerBreedingRule({
+    required this.resultColorKo,
+    required this.parentColorAKo,
+    required this.parentColorBKo,
+    this.note,
+    required this.isCatalogOnly,
+    required this.isFinalStep,
+  });
+
+  factory FlowerBreedingRule.fromJson(Map<String, dynamic> json) {
+    return FlowerBreedingRule(
+      resultColorKo: (json['resultColorKo'] ?? json['result_color_ko'] ?? '').toString(),
+      parentColorAKo: (json['parentColorAKo'] ?? json['parent_color_a_ko'] ?? '').toString(),
+      parentColorBKo: (json['parentColorBKo'] ?? json['parent_color_b_ko'] ?? '').toString(),
+      note: json['note']?.toString(),
+      isCatalogOnly: (json['isCatalogOnly'] ?? json['is_catalog_only'] ?? false) == true,
+      isFinalStep: (json['isFinalStep'] ?? json['is_final_step'] ?? false) == true,
+    );
+  }
+}
+
+class FlowerDetail {
+  final String id;
+  final String nameKo;
+  final String image;
+  final String growthTime;
+  final int level;
+  final int seedCost;
+  final int seedSell;
+  final List<int> prices;
+  final List<FlowerColorDetail> flowerColors;
+  final List<FlowerBreedingRule> breedingRules;
+
+  FlowerDetail({
+    required this.id,
+    required this.nameKo,
+    required this.image,
+    required this.growthTime,
+    required this.level,
+    required this.seedCost,
+    required this.seedSell,
+    required this.prices,
+    required this.flowerColors,
+    required this.breedingRules,
+  });
+
+  factory FlowerDetail.fromJson(Map<String, dynamic> json) {
+    final colorsJson = (json['flowerColors'] as List<dynamic>?) ?? const [];
+    final rulesJson = (json['breedingRules'] as List<dynamic>?) ?? const [];
+
+    return FlowerDetail(
+      id: json['id'].toString(),
+      nameKo: (json['nameKo'] ?? json['name_ko'] ?? '').toString(),
+      image: (json['image'] ?? '').toString(),
+      growthTime: (json['growthTime'] ??
+          json['growth_time'] ??
+          '').toString(),
+      level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
+      seedCost: int.tryParse(json['seedCost']?.toString() ?? json['seed_cost']?.toString() ?? '0') ?? 0,
+      seedSell: int.tryParse(json['seedSell']?.toString() ?? json['seed_sell']?.toString() ?? '0') ?? 0,
+      prices: [
+        int.tryParse((json['price1'] ?? json['price_1'] ?? 0).toString()) ?? 0,
+        int.tryParse((json['price2'] ?? json['price_2'] ?? 0).toString()) ?? 0,
+        int.tryParse((json['price3'] ?? json['price_3'] ?? 0).toString()) ?? 0,
+        int.tryParse((json['price4'] ?? json['price_4'] ?? 0).toString()) ?? 0,
+        int.tryParse((json['price5'] ?? json['price_5'] ?? 0).toString()) ?? 0,
+      ],
+      flowerColors: colorsJson
+          .map((e) => FlowerColorDetail.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      breedingRules: rulesJson
+          .map((e) => FlowerBreedingRule.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
 class BirdItem {
   final String id;
   final String name;
@@ -57,6 +165,23 @@ class BirdItem {
   }
 }
 
+class FlowerColorSummary {
+  final String colorNameKo;
+  final String image;
+
+  FlowerColorSummary({
+    required this.colorNameKo,
+    required this.image,
+  });
+
+  factory FlowerColorSummary.fromJson(Map<String, dynamic> json) {
+    return FlowerColorSummary(
+      colorNameKo: (json['colorNameKo'] ?? json['color_name_ko'] ?? '').toString(),
+      image: (json['image'] ?? '').toString(),
+    );
+  }
+}
+
 class PlantItem {
   final String id;
   final String name;
@@ -64,9 +189,11 @@ class PlantItem {
   final String image;
   final String location;
   final String availableTime;
+  final String growthTime;
   final String weather;
   final int level;
   final List<int> prices;
+  final List<FlowerColorSummary> flowerColorSummaries;
 
   PlantItem({
     required this.id,
@@ -75,15 +202,21 @@ class PlantItem {
     required this.image,
     required this.location,
     required this.availableTime,
+    required this.growthTime,
     required this.weather,
     required this.level,
     required this.prices,
+    required this.flowerColorSummaries,
   });
 
   factory PlantItem.fromJson(Map<String, dynamic> json) {
     int parsePrice(dynamic p1, dynamic p2) {
       return int.tryParse((p1 ?? p2 ?? 0).toString()) ?? 0;
     }
+
+    final rawSummaries = json['flowerColorSummaries'];
+    final List<dynamic> summariesJson =
+    rawSummaries is List ? rawSummaries : const [];
 
     return PlantItem(
       id: (json['id'] ?? '').toString(),
@@ -92,6 +225,7 @@ class PlantItem {
       image: (json['image'] ?? '').toString(),
       location: (json['location'] ?? '').toString(),
       availableTime: (json['availableTime'] ?? json['available_time'] ?? '').toString(),
+      growthTime: (json['growthTime'] ?? json['growth_time'] ?? '-').toString(),
       weather: (json['weather'] ?? '').toString(),
       level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
       prices: [
@@ -101,6 +235,10 @@ class PlantItem {
         parsePrice(json['price4'], json['price_4']),
         parsePrice(json['price5'], json['price_5']),
       ],
+      flowerColorSummaries: summariesJson
+          .whereType<Map<String, dynamic>>()
+          .map((e) => FlowerColorSummary.fromJson(e))
+          .toList(),
     );
   }
 }
@@ -397,6 +535,71 @@ class _GatheringScreenState extends State<GatheringScreen>
     return raw;
   }
 
+  Color _growthTimeChipColor(String raw) {
+    final value = raw.replaceAll(' ', '');
+
+    if (value.contains('18시간')) return const Color(0xFFE8F7E8); // 연초록
+    if (value.contains('1일6시간')) return const Color(0xFFFFF1E0); // 연주황
+    if (value.contains('1일')) return const Color(0xFFEAF4FF); // 연하늘
+    if (value.contains('2일')) return const Color(0xFFF3ECFF); // 연보라
+    if (value.contains('3일')) return const Color(0xFFFFE7EF); // 연핑크
+    return const Color(0xFFF4F6F8); // 기본
+  }
+
+  Color _growthTimeChipTextColor(String raw) {
+    final value = raw.replaceAll(' ', '');
+
+    if (value.contains('18시간')) return const Color(0xFF4E9B57);
+    if (value.contains('1일6시간')) return const Color(0xFFCC7A00);
+    if (value.contains('1일')) return const Color(0xFF4A7FD1);
+    if (value.contains('2일')) return const Color(0xFF7A5BC1);
+    if (value.contains('3일')) return const Color(0xFFD35B87);
+    return const Color(0xFF6B7280);
+  }
+
+  Widget _buildGrowthTimeTag(String text) {
+    final label = _formatGrowthTimeLabel(text);
+    if (label.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5), // ← 동일
+      decoration: BoxDecoration(
+        color: _growthTimeChipColor(text),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _growthTimeChipTextColor(text).withOpacity(0.16),
+          width: 0.8,
+        ),
+      ),
+      child: Transform.translate(
+        offset: const Offset(0, -0.5), // ← 동일
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 9.5, // ← 동일
+            height: 1.0,
+            fontWeight: FontWeight.w600,
+            color: _growthTimeChipTextColor(text),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatGrowthTimeLabel(String raw) {
+    final value = raw.trim().replaceAll(' ', '');
+
+    if (value.isEmpty || value == '-') return '';
+
+    if (value.contains('18시간')) return '성장 18시간';
+    if (value.contains('1일6시간')) return '성장 1일 6시간';
+    if (value.contains('1일')) return '성장 1일';
+    if (value.contains('2일')) return '성장 2일';
+    if (value.contains('3일')) return '성장 3일';
+
+    return '성장 $raw';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -546,6 +749,34 @@ class _GatheringScreenState extends State<GatheringScreen>
         });
       });
     });
+  }
+
+  Future<void> _openFlowerDetail(PlantItem plant) async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://161.33.30.40:8080/api/gardening/${plant.id}'),
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint('꽃 상세 조회 실패: ${response.statusCode}');
+        return;
+      }
+
+      final detail = FlowerDetail.fromJson(
+        jsonDecode(utf8.decode(response.bodyBytes)),
+      );
+
+      if (!mounted) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => FlowerDetailPage(detail: detail),
+        ),
+      );
+    } catch (e) {
+      debugPrint('꽃 상세 로드 실패: $e');
+    }
   }
 
   Future<void> _loadFavorites() async {
@@ -1144,6 +1375,102 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
+  Widget _buildFlowerColorSummaryBox(FlowerColorSummary color) {
+    return Container(
+      width: 62,
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4C7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFFFE08A),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.72),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                _imageAssetPath(color.image),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.local_florist_rounded,
+                  size: 18,
+                  color: Color(0xFFB08968),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 5),
+          Expanded(
+            child: Center(
+              child: Text(
+                color.colorNameKo,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF6B5B45),
+                  height: 1.15,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPressableCard({
+    required Widget child,
+    required VoidCallback onTap,
+  }) {
+    return StatefulBuilder(
+      builder: (context, setCardState) {
+        bool isPressed = false;
+
+        void setPressed(bool value) {
+          setCardState(() => isPressed = value);
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => setPressed(true),
+          onTapCancel: () => setPressed(false),
+          onTapUp: (_) async {
+            setPressed(false);
+            _dismissKeyboard();
+            await Future.delayed(const Duration(milliseconds: 20));
+            if (!mounted) return;
+            onTap();
+          },
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 90),
+            curve: Curves.easeOut,
+            scale: isPressed ? 0.982 : 1.0,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 90),
+              curve: Curves.easeOut,
+              transform: Matrix4.translationValues(0, isPressed ? 1.5 : 0, 0),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildFilterBarArea() {
     final filters = _getCurrentFilterList();
 
@@ -1455,17 +1782,17 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-  Widget _buildPriceButton(List<int> prices) {
+  Widget _buildPriceButton(List<int> prices, {int? seedCost}) {
     final validPrices = prices.where((e) => e > 0).toList();
-
     final pricePreview = validPrices.isEmpty
-        ? '-'
+        ? '가격보기'
         : (validPrices.first == validPrices.last
         ? '${_formatPrice(validPrices.first)}원'
         : '${_formatPrice(validPrices.first)}원 ~ ${_formatPrice(validPrices.last)}원');
 
     return GestureDetector(
-      onTap: () => _showPriceBottomSheet(prices),
+      onTap: () => _showPriceBottomSheet(prices, seedCost: seedCost),
+      behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
@@ -1475,6 +1802,13 @@ class _GatheringScreenState extends State<GatheringScreen>
             color: const Color(0xFFFF8E7C).withOpacity(0.18),
             width: 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1496,13 +1830,17 @@ class _GatheringScreenState extends State<GatheringScreen>
               ),
             ),
             const SizedBox(width: 6),
-            Text(
-              pricePreview,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF2D3436),
-                height: 1.0,
+            Flexible(
+              child: Text(
+                pricePreview,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF2D3436),
+                  height: 1.0,
+                ),
               ),
             ),
             const SizedBox(width: 2),
@@ -1564,48 +1902,239 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   Widget _buildPlantCard(PlantItem plant) {
     final bool isHighlighted = _highlightedId == plant.id;
+    final bool isFavorite = _favoriteIds.contains(plant.id);
 
-    return _buildGatheringCardShell(
-      isHighlighted: isHighlighted,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildCardImage(plant.image, Icons.local_florist),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: isHighlighted
+              ? const Color(0xFFFFF4D8)
+              : Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            splashColor: const Color(0xFFFF8E7C).withOpacity(0.08),
+            highlightColor: const Color(0xFFFF8E7C).withOpacity(0.04),
+            onTap: () => _openFlowerDetail(plant),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isHighlighted
+                      ? const Color(0xFFFFB27A).withOpacity(0.6)
+                      : const Color(0xFFFF8E7C).withOpacity(0.12),
+                  width: 1,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    _buildCardTitle(_displayPlantName(plant), plant.id),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: [
-                        _buildSmallTag('채집 ${plant.level}레벨'),
-                        if (plant.availableTime.isNotEmpty)
-                          _buildSmallTag(plant.availableTime),
-                        if (plant.location.isNotEmpty)
-                          _buildSmallTag(plant.location, isLocation: true),
-                      ],
+                    Container(
+                      width: 116,
+                      height: 116,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.black.withOpacity(0.05),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Image.asset(
+                              _imageAssetPath(plant.image),
+                              fit: BoxFit.contain,
+                              alignment: Alignment.center,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.local_florist_rounded,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                    const Spacer(),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: _buildPriceButton(plant.prices),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 116),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: 2,
+                                      right: 8,
+                                    ),
+                                    child: Text(
+                                      _displayPlantName(plant),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF333333),
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => _toggleFavorite(plant.id),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 2,
+                                    ),
+                                    child: Icon(
+                                      isFavorite
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      size: 24,
+                                      color: isFavorite
+                                          ? const Color(0xFFFF8E7C)
+                                          : const Color(0xFFD9D9D9),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: Wrap(
+                                    spacing: 5,
+                                    runSpacing: 4,
+                                    children: [
+                                      _buildSmallTag('원예 ${plant.level}레벨'),
+                                      if (plant.growthTime.trim().isNotEmpty &&
+                                          plant.growthTime.trim() != '-')
+                                        _buildGrowthTimeTag(
+                                          plant.growthTime.trim(),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Padding(
+                                  padding: EdgeInsets.only(right: 2),
+                                  child: Icon(
+                                    Icons.chevron_right_rounded,
+                                    size: 22,
+                                    color: Color(0xFFB8C2CC),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 34,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: _buildFlowerColorSummaryIcons(
+                                    plant.flowerColorSummaries,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: _buildPriceButton(
+                                plant.prices,
+                                seedCost: null,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  List<Widget> _buildFlowerColorSummaryIcons(List<FlowerColorSummary> colors) {
+    if (colors.isEmpty) {
+      return [
+        Container(
+          width: 32,
+          height: 32,
+          margin: const EdgeInsets.only(right: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xC6FFF8E7),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.local_florist_rounded,
+              size: 16,
+              color: Color(0xFF7C6F57),
+            ),
+          ),
+        ),
+      ];
+    }
+
+    return colors.map((color) {
+      final path = _imageAssetPath(color.image);
+
+      return Container(
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xC6FFF8E7),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Image.asset(
+              path,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.local_florist_rounded,
+                size: 16,
+                color: Color(0xFF7C6F57),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
+
   Widget _buildFishCard(FishItem fish) {
     final bool isHighlighted = _highlightedId == fish.id;
     final fishPrices = [
@@ -1729,25 +2258,31 @@ class _GatheringScreenState extends State<GatheringScreen>
 // 카드 내 이미지 박스
   Widget _buildCardImage(String image, IconData fallbackIcon) {
     return Container(
-      width: 88,
-      height: 88,
+      width: 110,
+      height: 110,
       decoration: BoxDecoration(
         color: const Color(0xFFFFFAF8),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: const Color(0xFFFF8E7C).withOpacity(0.15),
           width: 1,
         ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Image.asset(
-          _imageAssetPath(image),
-          fit: BoxFit.contain,
-          errorBuilder: (c, e, s) => Icon(
-            fallbackIcon,
-            color: Colors.grey,
-            size: 32,
+        borderRadius: BorderRadius.circular(12),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            child: Image.asset(
+              _imageAssetPath(image),
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              errorBuilder: (c, e, s) => Icon(
+                fallbackIcon,
+                color: Colors.grey,
+                size: 36,
+              ),
+            ),
           ),
         ),
       ),
@@ -2307,7 +2842,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     }
   }
 
-  void _showPriceBottomSheet(List<int> prices) {
+  void _showPriceBottomSheet(List<int> prices, {int? seedCost}) {
     _dismissKeyboard();
     final visiblePrices = <Map<String, dynamic>>[];
 
@@ -2388,7 +2923,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (visiblePrices.isEmpty)
+                if (visiblePrices.isEmpty && (seedCost == null || seedCost <= 0))
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -2408,53 +2943,100 @@ class _GatheringScreenState extends State<GatheringScreen>
                     ),
                   )
                 else
-                  ...visiblePrices.map((item) {
-                    final int star = item['star'] as int;
-                    final int price = item['price'] as int;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 9,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getStarBadgeColor(star),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '$star성',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF3F3F46),
+                  Column(
+                    children: [
+                      if (seedCost != null && seedCost > 0)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF7ED),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFE7CC),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Text(
+                                  '구매가',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF8A4B08),
+                                  ),
+                                ),
                               ),
-                            ),
+                              const Spacer(),
+                              Text(
+                                '${_formatPrice(seedCost)}원',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF2D3436),
+                                ),
+                              ),
+                            ],
                           ),
-                          const Spacer(),
-                          Text(
-                            '${_formatPrice(price)}원',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF2D3436),
-                            ),
+                        ),
+                      ...visiblePrices.map((item) {
+                        final int star = item['star'] as int;
+                        final int price = item['price'] as int;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
                           ),
-                        ],
-                      ),
-                    );
-                  }),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _getStarBadgeColor(star),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '$star성',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF3F3F46),
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                '${_formatPrice(price)}원',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF2D3436),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -2469,6 +3051,350 @@ class _GatheringScreenState extends State<GatheringScreen>
     final selected = list.removeAt(index);
     list.insert(0, selected);
   }
+}
 
+class FlowerDetailPage extends StatelessWidget {
+  final FlowerDetail detail;
 
+  const FlowerDetailPage({
+    super.key,
+    required this.detail,
+  });
+
+  String _formatPrice(int? price) {
+    if (price == null) return '';
+    return price.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},',
+    );
+  }
+
+  Color _growthTimeChipColor(String raw) {
+    final value = raw.replaceAll(' ', '');
+
+    if (value.contains('18시간')) return const Color(0xFFE8F7E8);
+    if (value.contains('1일6시간')) return const Color(0xFFFFF1E0);
+    if (value.contains('1일')) return const Color(0xFFEAF4FF);
+    if (value.contains('2일')) return const Color(0xFFF3ECFF);
+    if (value.contains('3일')) return const Color(0xFFFFE7EF);
+    return const Color(0xFFF4F6F8);
+  }
+
+  Color _growthTimeChipTextColor(String raw) {
+    final value = raw.replaceAll(' ', '');
+
+    if (value.contains('18시간')) return const Color(0xFF4E9B57);
+    if (value.contains('1일6시간')) return const Color(0xFFCC7A00);
+    if (value.contains('1일')) return const Color(0xFF4A7FD1);
+    if (value.contains('2일')) return const Color(0xFF7A5BC1);
+    if (value.contains('3일')) return const Color(0xFFD35B87);
+    return const Color(0xFF6B7280);
+  }
+
+  Color _getStarBadgeColor(int star) {
+    switch (star) {
+      case 1:
+        return const Color(0xFFF3F4F6);
+      case 2:
+        return const Color(0xFFDDF7E8);
+      case 3:
+        return const Color(0xFFE3F2FD);
+      case 4:
+        return const Color(0xFFF3E8FF);
+      case 5:
+        return const Color(0xFFFFF1C7);
+      default:
+        return const Color(0xFFF3F4F6);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePath = detail.image.startsWith('assets/')
+        ? detail.image
+        : 'assets/${detail.image}';
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFAF8),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 30),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFFFFE2DB),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 118,
+                          height: 118,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFAF8),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: Image.asset(
+                              imagePath,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.local_florist_rounded,
+                                size: 44,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                detail.nameKo,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF2D3436),
+                                  height: 1.15,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '꽃 · 원예 ${detail.level}레벨',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF7B8794),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  if (detail.growthTime.isNotEmpty)
+                                    _detailMetaChip(
+                                      detail.growthTime,
+                                      bg: _growthTimeChipColor(detail.growthTime),
+                                      fg: _growthTimeChipTextColor(detail.growthTime),
+                                    ),
+                                  _detailMetaChip(
+                                    '씨앗 ${_formatPrice(detail.seedCost)}원',
+                                    bg: const Color(0xFFFFF3F0),
+                                    fg: const Color(0xFFFF7A65),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    '꽃 색 종류',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2D3436),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: detail.flowerColors.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 0.72,
+                    ),
+                    itemBuilder: (context, index) {
+                      final color = detail.flowerColors[index];
+                      final colorPath = color.image.isNotEmpty
+                          ? (color.image.startsWith('assets/')
+                          ? color.image
+                          : 'assets/${color.image}')
+                          : '';
+
+                      return Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF4C7),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFFFE08A)),
+                        ),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.82),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: colorPath.isNotEmpty
+                                      ? Image.asset(
+                                    colorPath,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.local_florist_rounded,
+                                      size: 20,
+                                      color: Colors.grey,
+                                    ),
+                                  )
+                                      : const Icon(
+                                    Icons.local_florist_rounded,
+                                    size: 20,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              color.colorNameKo,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF4B5563),
+                                height: 1.15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '배합식',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2D3436),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...detail.breedingRules.map((rule) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFFFE2DB)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${rule.parentColorAKo} + ${rule.parentColorBKo} = ${rule.resultColorKo}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF2D3436),
+                            ),
+                          ),
+                          if ((rule.note ?? '').isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              rule.note!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF7B8794),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                          if (rule.isCatalogOnly || rule.isFinalStep) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                if (rule.isCatalogOnly)
+                                  _detailMetaChip(
+                                    '도감작',
+                                    bg: const Color(0xFFFFF3F0),
+                                    fg: const Color(0xFFFF7A65),
+                                  ),
+                                if (rule.isFinalStep)
+                                  _detailMetaChip(
+                                    '종결 배합',
+                                    bg: const Color(0xFFEFF6FF),
+                                    fg: const Color(0xFF3B82F6),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _detailMetaChip(
+      String text, {
+        required Color bg,
+        required Color fg,
+      }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: fg,
+          height: 1.0,
+        ),
+      ),
+    );
+  }
 }
