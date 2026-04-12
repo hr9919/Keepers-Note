@@ -593,6 +593,22 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   }
 
   @override
+  void didUpdateWidget(covariant CookingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.initialSearchItem != null &&
+        widget.initialSearchItem != oldWidget.initialSearchItem) {
+      _pendingSearchItem = widget.initialSearchItem;
+      _applySearchItem(widget.initialSearchItem!);
+      return;
+    }
+
+    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
+      _clearSearchState();
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     _searchFocusNode.dispose();
@@ -1180,6 +1196,17 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         ),
       ),
     );
+  }
+
+  void _moveToTopInList<T>(
+      List<T> list,
+      bool Function(T element) test,
+      ) {
+    final int index = list.indexWhere(test);
+    if (index <= 0) return;
+
+    final T target = list.removeAt(index);
+    list.insert(0, target);
   }
 
   void _attachScrollListener(ScrollController controller) {
@@ -1862,6 +1889,17 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           break;
       }
 
+      if (_pendingSearchItem != null &&
+          _pendingSearchItem!.cookingTab == CookingTabType.recipe) {
+        final normalizedId =
+        _normalizeSearchTargetId(_pendingSearchItem!.id);
+
+        _moveToTopInList<Gourmet>(
+          filtered,
+              (e) => e.id.trim() == normalizedId.trim(),
+        );
+      }
+
       if (!mounted) return;
       setState(() {
         _visibleRecipeList = filtered;
@@ -1911,13 +1949,22 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         break;
     }
 
+    if (_pendingSearchItem != null &&
+        _pendingSearchItem!.cookingTab == CookingTabType.material) {
+      final normalizedId =
+      _normalizeSearchTargetId(_pendingSearchItem!.id);
+
+      _moveToTopInList<CookingMaterialItem>(
+        filtered,
+            (e) => e.id.trim() == normalizedId.trim(),
+      );
+    }
+
     if (!mounted) return;
     setState(() {
       _visibleMaterialList = filtered;
     });
   }
-
-
 
   // --- 공통 카드 헬퍼 (레벨별 컬러 복구) ---
   String _ingredientImagePath(String ingredientName) {
@@ -2428,34 +2475,13 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     final normalizedId = _normalizeSearchTargetId(item.id);
 
+    _dismissSearchFocus();
     _searchController.clear();
     _searchQuery = '';
+    _selectedFilter = '전체';
 
     if (item.cookingTab == CookingTabType.material) {
       _tabController.animateTo(1);
-
-      if (item.cookingMaterialCategory != null) {
-        switch (item.cookingMaterialCategory!) {
-          case CookingMaterialCategoryType.crop:
-            _selectedFilter = '작물';
-            break;
-          case CookingMaterialCategoryType.store:
-            _selectedFilter = '상점구매';
-            break;
-          case CookingMaterialCategoryType.mushroom:
-            _selectedFilter = '버섯';
-            break;
-          case CookingMaterialCategoryType.fish:
-            _selectedFilter = '물고기';
-            break;
-          case CookingMaterialCategoryType.insect:
-            _selectedFilter = '곤충';
-            break;
-          case CookingMaterialCategoryType.etc:
-            _selectedFilter = '기타';
-            break;
-        }
-      }
     } else {
       _tabController.animateTo(0);
     }
@@ -2474,13 +2500,12 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       Future.delayed(const Duration(seconds: 2), () {
         if (!mounted) return;
 
-        if (_highlightedId == normalizedId) {
-          setState(() {
+        setState(() {
+          if (_highlightedId == normalizedId) {
             _highlightedId = null;
-          });
-        }
-
-        _pendingSearchItem = null;
+          }
+          _pendingSearchItem = null;
+        });
       });
     });
   }
