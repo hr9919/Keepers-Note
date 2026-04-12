@@ -196,10 +196,10 @@ class _HomeScreenState extends State<HomeScreen>
     final bool isVerified = point.isOakVerified || point.isFluoriteVerified;
 
     final Color borderColor = hasOak && hasFluorite
-        ? const Color(0xFFB794F4)
+        ? const Color(0xFFBFA2FF) // 둘다 (연보라)
         : hasOak
-        ? const Color(0xFF8BC34A)
-        : const Color(0xFF7E57C2);
+        ? const Color(0xFFFF8E7C) // 🌳 참나무 (코랄/주황)
+        : const Color(0xFF8ED6FF); // 💎 형광석 (파스텔 하늘)
 
     final String iconPath = hasOak
         ? point.oak!.iconPath
@@ -3671,6 +3671,63 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildPreviewSpawnPointBottomSheetIcon(SpawnPointModel point) {
+    if (point.isBothVerified) {
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          const Icon(
+            Icons.location_on_rounded,
+            size: 28,
+            color: Color(0xFFFF8E7C),
+          ),
+          Positioned(
+            left: 2,
+            bottom: 2,
+            child: Image.asset(
+              'assets/images/resources/oak.png',
+              width: 16,
+              height: 16,
+            ),
+          ),
+          Positioned(
+            right: 2,
+            top: 2,
+            child: Image.asset(
+              'assets/images/resources/fluorite.png',
+              width: 16,
+              height: 16,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (point.isOakVerified && point.oak != null) {
+      return Image.asset(point.oak!.iconPath, width: 28, height: 28);
+    }
+
+    if (point.isFluoriteVerified && point.fluorite != null) {
+      return Image.asset(point.fluorite!.iconPath, width: 28, height: 28);
+    }
+
+    if (point.isOakOnly) {
+      return Image.asset(
+        'assets/images/resources/oak.png',
+        width: 24,
+        height: 24,
+        color: const Color(0xFFFFC7BE),
+        colorBlendMode: BlendMode.modulate,
+      );
+    }
+
+    return const Icon(
+      Icons.location_on_rounded,
+      size: 28,
+      color: Color(0xFFFFC7BE),
+    );
+  }
+
   void _showPreviewSpawnPointDetail(SpawnPointModel point) {
     final oak = point.oak;
     final fluorite = point.fluorite;
@@ -3823,10 +3880,7 @@ class _HomeScreenState extends State<HomeScreen>
                       color: const Color(0xFFFFE1D9),
                     ),
                   ),
-                  child: Text(
-                    point.isOakOnly ? '🌳' : '💎',
-                    style: const TextStyle(fontSize: 20),
-                  ),
+                  child: _buildPreviewSpawnPointBottomSheetIcon(point),
                 ),
                 const SizedBox(width: 14),
                 Expanded(

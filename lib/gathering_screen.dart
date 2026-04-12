@@ -124,6 +124,7 @@ class BirdItem {
   final String image;
   final String location;
   final String availableTime;
+  final String timeKey;
   final String weather;
   final int level;
   final List<int> prices;
@@ -135,6 +136,7 @@ class BirdItem {
     required this.image,
     required this.location,
     required this.availableTime,
+    required this.timeKey,
     required this.weather,
     required this.level,
     required this.prices,
@@ -145,13 +147,20 @@ class BirdItem {
       return int.tryParse((p1 ?? p2 ?? 0).toString()) ?? 0;
     }
 
+    final availableTime =
+    (json['availableTime'] ?? json['available_time'] ?? '').toString();
+
+    final timeKey =
+    (json['timeKey'] ?? json['time_key'] ?? '').toString();
+
     return BirdItem(
       id: (json['id'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
       nameKo: (json['nameKo'] ?? json['name_ko'] ?? json['name'] ?? '').toString(),
       image: (json['image'] ?? '').toString(),
       location: (json['location'] ?? '').toString(),
-      availableTime: (json['availableTime'] ?? json['available_time'] ?? '').toString(),
+      availableTime: availableTime,
+      timeKey: timeKey,
       weather: (json['weather'] ?? '').toString(),
       level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
       prices: [
@@ -514,25 +523,28 @@ class _GatheringScreenState extends State<GatheringScreen>
     return fullPath;
   }
 
-  String _timeLabel(String? time) {
+  String _formatAvailableTimeChip(String? time) {
     if (time == null || time.trim().isEmpty) return '';
 
-    final raw = time.trim();
-    final lower = raw.toLowerCase();
-    final t = raw.replaceAll(' ', '');
+    final compact = time.trim().replaceAll(' ', '').toLowerCase();
 
-    if (lower == 'all day' || t == '0~24' || t == '0-24') return '하루종일';
-    if (t == '4~21' || t == '4-21') return '새벽~밤';
-    if (t == '4~19' || t == '4-19') return '새벽~저녁';
-    if (t == '0~18' || t == '0-18') return '밤~저녁';
-    if (t == '6~18' || t == '6-18') return '아침~저녁';
+    switch (compact) {
+      case 'all':
+        return '하루종일';
+      case 'day_night':
+        return '6시~24시';
+      case 'dawn_night':
+        return '0시~6시, 18시~24시';
+      case 'dawn_day_night':
+        return '0시~24시';
+    }
 
-    if (t == '6~12' || lower == 'morning') return '아침';
-    if (t == '12~18' || lower == 'afternoon') return '낮';
-    if (t == '18~24' || lower == 'evening') return '저녁';
-    if (t == '0~6' || lower == 'night') return '밤';
+    final match = RegExp(r'^(\d{1,2})[~-](\d{1,2})$').firstMatch(compact);
+    if (match != null) {
+      return '${match.group(1)}시~${match.group(2)}시';
+    }
 
-    return raw;
+    return time.trim();
   }
 
   Color _growthTimeChipColor(String raw) {
@@ -1857,6 +1869,9 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   Widget _buildBirdCard(BirdItem bird) {
     final bool isHighlighted = _highlightedId == bird.id;
+    final timeChip = _formatAvailableTimeChip(
+      bird.timeKey.isNotEmpty ? bird.timeKey : bird.availableTime,
+    );
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -1866,7 +1881,7 @@ class _GatheringScreenState extends State<GatheringScreen>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildCardImage(bird.image, Icons.flutter_dash),
+              _buildCardImage(bird.image, Icons.flutter_dash_rounded),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -1879,8 +1894,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                       runSpacing: 4,
                       children: [
                         _buildSmallTag('관찰 ${bird.level}레벨'),
-                        if (bird.availableTime.isNotEmpty)
-                          _buildSmallTag(bird.availableTime),
+                        if (timeChip.isNotEmpty) _buildSmallTag(timeChip),
                         if (bird.location.isNotEmpty)
                           _buildSmallTag(bird.location, isLocation: true),
                       ],
@@ -2145,6 +2159,8 @@ class _GatheringScreenState extends State<GatheringScreen>
       fish.price5 ?? 0,
     ];
 
+    final timeChip = _formatAvailableTimeChip(fish.availableTime);
+
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
       child: Padding(
@@ -2167,8 +2183,8 @@ class _GatheringScreenState extends State<GatheringScreen>
                       children: [
                         if (fish.level != null)
                           _buildSmallTag('낚시 ${fish.level}레벨'),
-                        if (_timeLabel(fish.availableTime).isNotEmpty)
-                          _buildSmallTag(_timeLabel(fish.availableTime)),
+                        if (timeChip.isNotEmpty)
+                          _buildSmallTag(timeChip),
                         if (fish.location.isNotEmpty)
                           _buildSmallTag(fish.location, isLocation: true),
                         if (fish.weather != 'Unknown' && fish.weather.isNotEmpty)
@@ -2192,6 +2208,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   Widget _buildInsectCard(InsectItem insect) {
     final bool isHighlighted = _highlightedId == insect.id;
+    final timeChip = _formatAvailableTimeChip(insect.availableTime);
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -2214,8 +2231,8 @@ class _GatheringScreenState extends State<GatheringScreen>
                       runSpacing: 4,
                       children: [
                         _buildSmallTag('채집 ${insect.level}레벨'),
-                        if (insect.availableTime.isNotEmpty)
-                          _buildSmallTag(insect.availableTime),
+                        if (timeChip.isNotEmpty)
+                          _buildSmallTag(timeChip),
                         if (insect.location.isNotEmpty)
                           _buildSmallTag(insect.location, isLocation: true),
                       ],
@@ -3330,17 +3347,6 @@ class FlowerDetailPage extends StatelessWidget {
                               color: Color(0xFF2D3436),
                             ),
                           ),
-                          if ((rule.note ?? '').isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              rule.note!,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF7B8794),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
                           if (rule.isCatalogOnly || rule.isFinalStep) ...[
                             const SizedBox(height: 8),
                             Wrap(

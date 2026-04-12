@@ -174,6 +174,27 @@ String _resolveIngredientImagePath(String? imagePath) {
   return 'assets/$raw';
 }
 
+String _resolveTypeLabel({
+  String? targetType,
+  required bool isCultivable,
+}) {
+  // ⭐ 핵심: 작물은 무조건 crop으로 처리
+  if (isCultivable) return '작물';
+
+  switch (targetType) {
+    case 'fish':
+      return '물고기';
+    case 'resource':
+      return '지도 채집 자원';
+    case 'shop':
+      return '상점 구매';
+    case 'gourmet':
+      return '요리';
+    default:
+      return '';
+  }
+}
+
 Widget _buildIngredientImage({
   required String ingredientNameKo,
   String? imagePath,
@@ -525,7 +546,6 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       '라즈베리': 'raspberry',
       '오렌지': 'orange',
       '파인애플': 'pineapple',
-      '아보카도': 'avocado',
 
       '검은 트러플': 'black-truffle',
       '표고버섯': 'shiitake',
@@ -2478,7 +2498,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   List<String> _currentFilters() => _tabController.index == 0
       ? const ['전체', '일반 레시피', '히든 레시피']
-      : const ['전체', '작물', '상점구매', '버섯', '물고기', '곤충', '기타'];
+      : const ['전체', '작물', '상점구매'];
 
   void _onSortSelected(String sort) { setState(() => _selectedSort = sort); _applyFilters(); }
 

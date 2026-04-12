@@ -43,6 +43,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   bool _showVoteNoticeBar = false;
   bool _hasShownVoteNoticeOnce = false;
+  bool _isTodayLocationVerified = false;
   Timer? _voteNoticeTimer;
 
   final Color seaColor = const Color(0xFF6CA0B3);
@@ -194,6 +195,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     final oak = point.oak;
     final fluorite = point.fluorite;
 
+    final bool oakVerified = point.resources.any(
+          (res) => res.resourceName == 'roaming_oak' && res.isVerified,
+    );
+
+    final bool fluoriteVerified = point.resources.any(
+          (res) => res.resourceName == 'fluorite' && res.isVerified,
+    );
+
+    final bool pointVerified = point.isOakOnly
+        ? oakVerified
+        : (oakVerified && fluoriteVerified);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -234,9 +247,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        point.isBothVerified
-                            ? '오늘 위치가 모두 확정되었어요.'
-                            : '게임에서 확인한 위치에 투표해 주세요.',
+                        pointVerified
+                            ? '오늘의 위치가 확정되었어요.'
+                            : '게임에서 확인한 형광석, 참나무 위치에 투표해 주세요.',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -314,6 +327,39 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         if (availableKeys.contains('fluorite')) 'fluorite',
       };
 
+      for (final point in data.spawnPoints) {
+        debugPrint('--- spawn point id=${point.id} oakOnly=${point.isOakOnly}');
+        for (final res in point.resources) {
+          debugPrint(
+            'resource=${res.resourceName}, verified=${res.isVerified}, vote=${res.voteCount}',
+          );
+        }
+      }
+
+      final bool hasVerifiedOak = data.spawnPoints.any(
+            (point) => point.resources.any(
+              (res) => res.resourceName == 'roaming_oak' && res.isVerified,
+        ),
+      );
+
+      final bool hasVerifiedFluorite = data.spawnPoints.any(
+            (point) => point.resources.any(
+              (res) => res.resourceName == 'fluorite' && res.isVerified,
+        ),
+      );
+
+      final bool isTodayLocationVerified =
+          hasVerifiedOak && hasVerifiedFluorite;
+
+      for (final point in data.spawnPoints) {
+        debugPrint('--- spawn point id=${point.id} oakOnly=${point.isOakOnly}');
+        for (final res in point.resources) {
+          debugPrint(
+            'resource=${res.resourceName}, verified=${res.isVerified}, vote=${res.voteCount}',
+          );
+        }
+      }
+
       final bool shouldShowVoteNotice =
           !_hasShownVoteNoticeOnce && data.spawnPoints.isNotEmpty;
 
@@ -328,6 +374,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         _showAllNpcs = widget.initialShowAllNpcs ?? !useCustomInitialKeys;
         _showAllAnimals = widget.initialShowAllAnimals ?? false;
         _isLoading = false;
+        _isTodayLocationVerified = isTodayLocationVerified;
 
         if (shouldShowVoteNotice) {
           _hasShownVoteNoticeOnce = true;
@@ -1774,9 +1821,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           ),
           duration: const Duration(milliseconds: 420),
           curve: Curves.easeOutCubic,
-          builder: (context, factor, child) {
+          builder: (context, factor, _) {
             final double slideX = (1 - factor) * -18;
-            final double opacity = Curves.easeOut.transform(factor).clamp(0.0, 1.0);
+            final double opacity =
+            Curves.easeOut.transform(factor).clamp(0.0, 1.0);
             final double scale = 0.985 + (0.015 * factor);
 
             return ClipRect(
@@ -1792,7 +1840,89 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       alignment: Alignment.centerLeft,
                       child: SizedBox(
                         width: fullWidth,
-                        child: child,
+                        child: Container(
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.white.withOpacity(0.88),
+                                const Color(0xFFFFF6F3).withOpacity(0.92),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: const Color(0xFFFFE4DE),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                              BoxShadow(
+                                color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 14),
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF1ED),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: const Color(0xFFFFE1D9),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.campaign_rounded,
+                                  size: 14,
+                                  color: Color(0xFFFF8E7C),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _isTodayLocationVerified
+                                      ? '참나무, 형광석 위치가 확정되었어요.'
+                                      : '오늘의 자원 위치에 투표해 주세요!',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF334155),
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _showVoteNoticeBar = false;
+                                  });
+                                },
+                                child: const Text(
+                                  '닫기',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFFF8E7C),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1800,87 +1930,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             );
           },
-          child: Container(
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.white.withOpacity(0.88),
-                  const Color(0xFFFFF6F3).withOpacity(0.92),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: const Color(0xFFFFE4DE),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: const Color(0xFFFF8E7C).withOpacity(0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 14),
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF1ED),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: const Color(0xFFFFE1D9),
-                      width: 1,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.campaign_rounded,
-                    size: 14,
-                    color: Color(0xFFFF8E7C),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    '오늘의 위치에 투표해 주세요!',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF334155),
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _showVoteNoticeBar = false;
-                    });
-                  },
-                  child: const Text(
-                    '닫기',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFFFF8E7C),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ],
-            ),
-          ),
         );
       },
     );
@@ -2122,10 +2171,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     final Color borderColor = isSelected
         ? accentColor
         : hasOak && hasFluorite
-        ? const Color(0xFFB794F4)
+        ? const Color(0xFFBFA2FF) // 둘다 있을 때 (연보라, 중간톤)
         : hasOak
-        ? const Color(0xFF8BC34A)
-        : const Color(0xFF7E57C2);
+        ? const Color(0xFFFF8E7C) // 🌳 참나무 (코랄 주황)
+        : const Color(0xFF8ED6FF); // 💎 형광석 (파스텔 하늘색)
 
     final String iconPath = hasOak
         ? point.oak!.iconPath

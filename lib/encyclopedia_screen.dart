@@ -5,12 +5,14 @@ import 'package:http/http.dart' as http;
 import 'dart:ui';
 import 'setting_screen.dart';
 import 'models/global_search_item.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 
 class AchievementItem {
   final String id;
   final String title;
   final String image;
   final String condition;
+  final String unlockedTitle;
   final bool isHidden;
 
   AchievementItem({
@@ -18,6 +20,7 @@ class AchievementItem {
     required this.title,
     required this.image,
     required this.condition,
+    required this.unlockedTitle,
     required this.isHidden,
   });
 
@@ -39,8 +42,12 @@ class AchievementItem {
         if (value is num) return value != 0;
         if (value is String) {
           final lower = value.toLowerCase();
-          if (lower == 'true' || lower == 'y' || lower == 'yes') return true;
-          if (lower == 'false' || lower == 'n' || lower == 'no') return false;
+          if (lower == 'true' || lower == 'y' || lower == 'yes' || lower == '1') {
+            return true;
+          }
+          if (lower == 'false' || lower == 'n' || lower == 'no' || lower == '0') {
+            return false;
+          }
         }
       }
       return fallback;
@@ -48,13 +55,17 @@ class AchievementItem {
 
     return AchievementItem(
       id: readString(['id'], fallback: UniqueKey().toString()),
-      title: readString(['name', 'nameKo', 'title'], fallback: '이름 없음'),
+      title: readString(['name_ko', 'nameKo', 'name', 'title'], fallback: '이름 없음'),
       image: readString(['image', 'imageUrl', 'icon']),
       condition: readString(
         ['condition', 'achievementCondition', 'description', 'unlockCondition'],
         fallback: '',
       ),
-      isHidden: readBool(['isHidden', 'hidden'], fallback: false),
+      unlockedTitle: readString(
+        ['unlocked_title', 'unlockedTitle', 'titleReward', 'rewardTitle'],
+        fallback: '',
+      ),
+      isHidden: readBool(['is_hidden', 'isHidden', 'hidden'], fallback: false),
     );
   }
 }
@@ -726,8 +737,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
         ),
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 180),
         itemCount: items.length,
-        gridDelegate:
-        const SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
           crossAxisSpacing: 10,
           mainAxisSpacing: 12,
@@ -1354,6 +1364,8 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
     _fetchDetail();
   }
 
+
+
   Future<void> _fetchDetail() async {
     setState(() {
       _isLoading = true;
@@ -1464,7 +1476,8 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final imagePath = _resolveAchievementImagePath(_detailItem.image);
+    final unlockedTitle = _detailItem?.unlockedTitle ?? '';
+    final imagePath = _resolveAchievementImagePath(_detailItem?.image ?? '');
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFAF8),
@@ -1528,11 +1541,56 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
                     Text(
                       _detailItem.title,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF2D3436),
+                        color: _detailItem.isHidden
+                            ? const Color(0xFF5B3AAE)
+                            : const Color(0xFF2D3436),
                         height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _detailItem.isHidden
+                            ? const Color(0xFFF4EEFF)
+                            : const Color(0xFFFFF3F0),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _detailItem.isHidden
+                              ? const Color(0xFFD8C7FF)
+                              : const Color(0xFFFFDDD4),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.workspace_premium_rounded,
+                            size: 16,
+                            color: _detailItem.isHidden
+                                ? const Color(0xFF8B5CF6)
+                                : const Color(0xFFFF8E7C),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              unlockedTitle.isNotEmpty
+                                  ? '칭호 · $unlockedTitle'
+                                  : '칭호 정보 없음',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: _detailItem.isHidden
+                                    ? const Color(0xFF7C3AED)
+                                    : const Color(0xFFE67E6B),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     if (_isLoading) ...[
@@ -1604,23 +1662,73 @@ class _AchievementPressableCard extends StatefulWidget {
 
 class _AchievementPressableCardState extends State<_AchievementPressableCard> {
   bool _isPressed = false;
+  String _cardUnlockedTitle = '';
+  bool _isTitleLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cardUnlockedTitle = widget.item.unlockedTitle.trim();
+    if (_cardUnlockedTitle.isEmpty) {
+      _fetchCardDetailTitle();
+    }
+  }
 
   void _setPressed(bool value) {
     if (_isPressed == value) return;
     setState(() => _isPressed = value);
   }
 
+  Future<void> _fetchCardDetailTitle() async {
+    if (_isTitleLoading) return;
+    _isTitleLoading = true;
+
+    try {
+      final response = await http.get(
+        Uri.parse('${widget.baseUrl}/api/achievements/${widget.item.id}'),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+
+        AchievementItem? detail;
+        if (decoded is Map<String, dynamic>) {
+          detail = AchievementItem.fromJson(decoded);
+        } else if (decoded is Map) {
+          detail = AchievementItem.fromJson(Map<String, dynamic>.from(decoded));
+        }
+
+        if (!mounted || detail == null) return;
+
+        setState(() {
+          _cardUnlockedTitle = (detail?.unlockedTitle ?? '').trim();
+        });
+      }
+    } catch (_) {
+      // 카드 칭호만 조용히 실패
+    } finally {
+      _isTitleLoading = false;
+    }
+  }
+
   Future<void> _handleTap() async {
     widget.onDismissSearchFocus();
 
-    await Future.delayed(const Duration(milliseconds: 20));
+    await Future.delayed(const Duration(milliseconds: 25));
     if (!mounted) return;
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => AchievementDetailScreen(
-          achievement: widget.item,
+          achievement: AchievementItem(
+            id: widget.item.id,
+            title: widget.item.title,
+            image: widget.item.image,
+            condition: widget.item.condition,
+            unlockedTitle: _cardUnlockedTitle,
+            isHidden: widget.item.isHidden,
+          ),
           baseUrl: widget.baseUrl,
         ),
       ),
@@ -1629,100 +1737,186 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      onPointerDown: (_) => _setPressed(true),
-      onPointerUp: (_) async {
-        await Future.delayed(const Duration(milliseconds: 70));
-        if (!mounted) return;
-        _setPressed(false);
-      },
-      onPointerCancel: (_) => _setPressed(false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _handleTap,
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 90),
-          curve: Curves.easeOut,
-          scale: _isPressed ? 0.975 : 1.0,
-          child: Stack(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 90),
-                curve: Curves.easeOut,
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
-                decoration: ShapeDecoration(
-                  color: _isPressed
-                      ? const Color(0xFFFFF6F3)
-                      : Colors.white.withOpacity(0.94),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: BorderSide(
-                      color: _isPressed
-                          ? const Color(0xFFFF8E7C).withOpacity(0.22)
-                          : const Color(0xFFFF8E7C).withOpacity(0.14),
-                      width: 1,
-                    ),
-                  ),
-                  shadows: _isPressed
-                      ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.025),
-                      blurRadius: 5,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                      : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 1,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFAF8),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: const Color(0xFFFFE0D9),
-                          ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: widget.imageBuilder(
-                            title: widget.item.title,
-                            imagePath: widget.item.image,
-                            padding: 4,
-                            iconSize: 24,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.item.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                        color: _isPressed
-                            ? const Color(0xFF2F3A45)
-                            : const Color(0xFF2D3436),
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
+    final item = widget.item;
+    final bool isHidden = item.isHidden;
+    final bool hasUnlockedTitle = _cardUnlockedTitle.trim().isNotEmpty;
+
+    final Color hiddenAccent = const Color(0xFF8B5CF6);
+    final Color hiddenBg = const Color(0xFFF4EEFF);
+
+    final Color normalAccent = const Color(0xFFFF8E7C);
+    final Color normalBg = const Color(0xFFFFF3F0);
+
+    final Color accent = isHidden ? hiddenAccent : normalAccent;
+    final Color chipBg = isHidden ? hiddenBg : normalBg;
+
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 90),
+      curve: Curves.easeOut,
+      scale: _isPressed ? 0.972 : 1.0,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.96),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: isHidden
+                  ? hiddenAccent.withOpacity(0.30)
+                  : const Color(0xFFFFE0D9),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _isPressed
+                    ? accent.withOpacity(0.14)
+                    : Colors.black.withOpacity(0.05),
+                blurRadius: _isPressed ? 16 : 12,
+                offset: Offset(0, _isPressed ? 6 : 4),
               ),
             ],
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            splashColor: const Color(0xFFFF8E7C).withOpacity(0.16),
+            highlightColor: const Color(0xFFFF8E7C).withOpacity(0.07),
+            onTapDown: (_) => _setPressed(true),
+            onTapCancel: () => _setPressed(false),
+            onTap: () async {
+              await Future.delayed(const Duration(milliseconds: 85));
+              if (!mounted) return;
+              _setPressed(false);
+              await _handleTap();
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    height: 82,
+                    decoration: BoxDecoration(
+                      color: isHidden
+                          ? hiddenBg.withOpacity(0.78)
+                          : const Color(0xFFFFFAF8),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: isHidden
+                            ? hiddenAccent.withOpacity(0.16)
+                            : const Color(0xFFFFE0D9),
+                      ),
+                    ),
+                    child: widget.imageBuilder(
+                      title: item.title,
+                      imagePath: item.image,
+                      padding: 10,
+                      iconSize: 28,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  SizedBox(
+                    height: 18,
+                    child: Center(
+                      child: AutoSizeText(
+                        item.title,
+                        maxLines: 1,
+                        minFontSize: 8.0,
+                        stepGranularity: 0.1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.0,
+                          fontWeight: FontWeight.w900,
+                          color: isHidden
+                              ? const Color(0xFF5B3AAE)
+                              : const Color(0xFF2D3436),
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 7),
+
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: chipBg,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: accent.withOpacity(0.18),
+                        ),
+                      ),
+                      child: Text(
+                        isHidden ? '히든' : '일반',
+                        style: TextStyle(
+                          fontSize: 10.2,
+                          fontWeight: FontWeight.w800,
+                          color: accent,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 5),
+
+                  SizedBox(
+                    height: 16,
+                    child: Center(
+                      child: _isTitleLoading && !hasUnlockedTitle
+                          ? const Text(
+                        '불러오는 중...',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 8.8,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF94A3B8),
+                          height: 1.0,
+                        ),
+                      )
+                          : hasUnlockedTitle
+                          ? AutoSizeText(
+                        '“$_cardUnlockedTitle”',
+                        maxLines: 1,
+                        minFontSize: 7.2,
+                        stepGranularity: 0.1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 9.6,
+                          fontWeight: FontWeight.w800,
+                          color: accent.withOpacity(0.96),
+                          height: 1.0,
+                        ),
+                      )
+                          : const Text(
+                        '???',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 8.8,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF94A3B8),
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
