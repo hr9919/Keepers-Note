@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 import 'home_screen.dart';
+import 'weather_admin_screen.dart';
 import 'encyclopedia_screen.dart';
 import 'cooking_screen.dart';
 import 'gathering_screen.dart';
@@ -92,6 +93,27 @@ class _MainWrapperState extends State<MainWrapper> {
     } catch (e) {
       debugPrint('이벤트 불러오기 실패: $e');
     }
+  }
+
+  Future<void> _openWeatherAdminScreen() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    if (_isDrawerOpen) {
+      await _closeDrawerSmooth();
+    }
+
+    if (_isEndDrawerOpen) {
+      await _closeEndDrawerSmooth();
+    }
+
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const WeatherAdminScreen(),
+      ),
+    );
   }
 
   Future<void> _openDrawerSmooth() async {
@@ -1347,6 +1369,26 @@ class _MainWrapperState extends State<MainWrapper> {
                         const SizedBox(height: 18),
                         _buildDrawerSectionLabel('기타'),
                         const SizedBox(height: 10),
+
+                        if (_isAdmin)
+                          _buildDrawerItem(
+                            icon: Icons.cloud_rounded,
+                            title: '날씨 관리',
+                            subtitle: '주간 날씨를 수정해요 (관리자)',
+                            isSelected: false,
+                            onTap: () async {
+                              FocusManager.instance.primaryFocus?.unfocus();
+                              await _closeDrawerSmooth();
+
+                              if (!mounted) return;
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const WeatherAdminScreen(),
+                                ),
+                              );
+                            },
+                          ),
 
                         _buildDrawerItem(
                           icon: Icons.settings_rounded,

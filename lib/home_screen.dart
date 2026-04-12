@@ -18,6 +18,7 @@ import 'services/global_search_service.dart';
 import 'models/event_item.dart';
 import 'dart:ui';
 import 'dart:math';
+import 'dart:convert';
 
 String formatDdayLabel(DateTime endAt) {
   final now = DateTime.now();
@@ -70,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen>
   Timer? _sixAMTimer;
   Timer? _eventBannerTimer;
   Timer? _eventResumeTimer;
+  Timer? _weatherRefreshTimer;
   bool _isUserInteracting = false;
   int _currentEventIndex = 0;
 
@@ -263,7 +265,13 @@ class _HomeScreenState extends State<HomeScreen>
 
   final Color snackAccent = const Color(0xFFFF8E7C);
 
+  static const String _baseUrl = 'http://161.33.30.40:8080';
+
   String _currentWeather = '맑음';
+  bool _isWeatherLoading = false;
+
+  List<Map<String, String>> _hourlyWeather = [];
+  List<Map<String, String>> _weeklyWeather = [];
 
   late final AnimationController _weatherController;
 
@@ -572,6 +580,8 @@ class _HomeScreenState extends State<HomeScreen>
     _scheduleSixAMTimer();
     _initializePreview();
     _loadGlobalSearchItems();
+    _loadWeather();
+    _scheduleNextWeatherRefresh();
     _searchController.addListener(_handleSearchChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToCenterPage());
@@ -699,6 +709,139 @@ class _HomeScreenState extends State<HomeScreen>
     });
 
     widget.openEndDrawer?.call();
+  }
+
+  String _normalizeWeatherLabel(String? raw) {
+    final value = (raw ?? '').trim();
+
+    switch (value) {
+      case 'SUNNY':
+      case 'CLEAR':
+      case '맑음':
+        return '맑음';
+      case 'CLOUDY':
+      case 'OVERCAST':
+      case '흐림':
+        return '흐림';
+      case 'RAIN':
+      case '비':
+        return '비';
+      case 'SNOW':
+      case '눈':
+        return '눈';
+      case 'RAINBOW':
+      case '무지개':
+        return '무지개';
+      default:
+        return value.isEmpty ? '맑음' : value;
+    }
+  }
+
+  String _weekdayLabelFromDate(String rawDate) {
+    try {
+      final dt = DateTime.parse(rawDate);
+      const labels = ['월', '화', '수', '목', '금', '토', '일'];
+      return labels[dt.weekday - 1];
+    } catch (_) {
+      return rawDate;
+    }
+  }
+
+  void _scheduleNextWeatherRefresh() {
+    _weatherRefreshTimer?.cancel();
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final candidates = <DateTime>[
+      today.add(const Duration(hours: 6)),
+      today.add(const Duration(hours: 12)),
+      today.add(const Duration(hours: 18)),
+      today.add(const Duration(days: 1)),
+      today.add(const Duration(days: 1, hours: 6)),
+    ].where((t) => t.isAfter(now)).toList()
+      ..sort();
+
+    if (candidates.isEmpty) return;
+
+    final nextTime = candidates.first;
+    final duration = nextTime.difference(now);
+
+    _weatherRefreshTimer = Timer(duration, () async {
+      await _loadWeather();
+      _scheduleNextWeatherRefresh();
+    });
+  }
+
+  Future<void> _loadWeather() async {
+    try {
+      if (mounted) {
+        setState(() {
+          _isWeatherLoading = true;
+        });
+      }
+
+      final currentRes = await http.get(
+        Uri.parse('$_baseUrl/api/weather/current'),
+      );
+
+      final weeklyRes = await http.get(
+        Uri.parse('$_baseUrl/api/weather/weekly'),
+      );
+
+      if (!mounted) return;
+
+      if (currentRes.statusCode == 200) {
+        final currentData = jsonDecode(utf8.decode(currentRes.bodyBytes));
+
+        final String currentWeather =
+        (currentData['currentWeather'] ?? '맑음').toString();
+
+        final List<dynamic> timeline =
+            (currentData['timeline'] as List<dynamic>?) ?? const [];
+
+        final List<Map<String, String>> hourly = timeline.map((e) {
+          final map = e as Map<String, dynamic>;
+          return {
+            'time': (map['label'] ?? '').toString(),
+            'weather': (map['weather'] ?? '맑음').toString(),
+            'slot': (map['slot'] ?? '').toString(),
+          };
+        }).toList();
+
+        setState(() {
+          _currentWeather = currentWeather;
+          _hourlyWeather = hourly;
+        });
+      }
+
+      if (weeklyRes.statusCode == 200) {
+        final weeklyData = jsonDecode(utf8.decode(weeklyRes.bodyBytes));
+
+        final List<dynamic> days =
+            (weeklyData['days'] as List<dynamic>?) ?? const [];
+
+        final List<Map<String, String>> weekly = days.map((e) {
+          final map = e as Map<String, dynamic>;
+          return {
+            'day': (map['dayOfWeek'] ?? '').toString(),
+            'weather': (map['weather'] ?? '맑음').toString(),
+            'date': (map['date'] ?? '').toString(),
+          };
+        }).toList();
+
+        setState(() {
+          _weeklyWeather = weekly;
+        });
+      }
+    } catch (e) {
+      debugPrint('날씨 로드 실패: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isWeatherLoading = false;
+      });
+    }
   }
 
   Future<void> _loadGlobalSearchItems() async {
@@ -865,6 +1008,7 @@ class _HomeScreenState extends State<HomeScreen>
     _searchFocusNode.dispose();
     _eventResumeTimer?.cancel();
     _weatherController.dispose();
+    _weatherRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -1930,6 +2074,7 @@ class _HomeScreenState extends State<HomeScreen>
                 edgeOffset: 8,
                 displacement: 26,
                 onRefresh: () async {
+                  await _loadWeather();
                   await widget.onRefresh?.call();
                   await _loadMapPreviewResources();
                 },
@@ -2175,6 +2320,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String _getWeatherDescription(String weather) {
+
     switch (weather) {
       case '맑음':
         return '햇살이 반짝이는 날이에요';
@@ -2187,7 +2333,7 @@ class _HomeScreenState extends State<HomeScreen>
       case '눈':
         return '포근하게 눈이 내리고 있어요';
       default:
-        return '';
+        return '오늘의 날씨예요';
     }
   }
 
@@ -2543,14 +2689,15 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildHourlyWeatherStrip(String currentWeather) {
     final bool isLightBg = ['맑음', '눈', '무지개'].contains(currentWeather);
 
-    final hourly = [
-      {'time': '아침', 'weather': '맑음'},
-      {'time': '점심', 'weather': '맑음'},
-      {'time': '저녁', 'weather': '흐림'},
-      {'time': '밤', 'weather': '비'},
-      {'time': '새벽', 'weather': '맑음'},
-      {'time': '아침', 'weather': '눈'},
-    ];
+    final hourly = _hourlyWeather.isEmpty
+        ? [
+      {'time': '06시', 'weather': currentWeather},
+      {'time': '12시', 'weather': currentWeather},
+      {'time': '18시', 'weather': currentWeather},
+      {'time': '00시', 'weather': currentWeather},
+      {'time': '내일 06시', 'weather': currentWeather},
+    ]
+        : _hourlyWeather;
 
     return SizedBox(
       height: 50,
@@ -2565,7 +2712,7 @@ class _HomeScreenState extends State<HomeScreen>
           final weather = item['weather']!;
 
           return Container(
-            width: 50,
+            width: 58,
             padding: const EdgeInsets.symmetric(vertical: 4),
             decoration: BoxDecoration(
               color: isLightBg
@@ -2581,8 +2728,11 @@ class _HomeScreenState extends State<HomeScreen>
               children: [
                 Text(
                   item['time']!,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 9.5,
+                    fontSize: 9.2,
                     fontWeight: FontWeight.w700,
                     height: 1.0,
                     color: _getWeatherTextColor(currentWeather),
@@ -2605,174 +2755,284 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _showWeeklyWeatherPopup() {
-    final weekly = [
-      {'day': '오늘', 'weather': '맑음'},
-      {'day': '내일', 'weather': '흐림'},
-      {'day': '금요일', 'weather': '비'},
-      {'day': '토요일', 'weather': '무지개'},
-      {'day': '일요일', 'weather': '눈'},
-    ];
+    final weekly = _weeklyWeather.isEmpty
+        ? [
+      {'day': '월', 'weather': _currentWeather, 'date': ''},
+      {'day': '화', 'weather': _currentWeather, 'date': ''},
+      {'day': '수', 'weather': _currentWeather, 'date': ''},
+      {'day': '목', 'weather': _currentWeather, 'date': ''},
+      {'day': '금', 'weather': _currentWeather, 'date': ''},
+      {'day': '토', 'weather': _currentWeather, 'date': ''},
+      {'day': '일', 'weather': _currentWeather, 'date': ''},
+    ]
+        : _weeklyWeather;
 
-    final bool isLightBg = ['맑음', '눈', '무지개'].contains(_currentWeather);
+    Color weatherAccent(String weather) {
+      switch (weather) {
+        case '맑음':
+          return const Color(0xFFFFC85A);
+        case '흐림':
+          return const Color(0xFF94A3B8);
+        case '비':
+          return const Color(0xFF7FB3FF);
+        case '눈':
+          return const Color(0xFF9FD4F2);
+        case '무지개':
+          return const Color(0xFFD8A7FF);
+        default:
+          return const Color(0xFFFF8E7C);
+      }
+    }
+
+    Color weatherSoftBg(String weather) {
+      switch (weather) {
+        case '맑음':
+          return const Color(0xFFFFF6DE);
+        case '흐림':
+          return const Color(0xFFF3F6FA);
+        case '비':
+          return const Color(0xFFEEF5FF);
+        case '눈':
+          return const Color(0xFFF1F8FD);
+        case '무지개':
+          return const Color(0xFFFFF1F8);
+        default:
+          return const Color(0xFFFFF3F0);
+      }
+    }
+
+    bool isTodayIndex(int index, String day) {
+      if (index == 0) return true;
+      return day == '오늘';
+    }
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
-        final bottomInset = MediaQuery.of(context).padding.bottom;
+        final media = MediaQuery.of(context);
+        final bottomInset = media.padding.bottom;
+        final maxHeight = media.size.height * 0.74;
 
         return SafeArea(
           top: false,
           child: Container(
-            padding: EdgeInsets.fromLTRB(20, 20, 20, 24 + bottomInset),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(26),
-              ),
+            constraints: BoxConstraints(
+              maxHeight: maxHeight,
             ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + bottomInset),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFFBFA),
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(30),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x16000000),
+                  blurRadius: 26,
+                  offset: Offset(0, -8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE9D9D3),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Container(
                       width: 42,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 18),
+                      height: 42,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE2E8F0),
-                        borderRadius: BorderRadius.circular(999),
+                        color: const Color(0xFFFFF1ED),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFFFFDED6),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.cloud_queue_rounded,
+                        size: 22,
+                        color: Color(0xFFFF8E7C),
                       ),
                     ),
-                  ),
-                  const Text(
-                    '주간 날씨 예보',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    '날씨를 탭하면 홈 날씨 카드에 바로 반영돼요.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Column(
-                    children: weekly.map((item) {
-                      final weather = item['weather']!;
-                      final day = item['day']!;
-                      final isSelected = _currentWeather == weather;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                _currentWeather = weather;
-                              });
-                              Navigator.pop(context);
-                            },
-                            borderRadius: BorderRadius.circular(18),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 15,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? const Color(0xFFFFF4F1)
-                                    : const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? const Color(0xFFFFD4CC)
-                                      : const Color(0xFFEAEFF5),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 28,
-                                    height: 28,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: isLightBg
-                                          ? Colors.white.withOpacity(0.32)
-                                          : Colors.white.withOpacity(0.10),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: _buildWeatherIcon(weather, size: 24),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          day,
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF64748B),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          weather,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w800,
-                                            color: Color(0xFF111827),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  AnimatedContainer(
-                                    duration: const Duration(milliseconds: 180),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? const Color(0xFFFF8E7C)
-                                          : const Color(0xFFEFF3F8),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      isSelected ? '현재 적용됨' : '선택',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : const Color(0xFF64748B),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '주간 날씨 예보',
+                            style: TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF2E2A27),
+                              height: 1.1,
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
+                          SizedBox(height: 4),
+                          Text(
+                            '이번 주 날씨 흐름을 가볍게 확인해보세요.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF8C817B),
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      children: List.generate(weekly.length, (index) {
+                        final item = weekly[index];
+                        final weather = _normalizeWeatherLabel(
+                          (item['weather'] ?? '').toString(),
+                        );
+                        final day = (item['day'] ?? '').toString();
+                        final date = (item['date'] ?? '').toString();
+                        final today = isTodayIndex(index, day);
+
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            bottom: index == weekly.length - 1 ? 0 : 10,
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 13,
+                            ),
+                            decoration: BoxDecoration(
+                              color: today
+                                  ? const Color(0xFFFFF6F3)
+                                  : Colors.white.withOpacity(0.94),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: today
+                                    ? const Color(0xFFFFD7CF)
+                                    : const Color(0xFFF1E6E2),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.028),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: weatherSoftBg(weather),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: _buildWeatherIcon(weather, size: 24),
+                                ),
+                                const SizedBox(width: 12),
+
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          if (today) ...[
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFEEE8),
+                                                borderRadius:
+                                                BorderRadius.circular(999),
+                                              ),
+                                              child: const Text(
+                                                '오늘',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFFFF8E7C),
+                                                  height: 1,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                          ],
+                                          Text(
+                                            day,
+                                            style: const TextStyle(
+                                              fontSize: 15.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF2F2A27),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        date.isEmpty ? weather : '$date · $weather',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF7E746E),
+                                          height: 1.25,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                const SizedBox(width: 10),
+
+                                Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    color: weatherAccent(weather),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: weatherAccent(weather)
+                                            .withOpacity(0.28),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );
