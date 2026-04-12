@@ -1,7 +1,7 @@
 name: keepers_note
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.0+11
+version: 1.0.0+12
 
 environment:
   sdk: ^3.11.3
@@ -21,6 +21,7 @@ dependencies:
   image_cropper: ^12.2.0
   material_design_icons_flutter: ^7.0.7296
   auto_size_text: ^3.0.0
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:

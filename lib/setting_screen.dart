@@ -9,6 +9,8 @@ import 'package:http_parser/http_parser.dart';
 import 'dart:io';
 import 'package:image_cropper/image_cropper.dart';
 import 'home_screen.dart';
+import 'package:path_provider/path_provider.dart';
+import 'image_adjust_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -85,38 +87,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // 2. 이미지 업로드 로직
   Future<void> _pickAndUploadImage(bool isProfile) async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 2048);
+    final XFile? image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2048,
+    );
     if (image == null) return;
 
-    final CroppedFile? croppedFile = await ImageCropper().cropImage(
-      sourcePath: image.path,
-      compressFormat: ImageCompressFormat.jpg,
-      compressQuality: 92,
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: isProfile ? '프로필 사진 조정' : '배경 사진 조정',
-          toolbarColor: Colors.white,
-          activeControlsWidgetColor: snackAccent,
-          initAspectRatio: isProfile ? CropAspectRatioPreset.square : CropAspectRatioPreset.ratio16x9,
+    final ImageAdjustResult? adjusted = await Navigator.push<ImageAdjustResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ImageAdjustScreen(
+          imagePath: image.path,
+          title: isProfile ? '프로필 사진 조정' : '배경 사진 조정',
+          shape: isProfile
+              ? ImageAdjustShape.circle
+              : ImageAdjustShape.roundedRect,
+          viewportAspectRatio: isProfile ? 1.0 : (16 / 9),
         ),
-      ],
+      ),
     );
 
-    if (croppedFile == null) return;
+    if (adjusted == null) return;
 
     try {
       setState(() => _isLoading = true);
-      final request = http.MultipartRequest('POST', Uri.parse('http://161.33.30.40:8080/api/user/upload-image'));
+
+      final tempDir = await getTemporaryDirectory();
+      final filePath =
+          '${tempDir.path}/${isProfile ? 'profile' : 'header'}_${DateTime.now().millisecondsSinceEpoch}.${adjusted.extension}';
+      final file = File(filePath);
+      await file.writeAsBytes(adjusted.bytes);
+
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://161.33.30.40:8080/api/user/upload-image'),
+      );
+
       request.fields['kakaoId'] = _userUid;
       request.fields['type'] = isProfile ? "PROFILE" : "HEADER";
-      request.files.add(await http.MultipartFile.fromPath('file', croppedFile.path, contentType: MediaType('image', 'jpeg')));
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          file.path,
+          contentType: MediaType('image', adjusted.extension == 'png' ? 'png' : 'jpeg'),
+        ),
+      );
 
       final response = await http.Response.fromStream(await request.send());
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
-          final newUrl = "http://161.33.30.40:8080${data['url']}?t=${DateTime.now().millisecondsSinceEpoch}";
-          if (isProfile) _profileImageUrl = newUrl; else _headerImageUrl = newUrl;
+          final newUrl =
+              "http://161.33.30.40:8080${data['url']}?t=${DateTime.now().millisecondsSinceEpoch}";
+          if (isProfile) {
+            _profileImageUrl = newUrl;
+          } else {
+            _headerImageUrl = newUrl;
+          }
           _didUserInfoChange = true;
         });
         _showSnackBar("이미지가 변경되었습니다! ✨");

@@ -7,6 +7,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:path_provider/path_provider.dart';
+import 'image_adjust_screen.dart';
 
 import 'manage_pet_screen.dart';
 import 'models/global_search_item.dart';
@@ -3230,12 +3233,34 @@ class _PetScreenState extends State<PetScreen>
                       onTap: () async {
                         final XFile? image = await _picker.pickImage(
                           source: ImageSource.gallery,
+                          maxWidth: 2048,
                         );
-                        if (image != null) {
-                          setSheetState(
-                                () => tempImagePath = image.path,
-                          );
-                        }
+                        if (image == null) return;
+
+                        final ImageAdjustResult? adjusted =
+                        await Navigator.push<ImageAdjustResult>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ImageAdjustScreen(
+                              imagePath: image.path,
+                              title: _tabController.index == 0 ? '고양이 사진 조정' : '강아지 사진 조정',
+                              shape: ImageAdjustShape.circle,
+                              viewportAspectRatio: 1.0,
+                            ),
+                          ),
+                        );
+
+                        if (adjusted == null) return;
+
+                        final tempDir = await getTemporaryDirectory();
+                        final filePath =
+                            '${tempDir.path}/pet_${DateTime.now().millisecondsSinceEpoch}.${adjusted.extension}';
+                        final file = File(filePath);
+                        await file.writeAsBytes(adjusted.bytes);
+
+                        setSheetState(() {
+                          tempImagePath = file.path;
+                        });
                       },
                       child: Stack(
                         children: [
