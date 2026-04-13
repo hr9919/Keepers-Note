@@ -13,6 +13,7 @@ import 'cooking_screen.dart';
 import 'gathering_screen.dart';
 import 'pet_screen.dart';
 import 'setting_screen.dart';
+import 'tip_guide_screen.dart';
 import 'models/global_search_item.dart';
 import 'event_screen.dart';
 import 'models/event_item.dart';
@@ -290,6 +291,27 @@ class _MainWrapperState extends State<MainWrapper> {
         _todoTasks = mapped;
       });
     } catch (_) {}
+  }
+
+  Future<void> _openTipGuideScreen() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    if (_isDrawerOpen) {
+      await _closeDrawerSmooth();
+    }
+
+    if (_isEndDrawerOpen) {
+      await _closeEndDrawerSmooth();
+    }
+
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const TipGuideScreen(),
+      ),
+    );
   }
 
   void _toggleTodo(int index) async {
@@ -1327,43 +1349,17 @@ class _MainWrapperState extends State<MainWrapper> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildDrawerSectionLabel('메뉴'),
+                        _buildDrawerSectionLabel('가이드'),
                         const SizedBox(height: 10),
 
                         _buildDrawerItem(
-                          icon: Icons.home_rounded,
-                          title: '홈',
-                          subtitle: '오늘의 정보와 할 일을 확인해요',
-                          isSelected: _selectedIndex == 0,
-                          onTap: () => _onMenuSelect(0),
-                        ),
-                        _buildDrawerItem(
-                          icon: Icons.collections_bookmark_rounded,
-                          title: '도감',
-                          subtitle: '아이템과 생물 정보를 둘러봐요',
-                          isSelected: _selectedIndex == 1,
-                          onTap: () => _onMenuSelect(1),
-                        ),
-                        _buildDrawerItem(
-                          icon: Icons.soup_kitchen_rounded,
-                          title: '요리',
-                          subtitle: '레시피와 재료를 정리해요',
-                          isSelected: _selectedIndex == 2,
-                          onTap: () => _onMenuSelect(2),
-                        ),
-                        _buildDrawerItem(
-                          icon: Icons.travel_explore_rounded,
-                          title: '채집',
-                          subtitle: '낚시, 곤충, 새, 원예를 모아봐요',
-                          isSelected: _selectedIndex == 3,
-                          onTap: () => _onMenuSelect(3),
-                        ),
-                        _buildDrawerItem(
-                          icon: Icons.pets_rounded,
-                          title: '동물',
-                          subtitle: '간식 실험실과 동물 정보를 확인해요',
-                          isSelected: _selectedIndex == 4,
-                          onTap: () => _onMenuSelect(4),
+                          icon: Icons.lightbulb_rounded,
+                          title: '팁 가이드',
+                          subtitle: '게임 진행에 도움이 되는 소소한 팁을 확인해요',
+                          isSelected: false,
+                          onTap: () async {
+                            await _openTipGuideScreen();
+                          },
                         ),
 
                         const SizedBox(height: 18),

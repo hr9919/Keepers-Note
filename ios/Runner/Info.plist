@@ -28,9 +28,9 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>kakao0d98c27a8e42e368e32dd30e5f3fb37a</string>
-			</array>
+            <array>
+                <string>kakao13e6e9e30bad4b0e8a92e1561bab73b0</string>
+            </array>
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
@@ -43,6 +43,15 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>프로필 사진 촬영을 위해 카메라 접근 권한이 필요합니다.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>프로필 사진 설정을 위해 갤러리 접근 권한이 필요합니다.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -57,30 +66,19 @@
 					<key>UISceneConfigurationName</key>
 					<string>flutter</string>
 					<key>UISceneDelegateClassName</key>
-					<string>FlutterSceneDelegate</string>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
 					<key>UISceneStoryboardFile</key>
 					<string>Main</string>
 				</dict>
 			</array>
 		</dict>
 	</dict>
-    <key>UILaunchStoryboardName</key>
-    <string>LaunchScreen</string>
-
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>프로필 사진 설정을 위해 갤러리 접근 권한이 필요합니다.</string>
-
-    <key>NSCameraUsageDescription</key>
-    <string>프로필 사진 촬영을 위해 카메라 접근 권한이 필요합니다.</string>
-
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <key>NSAllowsArbitraryLoads</key>
-        <true/>
-    </dict>
-
-    <key>UIMainStoryboardFile</key>
-    <string>Main</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
 	<key>UIStatusBarHidden</key>
 	<false/>
 	<key>UISupportedInterfaceOrientations</key>
@@ -96,7 +94,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
 </dict>
 </plist>

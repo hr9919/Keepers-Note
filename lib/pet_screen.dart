@@ -1175,6 +1175,101 @@ class _PetScreenState extends State<PetScreen>
     });
   }
 
+  void _showPetImagePreview(Pet pet) {
+    final String? imagePath = pet.imagePath;
+    final bool hasLocalFile =
+        imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync();
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.72),
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Stack(
+            children: [
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.96),
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.22),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: AspectRatio(
+                          aspectRatio: 1,
+                          child: hasLocalFile
+                              ? Image.file(
+                            File(imagePath!),
+                            fit: BoxFit.contain,
+                          )
+                              : Image.asset(
+                            'assets/images/pets.webp',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        pet.name,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2D3436),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        pet.breed,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Material(
+                  color: Colors.white.withOpacity(0.92),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.pop(context),
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildMiniPetCard({
     required String id,
     required String imagePath,
@@ -2254,8 +2349,18 @@ class _PetScreenState extends State<PetScreen>
           padding: const EdgeInsets.fromLTRB(0, 2, 0, 2),
           child: Row(
             children: [
-              _buildPetAvatar(pet, size: 48),
+              // ⭐ 핵심: 아바타만 따로 터치 처리
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _showPetImagePreview(pet),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: _buildPetAvatar(pet, size: 48),
+                ),
+              ),
+
               const SizedBox(width: 8),
+
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

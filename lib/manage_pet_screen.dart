@@ -49,6 +49,53 @@ class _ManagePetsScreenState extends State<ManagePetsScreen> {
     Navigator.pop(context);
   }
 
+  void _showPetImagePreview(Pet pet) {
+    final imagePath = pet.imagePath;
+    final bool hasLocalImage =
+        imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync();
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.75),
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: hasLocalImage
+                    ? Image.file(
+                  File(imagePath!),
+                  fit: BoxFit.contain,
+                )
+                    : Image.asset(
+                  'assets/images/pets.webp',
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, size: 18),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // --- [수정] 간식 실험실 스타일의 예쁜 이탈 방지 팝업 ---
   Future<bool> _showExitDialog() async {
     return await showDialog<bool>(
@@ -288,6 +335,10 @@ class _ManagePetsScreenState extends State<ManagePetsScreen> {
 
   Widget _buildManageCard(Pet pet) {
     final isSelected = _selectedIds.contains(pet.id);
+
+    final bool hasLocalImage =
+        pet.imagePath != null && File(pet.imagePath!).existsSync();
+
     return Container(
       key: ValueKey('manage_${pet.id}'),
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -295,11 +346,17 @@ class _ManagePetsScreenState extends State<ManagePetsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-            color: isSelected ? const Color(0xFFFF8E7C) : const Color(0xFFF2F2F2),
-            width: isSelected ? 2 : 1.2
+          color: isSelected
+              ? const Color(0xFFFF8E7C)
+              : const Color(0xFFF2F2F2),
+          width: isSelected ? 2 : 1.2,
         ),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: ListTile(
@@ -310,37 +367,109 @@ class _ManagePetsScreenState extends State<ManagePetsScreen> {
             Checkbox(
               value: isSelected,
               activeColor: const Color(0xFFFF8E7C),
-              side: BorderSide(color: isSelected ? const Color(0xFFFF8E7C) : const Color(0xFFD1D1D1), width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              side: BorderSide(
+                color: isSelected
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFFD1D1D1),
+                width: 1.5,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
               onChanged: (val) {
                 setState(() {
-                  if (val == true) _selectedIds.add(pet.id!);
-                  else _selectedIds.remove(pet.id);
+                  if (val == true) {
+                    _selectedIds.add(pet.id!);
+                  } else {
+                    _selectedIds.remove(pet.id);
+                  }
                 });
               },
             ),
             const SizedBox(width: 4),
-            CircleAvatar(
-              radius: 24,
-              backgroundImage: (pet.imagePath != null && File(pet.imagePath!).existsSync())
-                  ? FileImage(File(pet.imagePath!))
-                  : const AssetImage('assets/images/pets.webp') as ImageProvider,
+
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _showPetImagePreview(pet),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                      image: DecorationImage(
+                        image: hasLocalImage
+                            ? FileImage(File(pet.imagePath!))
+                            : const AssetImage('assets/images/pets.webp')
+                        as ImageProvider,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.52),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.2),
+                      ),
+                      child: const Icon(
+                        Icons.zoom_in_rounded,
+                        size: 11,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        title: Text(pet.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        subtitle: Text(pet.breed, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+        title: Text(
+          pet.name,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Text(
+          pet.breed,
+          style: const TextStyle(fontSize: 13, color: Colors.grey),
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              icon: const Icon(Icons.edit_note_rounded, color: Color(0xFFFF8E7C), size: 28),
+              icon: const Icon(
+                Icons.edit_note_rounded,
+                color: Color(0xFFFF8E7C),
+                size: 28,
+              ),
               onPressed: () => _handleEdit(pet),
             ),
             const SizedBox(width: 12),
-            const Icon(Icons.drag_indicator_rounded, color: Color(0xFFE0E0E0), size: 28),
+            const Icon(
+              Icons.drag_indicator_rounded,
+              color: Color(0xFFE0E0E0),
+              size: 28,
+            ),
           ],
         ),
       ),
