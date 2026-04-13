@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/today_info_widget_bg">
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="키퍼노트"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:textColor="#2F2A27" />
+
+    <TextView
+        android:id="@+id/widget_weather"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="현재 날씨 · 맑음"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#FF8E7C" />
+
+    <TextView
+        android:id="@+id/widget_oak"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="참나무 · 미확정"
+        android:textSize="13sp"
+        android:textColor="#4B4744" />
+
+    <TextView
+        android:id="@+id/widget_fluorite"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="형광석 · 미확정"
+        android:textSize="13sp"
+        android:textColor="#4B4744" />
+
+    <TextView
+        android:id="@+id/widget_updated_at"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="업데이트 04/13 09:10"
+        android:textSize="11sp"
+        android:textColor="#8E8782" />
+</LinearLayout>
