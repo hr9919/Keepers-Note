@@ -634,17 +634,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 '닉네임',
                 nameController,
                 10,
-                '새로운 닉네임 입력',
+                '인게임 닉네임 입력',
                 icon: Icons.person_rounded,
               ),
               const SizedBox(height: 14),
               _buildDialogField(
                 'UID',
                 uidController,
-                7,
-                '소문자와 숫자 조합 7자리',
+                10,
+                '소문자와 숫자 조합',
                 icon: Icons.badge_rounded,
-                helperText: '예: abc1234',
+                helperText: '예: abc123456',
               ),
 
               const SizedBox(height: 22),
@@ -719,7 +719,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         final uid = uidController.text.trim();
 
                         if (uid.isNotEmpty &&
-                            !RegExp(r'^[a-z0-9]{7}$').hasMatch(uid)) {
+                            !RegExp(r'^[a-z0-9]{1,10}$').hasMatch(uid)) {
                           _showSnackBar("UID 형식을 확인해주세요.");
                           return;
                         }

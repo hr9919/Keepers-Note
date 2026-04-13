@@ -13,6 +13,7 @@ import 'cooking_screen.dart';
 import 'gathering_screen.dart';
 import 'pet_screen.dart';
 import 'setting_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'tip_guide_screen.dart';
 import 'models/global_search_item.dart';
 import 'event_screen.dart';
@@ -96,6 +97,245 @@ class _MainWrapperState extends State<MainWrapper> {
     }
   }
 
+  Future<void> _confirmAndSendMail() async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF8E7C).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.mail_outline_rounded,
+                      color: Color(0xFFFF8E7C),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '건의 메일 보내기',
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2D3436),
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          '메일 앱으로 이동해서 의견을 보낼 수 있어요',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF9AA4B2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Material(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => Navigator.pop(dialogContext, false),
+                      child: const SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 22),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8F6),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFFF8E7C).withOpacity(0.14),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 16,
+                      color: Color(0xFFFF8E7C),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '불편한 점, 버그, 추가되면 좋은 기능을 알려주세요.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.4,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF7C8796),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(
+                          color: Color(0xFFE2E8F0),
+                          width: 1.2,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        foregroundColor: const Color(0xFF636E72),
+                        backgroundColor: const Color(0xFFF8FAFC),
+                      ),
+                      child: const Text(
+                        '취소',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF8E7C),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        '메일 앱 열기',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (ok == true) {
+      await _sendFeedbackEmail();
+    }
+  }
+
+  Future<void> _sendFeedbackEmail() async {
+    final Uri emailUri = Uri(
+      scheme: 'mailto',
+      path: 'mintblue1078@gmail.com',
+      query: Uri.encodeFull(
+        'subject=키퍼노트 건의사항&body=앱 사용 중 느낀 점 및 새로운 기능 건의 내용을 적어주세요 🙏',
+      ),
+    );
+
+    try {
+      await launchUrl(emailUri);
+    } catch (e) {
+      debugPrint('메일 실행 실패: $e');
+    }
+  }
+
+  Future<void> _closeDrawerAndPush(Widget page) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    await Future.delayed(const Duration(milliseconds: 110)); // ripple 살짝 보여주기
+
+    if (_isDrawerOpen) {
+      setState(() => _isDrawerOpen = false);
+      await Future.delayed(_kPanelDuration);
+    }
+
+    if (_isEndDrawerOpen) {
+      setState(() => _isEndDrawerOpen = false);
+      await Future.delayed(_kPanelDuration);
+    }
+
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 240),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
+        pageBuilder: (_, animation, __) => page,
+        transitionsBuilder: (_, animation, __, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          );
+
+          return FadeTransition(
+            opacity: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.02, 0.0),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _openWeatherAdminScreen() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
@@ -171,7 +411,8 @@ class _MainWrapperState extends State<MainWrapper> {
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
-          _userUid = data['gameUid'] ?? kakaoId;
+          final gameUid = data['gameUid']?.toString().trim() ?? '';
+          _userUid = gameUid.isNotEmpty ? gameUid : 'UID를 입력해보세요';
           _userName = data['nickname'] ?? "사용자";
           _isAdmin = data['isAdmin'] ?? false;
 
@@ -192,7 +433,7 @@ class _MainWrapperState extends State<MainWrapper> {
       } else {
         if (!mounted) return;
         setState(() {
-          _userUid = kakaoId;
+          _userUid = 'UID를 입력해보세요';
         });
       }
 
@@ -1349,63 +1590,97 @@ class _MainWrapperState extends State<MainWrapper> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildDrawerSectionLabel('가이드'),
-                        const SizedBox(height: 10),
-
                         _buildDrawerItem(
                           icon: Icons.lightbulb_rounded,
-                          title: '팁 가이드',
-                          subtitle: '게임 진행에 도움이 되는 소소한 팁을 확인해요',
+                          title: '키퍼노트 가이드',
+                          subtitle: '앱 기능 소개',
                           isSelected: false,
+                          accentColor: const Color(0xFFFFC457),
                           onTap: () async {
+                            await Future.delayed(const Duration(milliseconds: 110));
+                            if (!mounted) return;
                             await _openTipGuideScreen();
                           },
                         ),
 
-                        const SizedBox(height: 18),
-                        _buildDrawerSectionLabel('기타'),
-                        const SizedBox(height: 10),
+                        _buildDrawerItem(
+                          icon: Icons.forum_rounded,
+                          title: '미니 커뮤니티',
+                          subtitle: '준비중인 기능이에요',
+                          isSelected: false,
+                          accentColor: const Color(0xFFFF9F5A),
+                          onTap: () async {
+                            await Future.delayed(const Duration(milliseconds: 110));
+                            if (!mounted) return;
+                            await _closeDrawerSmooth();
+                            if (!mounted) return;
+                            await _showComingSoonDialog(
+                              title: '미니 커뮤니티',
+                              message: '곧 추가될 예정이에요!',
+                            );
+                          },
+                        ),
 
-                        if (_isAdmin)
+                        _buildDrawerItem(
+                          icon: Icons.mail_outline_rounded,
+                          title: '피드백 보내기',
+                          subtitle: '아이디어를 보내주세요',
+                          isSelected: false,
+                          accentColor: const Color(0xFF78C3FF),
+                          onTap: () async {
+                            await Future.delayed(const Duration(milliseconds: 110));
+                            if (!mounted) return;
+                            await _closeDrawerSmooth();
+                            if (!mounted) return;
+                            await _confirmAndSendMail();
+                          },
+                        ),
+
+                        if (_isAdmin) ...[
+                          const SizedBox(height: 10),
                           _buildDrawerItem(
                             icon: Icons.cloud_rounded,
-                            title: '날씨 관리',
-                            subtitle: '주간 날씨를 수정해요 (관리자)',
+                            title: '주간 날씨 수정',
+                            subtitle: '관리자 전용 메뉴',
                             isSelected: false,
+                            accentColor: const Color(0xFFB8BEC8),
                             onTap: () async {
                               FocusManager.instance.primaryFocus?.unfocus();
-                              await _closeDrawerSmooth();
 
+                              await Future.delayed(const Duration(milliseconds: 110));
                               if (!mounted) return;
+
+                              await _closeDrawerSmooth();
+                              if (!mounted) return;
+
                               await Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (context) => const WeatherAdminScreen(),
+                                PageRouteBuilder(
+                                  transitionDuration: const Duration(milliseconds: 240),
+                                  reverseTransitionDuration: const Duration(milliseconds: 200),
+                                  pageBuilder: (_, animation, __) => const WeatherAdminScreen(),
+                                  transitionsBuilder: (_, animation, __, child) {
+                                    final curved = CurvedAnimation(
+                                      parent: animation,
+                                      curve: Curves.easeOutCubic,
+                                    );
+
+                                    return FadeTransition(
+                                      opacity: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
+                                      child: SlideTransition(
+                                        position: Tween<Offset>(
+                                          begin: const Offset(0.02, 0.0),
+                                          end: Offset.zero,
+                                        ).animate(curved),
+                                        child: child,
+                                      ),
+                                    );
+                                  },
                                 ),
                               );
                             },
                           ),
-
-                        _buildDrawerItem(
-                          icon: Icons.settings_rounded,
-                          title: '설정',
-                          subtitle: '프로필과 앱 설정을 관리해요',
-                          isSelected: false,
-                          onTap: () async {
-                            FocusManager.instance.primaryFocus?.unfocus();
-                            await _closeDrawerSmooth();
-
-                            if (!mounted) return;
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SettingsScreen(),
-                              ),
-                            );
-
-                            _fetchUserInfo();
-                          },
-                        ),
+                        ],
 
                         SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
                       ],
@@ -1417,6 +1692,97 @@ class _MainWrapperState extends State<MainWrapper> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _showComingSoonDialog({
+    required String title,
+    required String message,
+  }) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF4F1),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    '🚧',
+                    style: TextStyle(fontSize: 26),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2D3436),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF7C8796),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF8E7C),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: const Text(
+                      '확인',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1712,103 +2078,127 @@ class _MainWrapperState extends State<MainWrapper> {
     required String subtitle,
     required bool isSelected,
     required VoidCallback onTap,
+    Color accentColor = const Color(0xFFFF8E7C),
   }) {
+    final Color effectiveAccent =
+    isSelected ? const Color(0xFFFF8E7C) : accentColor;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? const Color(0xFFFFF4F1)
-                  : Colors.white.withOpacity(0.92),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFFFFD7CF)
-                    : const Color(0xFFF1F5F9),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.035),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        borderRadius: BorderRadius.circular(24),
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: effectiveAccent.withOpacity(0.16),
+              width: 1.2,
             ),
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFFFF8E7C)
-                        : const Color(0xFFFFF1ED),
-                    borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.045),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(24),
+            splashColor: effectiveAccent.withOpacity(0.12),
+            highlightColor: effectiveAccent.withOpacity(0.06),
+            overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+              if (states.contains(WidgetState.pressed)) {
+                return effectiveAccent.withOpacity(0.12);
+              }
+              if (states.contains(WidgetState.hovered)) {
+                return effectiveAccent.withOpacity(0.04);
+              }
+              return null;
+            }),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(0, 0, 14, 0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 5,
+                    height: 72,
+                    margin: const EdgeInsets.only(
+                      left: 0,
+                      top: 10,
+                      bottom: 10,
+                      right: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: effectiveAccent,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
-                  child: Icon(
-                    icon,
-                    size: 22,
-                    color: isSelected
-                        ? Colors.white
-                        : const Color(0xFFFF8E7C),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w800,
-                          color: isSelected
-                              ? const Color(0xFFE56F5B)
-                              : const Color(0xFF334155),
-                        ),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: effectiveAccent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: effectiveAccent.withOpacity(0.16),
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF94A3B8),
-                          height: 1.2,
-                        ),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: effectiveAccent,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF2D3436),
+                              height: 1.15,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF8A94A6),
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFFFFE4DE)
-                        : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(10),
+                  const SizedBox(width: 10),
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: effectiveAccent.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 19,
+                      color: effectiveAccent,
+                    ),
                   ),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    size: 18,
-                    color: isSelected
-                        ? const Color(0xFFFF8E7C)
-                        : const Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
