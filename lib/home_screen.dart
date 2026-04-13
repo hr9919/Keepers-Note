@@ -12,6 +12,7 @@ import 'models/spawn_point_model.dart';
 import 'models/spawn_resource_model.dart';
 import 'services/api_service.dart';
 import 'services/home_widget_service.dart';
+import 'utils/spawn_point_label_helper.dart';
 import 'setting_screen.dart';
 import 'map_screen.dart';
 import 'models/global_search_item.dart';
@@ -38,28 +39,6 @@ String formatDdayLabel(DateTime endAt) {
   if (dday == 0) return 'D-Day';
   return 'D-$dday';
 }
-
-class WidgetPlaceRef {
-  final String key;       // house_01, house_02, oak_forest
-  final String label;     // 1번 집, 2번 집, 참나무 숲
-  final double x;         // 맵 정규화 좌표
-  final double y;
-
-  const WidgetPlaceRef({
-    required this.key,
-    required this.label,
-    required this.x,
-    required this.y,
-  });
-}
-
-const widgetPlaceRefs = <WidgetPlaceRef>[
-  WidgetPlaceRef(key: 'house_01', label: '1번 집', x: 12.3, y: 40.2),
-  WidgetPlaceRef(key: 'house_02', label: '2번 집', x: 18.1, y: 35.7),
-  // ...
-  WidgetPlaceRef(key: 'house_12', label: '12번 집', x: 77.4, y: 52.9),
-  WidgetPlaceRef(key: 'oak_forest', label: '참나무 숲', x: 88.0, y: 21.0),
-];
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
@@ -533,44 +512,41 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  String _mapPointToWidgetLabel(double x, double y) {
-    WidgetPlaceRef? best;
-    double bestDist = double.infinity;
-
-    for (final ref in widgetPlaceRefs) {
-      final dx = x - ref.x;
-      final dy = y - ref.y;
-      final dist = dx * dx + dy * dy;
-
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = ref;
-      }
-    }
-
-    return best?.label ?? '위치 확인 필요';
-  }
-
   Future<void> _syncTodayInfoToWidget() async {
     String oakText = '미확정';
     String fluoriteText = '미확정';
 
-    final verifiedOakPoints = _previewSpawnPoints.where(
-          (p) => p.resources.any((r) => r.resourceName == 'roaming_oak' && r.isVerified),
-    );
+    SpawnPointModel? oakPoint;
+    SpawnPointModel? fluoritePoint;
 
-    final verifiedFluoritePoints = _previewSpawnPoints.where(
-          (p) => p.resources.any((r) => r.resourceName == 'fluorite' && r.isVerified),
-    );
+    for (final point in _previewSpawnPoints) {
+      for (final r in point.resources) {
+        if (r.resourceName == 'roaming_oak' &&
+            (r.isVerified || r.isFixed) &&
+            r.isActive) {
+          oakPoint = point;
+        }
 
-    if (verifiedOakPoints.isNotEmpty) {
-      final point = verifiedOakPoints.first;
-      oakText = _mapPointToWidgetLabel(point.x, point.y);
+        if (r.resourceName == 'fluorite' &&
+            (r.isVerified || r.isFixed) &&
+            r.isActive) {
+          fluoritePoint = point;
+        }
+      }
     }
 
-    if (verifiedFluoritePoints.isNotEmpty) {
-      final point = verifiedFluoritePoints.first;
-      fluoriteText = _mapPointToWidgetLabel(point.x, point.y);
+    if (oakPoint != null) {
+      oakText = mapPointToWidgetLabelByLatLng(
+        oakPoint.lat,
+        oakPoint.lng,
+      );
+    }
+
+    if (fluoritePoint != null) {
+      fluoriteText = mapPointToWidgetLabelByLatLng(
+        fluoritePoint.lat,
+        fluoritePoint.lng,
+      );
     }
 
     final now = DateTime.now();

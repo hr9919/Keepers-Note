@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetPlugin
 import es.antonborri.home_widget.HomeWidgetProvider
@@ -13,10 +15,11 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray
+        appWidgetIds: IntArray,
+        widgetData: SharedPreferences
     ) {
         appWidgetIds.forEach { appWidgetId ->
-            updateAppWidget(context, appWidgetManager, appWidgetId)
+            updateAppWidget(context, appWidgetManager, appWidgetId, widgetData)
         }
     }
 
@@ -24,9 +27,9 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
         fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
-            appWidgetId: Int
+            appWidgetId: Int,
+            prefs: SharedPreferences
         ) {
-            val prefs = HomeWidgetPlugin.getData(context)
             val weather = prefs.getString("weather", "맑음") ?: "맑음"
             val oakText = prefs.getString("oak_text", "미확정") ?: "미확정"
             val fluoriteText = prefs.getString("fluorite_text", "미확정") ?: "미확정"
@@ -56,8 +59,11 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, TodayInfoWidgetProvider::class.java)
             val ids = manager.getAppWidgetIds(component)
+
+            val prefs = HomeWidgetPlugin.getData(context)
+
             ids.forEach { id ->
-                updateAppWidget(context, manager, id)
+                updateAppWidget(context, manager, id, prefs)
             }
         }
     }

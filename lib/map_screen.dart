@@ -9,6 +9,7 @@ import 'models/resource_model.dart';
 import 'models/map_data_response.dart';
 import 'models/spawn_point_model.dart';
 import 'models/spawn_resource_model.dart';
+import 'utils/spawn_point_label_helper.dart';
 import 'services/api_service.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
@@ -45,6 +46,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   bool _hasShownVoteNoticeOnce = false;
   bool _isTodayLocationVerified = false;
   Timer? _voteNoticeTimer;
+  String _todayOakLocationLabel = '';
+  String _todayFluoriteLocationLabel = '';
 
   final Color seaColor = const Color(0xFF6CA0B3);
   final Color accentColor = const Color(0xFFFF8E7C);
@@ -203,9 +206,23 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           (res) => res.resourceName == 'fluorite' && res.isVerified,
     );
 
-    final bool pointVerified = point.isOakOnly
-        ? oakVerified
-        : (oakVerified && fluoriteVerified);
+    final bool pointVerified = oakVerified || fluoriteVerified;
+
+    final String pointLabel = mapPointToWidgetLabelByLatLng(
+      point.lat,
+      point.lng,
+    );
+
+    String descriptionText;
+    if (oakVerified && fluoriteVerified) {
+      descriptionText = '참나무와 형광석이 모두 $pointLabel에 있어요!';
+    } else if (oakVerified) {
+      descriptionText = '참나무는 $pointLabel에 있어요!';
+    } else if (fluoriteVerified) {
+      descriptionText = '형광석은 $pointLabel에 있어요!';
+    } else {
+      descriptionText = '게임에서 확인한 형광석, 참나무 위치에 투표해 주세요.';
+    }
 
     showModalBottomSheet(
       context: context,
@@ -247,9 +264,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        pointVerified
-                            ? '오늘의 위치가 확정되었어요.'
-                            : '게임에서 확인한 형광석, 참나무 위치에 투표해 주세요.',
+                        descriptionText,
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -336,29 +351,39 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         }
       }
 
-      final bool hasVerifiedOak = data.spawnPoints.any(
-            (point) => point.resources.any(
-              (res) => res.resourceName == 'roaming_oak' && res.isVerified,
-        ),
-      );
+      SpawnPointModel? verifiedOakPoint;
+      SpawnPointModel? verifiedFluoritePoint;
 
-      final bool hasVerifiedFluorite = data.spawnPoints.any(
-            (point) => point.resources.any(
-              (res) => res.resourceName == 'fluorite' && res.isVerified,
-        ),
-      );
+      for (final point in data.spawnPoints) {
+        for (final res in point.resources) {
+          if (res.resourceName == 'roaming_oak' && res.isVerified) {
+            verifiedOakPoint = point;
+          }
+          if (res.resourceName == 'fluorite' && res.isVerified) {
+            verifiedFluoritePoint = point;
+          }
+        }
+      }
+
+      final bool hasVerifiedOak = verifiedOakPoint != null;
+      final bool hasVerifiedFluorite = verifiedFluoritePoint != null;
 
       final bool isTodayLocationVerified =
           hasVerifiedOak && hasVerifiedFluorite;
 
-      for (final point in data.spawnPoints) {
-        debugPrint('--- spawn point id=${point.id} oakOnly=${point.isOakOnly}');
-        for (final res in point.resources) {
-          debugPrint(
-            'resource=${res.resourceName}, verified=${res.isVerified}, vote=${res.voteCount}',
-          );
-        }
-      }
+      final String todayOakLocationLabel = verifiedOakPoint != null
+          ? mapPointToWidgetLabelByLatLng(
+        verifiedOakPoint.lat,
+        verifiedOakPoint.lng,
+      )
+          : '';
+
+      final String todayFluoriteLocationLabel = verifiedFluoritePoint != null
+          ? mapPointToWidgetLabelByLatLng(
+        verifiedFluoritePoint.lat,
+        verifiedFluoritePoint.lng,
+      )
+          : '';
 
       final bool shouldShowVoteNotice =
           !_hasShownVoteNoticeOnce && data.spawnPoints.isNotEmpty;
@@ -374,7 +399,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         _showAllNpcs = widget.initialShowAllNpcs ?? !useCustomInitialKeys;
         _showAllAnimals = widget.initialShowAllAnimals ?? false;
         _isLoading = false;
+
         _isTodayLocationVerified = isTodayLocationVerified;
+        _todayOakLocationLabel = todayOakLocationLabel;
+        _todayFluoriteLocationLabel = todayFluoriteLocationLabel;
 
         if (shouldShowVoteNotice) {
           _hasShownVoteNoticeOnce = true;
@@ -1810,6 +1838,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildVoteNoticeFloatingBar() {
+    String noticeText;
+
+    if (_isTodayLocationVerified) {
+      final List<String> parts = [];
+
+      if (_todayOakLocationLabel.trim().isNotEmpty) {
+        parts.add('참나무는 ${_todayOakLocationLabel.trim()}');
+      }
+
+      if (_todayFluoriteLocationLabel.trim().isNotEmpty) {
+        parts.add('형광석은 ${_todayFluoriteLocationLabel.trim()}');
+      }
+
+      if (parts.isEmpty) {
+        noticeText = '오늘의 자원 위치가 확정되었어요!';
+      } else {
+        noticeText = '${parts.join(', ')}에 있어요!';
+      }
+    } else {
+      noticeText = '오늘의 자원 위치에 투표해 주세요!';
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final double fullWidth = constraints.maxWidth;
@@ -1841,7 +1891,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       child: SizedBox(
                         width: fullWidth,
                         child: Container(
-                          height: 44,
+                          height: 44, // ✅ 고정 높이로 변경
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
@@ -1892,13 +1942,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  _isTodayLocationVerified
-                                      ? '참나무, 형광석 위치가 확정되었어요.'
-                                      : '오늘의 자원 위치에 투표해 주세요!',
+                                  noticeText,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontSize: 13.5,
+                                    fontSize: 11,
+                                    height: 1.2,
                                     fontWeight: FontWeight.w700,
                                     color: Color(0xFF334155),
                                   ),
