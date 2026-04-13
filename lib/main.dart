@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'onboarding_screen.dart';
 import 'main_wrapper.dart';
@@ -9,7 +10,9 @@ import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  KakaoSdk.init(nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0');
+  KakaoSdk.init(
+    nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0',
+  );
 
   runApp(const KeepersNoteApp());
 }
@@ -38,6 +41,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   static const Duration _minimumSplashDuration = Duration(milliseconds: 1400);
+  static const String _baseUrl = 'http://161.33.30.40:8080';
 
   late final AnimationController _animationController;
 
@@ -112,10 +116,22 @@ class _SplashScreenState extends State<SplashScreen>
     _prepareAndNavigate();
   }
 
+  void _log(String message) {
+    debugPrint('[Splash/Login] $message');
+  }
+
   Future<void> _prepareAndNavigate() async {
     final stopwatch = Stopwatch()..start();
 
-    final bool isLoggedIn = await _checkLoginStatus();
+    bool isLoggedIn = false;
+    try {
+      isLoggedIn = await _checkLoginStatus();
+    } catch (e, s) {
+      _log('prepareAndNavigate error: $e');
+      debugPrint('$s');
+      isLoggedIn = false;
+    }
+
     stopwatch.stop();
 
     final elapsed = stopwatch.elapsed;
@@ -151,37 +167,103 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<bool> _checkLoginStatus() async {
     try {
-      if (!await AuthApi.instance.hasToken()) {
+      _log('자동 로그인 체크 시작');
+
+      final hasToken = await AuthApi.instance.hasToken();
+      _log('hasToken = $hasToken');
+
+      if (!hasToken) {
         return false;
       }
 
-      try {
-        final User kakaoUser = await UserApi.instance.me();
-
-        final response = await http.post(
-          Uri.parse('http://161.33.30.40:8080/api/user/login'),
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({
-            "kakaoId": kakaoUser.id,
-            "nickname": kakaoUser.kakaoAccount?.profile?.nickname ?? "사용자",
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          debugPrint("서버 동기화 성공");
-          return true;
-        } else {
-          debugPrint("서버 응답 에러: ${response.statusCode}");
-          return false;
-        }
-      } catch (e) {
-        debugPrint("상세 체크 실패: $e");
-        await TokenManagerProvider.instance.manager.clear();
+      final user = await _safeGetKakaoUser();
+      if (user == null) {
+        _log('사용자 정보 조회 실패 → 토큰 삭제');
+        await _clearKakaoToken();
         return false;
       }
-    } catch (e) {
-      debugPrint("로그인 상태 체크 에러: $e");
+
+      final kakaoId = user.id;
+      final nickname = user.kakaoAccount?.profile?.nickname ?? '사용자';
+
+      _log('kakaoId = $kakaoId');
+      _log('nickname = $nickname');
+
+      if (kakaoId == null) {
+        _log('kakaoId null → 토큰 삭제');
+        await _clearKakaoToken();
+        return false;
+      }
+
+      final synced = await _syncUserToServer(
+        kakaoId: kakaoId,
+        nickname: nickname,
+      );
+
+      _log('서버 동기화 결과 = $synced');
+
+      if (!synced) {
+        await _clearKakaoToken();
+      }
+
+      return synced;
+    } catch (e, s) {
+      _log('로그인 상태 체크 에러: $e');
+      debugPrint('$s');
+      await _clearKakaoToken();
       return false;
+    }
+  }
+
+  Future<User?> _safeGetKakaoUser() async {
+    try {
+      _log('UserApi.instance.me() 호출');
+      final user = await UserApi.instance.me();
+      _log('me() 성공');
+      return user;
+    } catch (e, s) {
+      _log('me() 실패: $e');
+      debugPrint('$s');
+      return null;
+    }
+  }
+
+  Future<bool> _syncUserToServer({
+    required int kakaoId,
+    required String nickname,
+  }) async {
+    try {
+      _log('서버 동기화 요청 시작');
+
+      final response = await http
+          .post(
+        Uri.parse('$_baseUrl/api/user/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'kakaoId': kakaoId,
+          'nickname': nickname,
+        }),
+      )
+          .timeout(const Duration(seconds: 8));
+
+      _log('서버 응답 코드 = ${response.statusCode}');
+      _log('서버 응답 바디 = ${response.body}');
+
+      return response.statusCode == 200;
+    } catch (e, s) {
+      _log('서버 동기화 실패: $e');
+      debugPrint('$s');
+      return false;
+    }
+  }
+
+  Future<void> _clearKakaoToken() async {
+    try {
+      _log('토큰 삭제');
+      await TokenManagerProvider.instance.manager.clear();
+    } catch (e, s) {
+      _log('토큰 삭제 실패: $e');
+      debugPrint('$s');
     }
   }
 
@@ -211,7 +293,6 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 children: [
                   const Spacer(flex: 7),
-
                   SlideTransition(
                     position: _titleSlide,
                     child: FadeTransition(
@@ -271,9 +352,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 24),
-
                   SlideTransition(
                     position: _bookSlide,
                     child: FadeTransition(
@@ -283,16 +362,16 @@ class _SplashScreenState extends State<SplashScreen>
                         height: 258,
                         decoration: const BoxDecoration(
                           image: DecorationImage(
-                            image: AssetImage("assets/images/splash_art_shadow.png"),
+                            image: AssetImage(
+                              "assets/images/splash_art_shadow.png",
+                            ),
                             fit: BoxFit.contain,
                           ),
                         ),
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 28),
-
                   SlideTransition(
                     position: _captionSlide,
                     child: FadeTransition(
@@ -324,7 +403,6 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                   ),
-
                   const Spacer(flex: 8),
                 ],
               ),
@@ -333,5 +411,40 @@ class _SplashScreenState extends State<SplashScreen>
         ),
       ),
     );
+  }
+}
+
+/// iOS 실기기 문제 분리용 카카오 로그인 헬퍼
+/// 실제 로그인 버튼 쪽에서 이 함수를 쓰면 됨.
+Future<OAuthToken?> signInWithKakaoForStableIOS() async {
+  try {
+    debugPrint('[KakaoLogin] 로그인 시작');
+
+    if (Platform.isIOS) {
+      debugPrint('[KakaoLogin] iOS → loginWithKakaoAccount 사용');
+      return await UserApi.instance.loginWithKakaoAccount();
+    }
+
+    final installed = await isKakaoTalkInstalled();
+    debugPrint('[KakaoLogin] isKakaoTalkInstalled = $installed');
+
+    if (installed) {
+      try {
+        debugPrint('[KakaoLogin] loginWithKakaoTalk 시도');
+        return await UserApi.instance.loginWithKakaoTalk();
+      } catch (e, s) {
+        debugPrint('[KakaoLogin] loginWithKakaoTalk 실패: $e');
+        debugPrint('$s');
+        debugPrint('[KakaoLogin] loginWithKakaoAccount fallback');
+        return await UserApi.instance.loginWithKakaoAccount();
+      }
+    }
+
+    debugPrint('[KakaoLogin] 카카오톡 미설치 → account 로그인');
+    return await UserApi.instance.loginWithKakaoAccount();
+  } catch (e, s) {
+    debugPrint('[KakaoLogin] 전체 실패: $e');
+    debugPrint('$s');
+    return null;
   }
 }
