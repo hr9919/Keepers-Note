@@ -689,64 +689,73 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   Widget _buildAchievementContent() {
     final items = _getFilteredAchievements();
 
-    return RefreshIndicator(
-      key: const PageStorageKey('achievement_tab'),
-      onRefresh: () => _fetchAchievements(showLoading: false),
-      color: snackAccent,
-      child: _isAchievementLoading && _achievementItems.isEmpty
-          ? ListView(
-        controller: _achievementScrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
-        children: const [
-          Center(
-            child: CircularProgressIndicator(
-              color: Color(0xFFFF8E7C),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double width = constraints.maxWidth;
+
+        final bool isTablet = width >= 700;
+        final int crossAxisCount = isTablet ? 5 : 3;
+
+        return RefreshIndicator(
+          key: const PageStorageKey('achievement_tab'),
+          onRefresh: () => _fetchAchievements(showLoading: false),
+          color: snackAccent,
+          child: _isAchievementLoading && _achievementItems.isEmpty
+              ? ListView(
+            controller: _achievementScrollController,
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
             ),
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
+            children: const [
+              Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFFFF8E7C),
+                ),
+              ),
+            ],
+          )
+              : _achievementError != null && _achievementItems.isEmpty
+              ? ListView(
+            controller: _achievementScrollController,
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
+            children: [
+              _buildAchievementErrorCard(),
+            ],
+          )
+              : items.isEmpty
+              ? ListView(
+            controller: _achievementScrollController,
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
+            children: [
+              _buildAchievementEmptyCard(),
+            ],
+          )
+              : GridView.builder(
+            controller: _achievementScrollController,
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 180),
+            itemCount: items.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: isTablet ? 14 : 10,
+              mainAxisSpacing: isTablet ? 14 : 12,
+              mainAxisExtent: isTablet ? 210 : 200,
+            ),
+            itemBuilder: (context, index) {
+              return _buildAchievementCard(items[index]);
+            },
           ),
-        ],
-      )
-          : _achievementError != null && _achievementItems.isEmpty
-          ? ListView(
-        controller: _achievementScrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
-        children: [
-          _buildAchievementErrorCard(),
-        ],
-      )
-          : items.isEmpty
-          ? ListView(
-        controller: _achievementScrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 180),
-        children: [
-          _buildAchievementEmptyCard(),
-        ],
-      )
-          : GridView.builder(
-        controller: _achievementScrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 180),
-        itemCount: items.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.66,
-        ),
-        itemBuilder: (context, index) {
-          return _buildAchievementCard(items[index]);
-        },
-      ),
+        );
+      },
     );
   }
 
@@ -1253,6 +1262,8 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
+        splashColor: const Color(0xFFFF8E7C).withOpacity(0.10),
+        highlightColor: const Color(0xFFFF8E7C).withOpacity(0.05),
         onTap: () {
           if (_selectedFilter == label) return;
           setState(() {
@@ -1294,6 +1305,8 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
           child: Center(
             child: Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12.8,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
@@ -1301,6 +1314,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
                     ? const Color(0xFFFF8E7C)
                     : const Color(0xFF667085),
                 letterSpacing: -0.1,
+                height: 1.0,
               ),
             ),
           ),
@@ -1705,15 +1719,15 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
         });
       }
     } catch (_) {
-      // 카드 칭호만 조용히 실패
     } finally {
-      _isTitleLoading = false;
+      if (mounted) {
+        setState(() => _isTitleLoading = false);
+      }
     }
   }
 
   Future<void> _handleTap() async {
     widget.onDismissSearchFocus();
-
     await Future.delayed(const Duration(milliseconds: 25));
     if (!mounted) return;
 
@@ -1743,7 +1757,6 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
 
     final Color hiddenAccent = const Color(0xFF8B5CF6);
     final Color hiddenBg = const Color(0xFFF4EEFF);
-
     final Color normalAccent = const Color(0xFFFF8E7C);
     final Color normalBg = const Color(0xFFFFF3F0);
 
@@ -1792,39 +1805,42 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    height: 82,
-                    decoration: BoxDecoration(
-                      color: isHidden
-                          ? hiddenBg.withOpacity(0.78)
-                          : const Color(0xFFFFFAF8),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
+                  /// ⭐ 이미지 (유지)
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
                         color: isHidden
-                            ? hiddenAccent.withOpacity(0.16)
-                            : const Color(0xFFFFE0D9),
+                            ? hiddenBg.withOpacity(0.78)
+                            : const Color(0xFFFFFAF8),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isHidden
+                              ? hiddenAccent.withOpacity(0.16)
+                              : const Color(0xFFFFE0D9),
+                        ),
+                      ),
+                      child: widget.imageBuilder(
+                        title: item.title,
+                        imagePath: item.image,
+                        padding: 8,
+                        iconSize: 28,
+                        fit: BoxFit.contain,
                       ),
                     ),
-                    child: widget.imageBuilder(
-                      title: item.title,
-                      imagePath: item.image,
-                      padding: 10,
-                      iconSize: 28,
-                      fit: BoxFit.contain,
-                    ),
                   ),
+
                   const SizedBox(height: 8),
 
+                  /// ⭐ 제목 (AutoSizeText 유지 - 1줄)
                   SizedBox(
                     height: 18,
                     child: Center(
                       child: AutoSizeText(
                         item.title,
                         maxLines: 1,
-                        minFontSize: 8.0,
+                        minFontSize: 9.5,
                         stepGranularity: 0.1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
@@ -1840,13 +1856,14 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
                     ),
                   ),
 
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 6),
 
+                  /// ⭐ 칩
                   Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
-                        vertical: 4,
+                        vertical: 3,
                       ),
                       decoration: BoxDecoration(
                         color: chipBg,
@@ -1858,7 +1875,7 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
                       child: Text(
                         isHidden ? '히든' : '일반',
                         style: TextStyle(
-                          fontSize: 10.2,
+                          fontSize: 10.0,
                           fontWeight: FontWeight.w800,
                           color: accent,
                           height: 1.0,
@@ -1867,49 +1884,46 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
                     ),
                   ),
 
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 4),
 
+                  /// ⭐ 칭호 (Text로 안정화)
                   SizedBox(
-                    height: 16,
+                    height: 28,
                     child: Center(
                       child: _isTitleLoading && !hasUnlockedTitle
                           ? const Text(
-                        '불러오는 중...',
-                        textAlign: TextAlign.center,
+                        '...',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 8.8,
+                          fontSize: 8.0,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF94A3B8),
-                          height: 1.0,
                         ),
                       )
                           : hasUnlockedTitle
-                          ? AutoSizeText(
+                          ? Text(
                         '“$_cardUnlockedTitle”',
                         maxLines: 1,
-                        minFontSize: 7.2,
-                        stepGranularity: 0.1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 9.6,
+                          fontSize: 9.2,
                           fontWeight: FontWeight.w800,
-                          color: accent.withOpacity(0.96),
+                          color: accent.withOpacity(0.94),
                           height: 1.0,
                         ),
                       )
                           : const Text(
                         '???',
-                        textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 8.8,
+                          fontSize: 8.0,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF94A3B8),
-                          height: 1.0,
                         ),
                       ),
                     ),

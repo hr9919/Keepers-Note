@@ -175,42 +175,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
         appBar: _buildSnackAppBar(context),
         body: Stack(
           children: [
-            SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: [
-                  _buildModernHeader(),
-                  Transform.translate(
-                    offset: const Offset(0, -45),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 600),
-                        opacity: _isDataStable ? 1.0 : 0.0,
-                        curve: Curves.easeIn,
-                        child: Column(
-                          children: [
-                            _buildProfileMainCard(),
-                            const SizedBox(height: 24),
-                            _buildSnackSection('공식 커뮤니티', [
-                              _buildSnackLinkItem('네이버 공식 카페', 'assets/icons/ic_naver_cafe.png', 'https://cafe.naver.com/heartopia'),
-                              _buildSnackLinkItem('한국 공식 유튜브', 'assets/icons/ic_youtube.png', 'https://www.youtube.com/@Heartopia-KR'),
-                            ]),
-                            const SizedBox(height: 20),
-                            _buildSnackSection('이용 안내', [
-                              _buildSnackRowItem('앱 버전', trailingText: '1.0.0'),
-                              _buildSnackRowItem('버그 리포트 보내기', isLink: true, onTap: _sendEmail),
-                              _buildSnackRowItem('저작권 및 법적 고지', isLink: true, onTap: _showCopyrightDialog),
-                            ]),
-                            const SizedBox(height: 100),
-                          ],
+            RefreshIndicator(
+              onRefresh: _loadUserInfo, // ⭐ 핵심
+              color: snackAccent,
+              backgroundColor: Colors.white,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                child: Column(
+                  children: [
+                    _buildModernHeader(),
+                    Transform.translate(
+                      offset: const Offset(0, -45),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 600),
+                          opacity: _isDataStable ? 1.0 : 0.0,
+                          curve: Curves.easeIn,
+                          child: Column(
+                            children: [
+                              _buildProfileMainCard(),
+                              const SizedBox(height: 24),
+                              _buildSnackSection('공식 커뮤니티', [
+                                _buildSnackLinkItem('네이버 공식 카페', 'assets/icons/ic_naver_cafe.png', 'https://cafe.naver.com/heartopia'),
+                                _buildSnackLinkItem('한국 공식 유튜브', 'assets/icons/ic_youtube.png', 'https://www.youtube.com/@Heartopia-KR'),
+                              ]),
+                              const SizedBox(height: 20),
+                              _buildSnackSection('이용 안내', [
+                                _buildSnackRowItem('앱 버전', trailingText: '1.0.0'),
+                                _buildSnackRowItem('버그 리포트 보내기', isLink: true, onTap: _sendEmail),
+                                _buildSnackRowItem('저작권 및 법적 고지', isLink: true, onTap: _showCopyrightDialog),
+                              ]),
+                              const SizedBox(height: 100),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
+
             if (_isLoading) _buildLoadingOverlay(),
           ],
         ),
