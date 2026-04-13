@@ -142,18 +142,19 @@ class _PetScreenState extends State<PetScreen>
 
         setState(() {
           _allPets = data.map(
-                (json) => Pet(
-              id: json['id'],
-              name: json['name'],
-              breed: json['breed'],
-              isCat: json['isCat'] ?? true,
-              imagePath: json['imagePath'],
-              favoriteSnack: json['favoriteSnack'] ?? '',
-              triedSnacks: Set<String>.from(json['triedSnacks'] ?? []),
-              sortOrder: json['sortOrder'],
-              color: (json['color'] ?? '전체').toString(),
-              eyeType: (json['eyeType'] ?? '전체').toString(),
-            ),
+                (json) =>
+                Pet(
+                  id: json['id'],
+                  name: json['name'],
+                  breed: json['breed'],
+                  isCat: json['isCat'] ?? true,
+                  imagePath: json['imagePath'],
+                  favoriteSnack: json['favoriteSnack'] ?? '',
+                  triedSnacks: Set<String>.from(json['triedSnacks'] ?? []),
+                  sortOrder: json['sortOrder'],
+                  color: (json['color'] ?? '전체').toString(),
+                  eyeType: (json['eyeType'] ?? '전체').toString(),
+                ),
           ).toList();
 
           _allPets.sort(
@@ -216,8 +217,7 @@ class _PetScreenState extends State<PetScreen>
     }
   }
 
-  Future<void> _savePetToServer(
-      String name,
+  Future<void> _savePetToServer(String name,
       String breed,
       String? imagePath, {
         int? existingId,
@@ -465,9 +465,18 @@ class _PetScreenState extends State<PetScreen>
 
   @override
   Widget build(BuildContext context) {
-    final double topPadding = MediaQuery.of(context).padding.top;
-    final double safeBottom = MediaQuery.of(context).padding.bottom;
-    final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final double topPadding = MediaQuery
+        .of(context)
+        .padding
+        .top;
+    final double safeBottom = MediaQuery
+        .of(context)
+        .padding
+        .bottom;
+    final double keyboardInset = MediaQuery
+        .of(context)
+        .viewInsets
+        .bottom;
 
     final bool showFilterInAppBar = _isFilterVisible;
     final double appBarHeight = topPadding + (showFilterInAppBar ? 110 : 126);
@@ -674,19 +683,24 @@ class _PetScreenState extends State<PetScreen>
 
     final source = '$breed $name $image';
 
-    if (source.contains('white') || source.contains('흰') || source.contains('화이트')) {
+    if (source.contains('white') || source.contains('흰') ||
+        source.contains('화이트')) {
       return '화이트';
     }
-    if (source.contains('black') || source.contains('검') || source.contains('블랙')) {
+    if (source.contains('black') || source.contains('검') ||
+        source.contains('블랙')) {
       return '블랙';
     }
-    if (source.contains('cheese') || source.contains('치즈') || source.contains('yellow') || source.contains('노랑')) {
+    if (source.contains('cheese') || source.contains('치즈') ||
+        source.contains('yellow') || source.contains('노랑')) {
       return '치즈';
     }
-    if (source.contains('tabby') || source.contains('얼룩') || source.contains('stripe') || source.contains('줄무늬')) {
+    if (source.contains('tabby') || source.contains('얼룩') ||
+        source.contains('stripe') || source.contains('줄무늬')) {
       return '얼룩';
     }
-    if (source.contains('tricolor') || source.contains('calico') || source.contains('삼색')) {
+    if (source.contains('tricolor') || source.contains('calico') ||
+        source.contains('삼색')) {
       return '삼색';
     }
 
@@ -757,7 +771,8 @@ class _PetScreenState extends State<PetScreen>
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: hasAnyFilter
-                    ? const Color(0xFFFFF3F0).withOpacity(isPressed ? 0.98 : 0.95)
+                    ? const Color(0xFFFFF3F0).withOpacity(
+                    isPressed ? 0.98 : 0.95)
                     : Colors.white.withOpacity(isPressed ? 0.98 : 0.92),
                 borderRadius: BorderRadius.circular(20),
 
@@ -1098,9 +1113,12 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
+
   Widget _buildPetCollectionCard({
     required String title,
     required List<Map<String, String>> items,
+    bool showSampleBadge = false,
+    String? sampleDescription,
   }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -1126,15 +1144,20 @@ class _PetScreenState extends State<PetScreen>
           children: [
             Row(
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF2D3748),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2D3748),
+                    ),
                   ),
                 ),
-                const Spacer(),
+                if (showSampleBadge) ...[
+                  _buildSampleBadge(),
+                  const SizedBox(width: 8),
+                ],
                 Icon(
                   Icons.chevron_right_rounded,
                   size: 18,
@@ -1143,6 +1166,10 @@ class _PetScreenState extends State<PetScreen>
               ],
             ),
             const SizedBox(height: 10),
+            if (sampleDescription != null) ...[
+              _buildSampleInfoBanner(sampleDescription),
+              const SizedBox(height: 10),
+            ],
             SizedBox(
               height: 150,
               child: ListView.separated(
@@ -1165,6 +1192,7 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
+
   void _toggleLikedPet(String id) {
     setState(() {
       if (_likedPetCardIds.contains(id)) {
@@ -1178,7 +1206,8 @@ class _PetScreenState extends State<PetScreen>
   void _showPetImagePreview(Pet pet) {
     final String? imagePath = pet.imagePath;
     final bool hasLocalFile =
-        imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync();
+        imagePath != null && imagePath.isNotEmpty &&
+            File(imagePath).existsSync();
 
     showDialog(
       context: context,
@@ -1186,7 +1215,8 @@ class _PetScreenState extends State<PetScreen>
       builder: (context) {
         return Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20, vertical: 24),
           child: Stack(
             children: [
               Center(
@@ -1270,6 +1300,7 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
+
   Widget _buildMiniPetCard({
     required String id,
     required String imagePath,
@@ -1312,7 +1343,8 @@ class _PetScreenState extends State<PetScreen>
                     onTap: () => _toggleLikedPet(id),
                     behavior: HitTestBehavior.opaque,
                     child: Icon(
-                      isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      isFavorite ? Icons.favorite_rounded : Icons
+                          .favorite_border_rounded,
                       size: 18,
                       color: isFavorite
                           ? const Color(0xFFFF8E7C)
@@ -1358,7 +1390,225 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
-  Widget _buildFilterSectionLabel(String label, {Color color = const Color(0xFF64748B)}) {
+  Widget _buildSampleBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFFFA08F),
+            Color(0xFFFF8E7C),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF8E7C).withOpacity(0.18),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.auto_awesome_rounded,
+            size: 13,
+            color: Colors.white,
+          ),
+          SizedBox(width: 5),
+          Text(
+            'SAMPLE',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSampleInfoBanner(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7F4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFFFE2DB),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFEEE9),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.science_rounded,
+              size: 14,
+              color: Color(0xFFFF8E7C),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 12.2,
+                height: 1.4,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF7A6A66),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSampleHeroCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.94),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFFFDDD6),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF1ED),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFFFFDED6),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: const Color(0xFFFF8E7C),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2D3436),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 12.8,
+              height: 1.45,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF7B8794),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: const [
+              _SampleStatusPill(label: '샘플 데이터 노출 중'),
+              _SampleStatusPill(label: '정식 도감 준비중'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDogSampleContent() {
+    final dogItems = [
+      {
+        'id': 'dog_sample_1',
+        'image': 'assets/images/dogs_1.png',
+        'label': '강아지 샘플 1'
+      },
+      {
+        'id': 'dog_sample_2',
+        'image': 'assets/images/dogs_2.png',
+        'label': '강아지 샘플 2'
+      },
+      {
+        'id': 'dog_sample_3',
+        'image': 'assets/images/dogs_3.png',
+        'label': '강아지 샘플 3'
+      },
+      {
+        'id': 'dog_sample_4',
+        'image': 'assets/images/dogs_4.png',
+        'label': '강아지 샘플 4'
+      },
+      {
+        'id': 'dog_sample_5',
+        'image': 'assets/images/dogs_5.png',
+        'label': '강아지 샘플 5'
+      },
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSampleHeroCard(
+          title: '지금은 펫 관리만 이용 가능해요!!',
+          subtitle: '지금 보이는 항목은 정식 테스트를 위한 샘플 데이터예요.',
+          icon: Icons.pets_rounded,
+        ),
+        _buildPetCollectionCard(
+          title: '강아지 샘플 리스트',
+          items: dogItems,
+          sampleDescription: '현재 강아지 리스트는 샘플 데이터로 표시되고 있어요.',
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+
+  Widget _buildFilterSectionLabel(String label,
+      {Color color = const Color(0xFF64748B)}) {
     return Padding(
       padding: const EdgeInsets.only(left: 16, right: 8),
       child: Text(
@@ -1426,12 +1676,13 @@ class _PetScreenState extends State<PetScreen>
                           const Spacer(),
                           _buildAppBarButton(
                             icon: 'assets/icons/ic_settings.svg',
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SettingsScreen(),
-                              ),
-                            ),
+                            onTap: () =>
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const SettingsScreen(),
+                                  ),
+                                ),
                           ),
                         ],
                       ),
@@ -1737,6 +1988,7 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
+
   Widget _buildTabContent({required bool isCat}) {
     final controller = isCat ? _catScrollController : _dogScrollController;
 
@@ -1757,22 +2009,13 @@ class _PetScreenState extends State<PetScreen>
           bottom: 120,
         ),
         children: [
-          if (isCat)
-            _buildPetGridContent()
-          else
-            const Padding(
-              padding: EdgeInsets.only(top: 100),
-              child: Center(
-                child: Text(
-                  '강아지 리스트 준비 중',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-            ),
+          if (isCat) _buildPetGridContent() else
+            _buildDogSampleContent(),
         ],
       ),
     );
   }
+
 
   Widget _buildPetProfileInlinePanel() {
     final bool isCatTab = _tabController.index == 0;
@@ -1787,22 +2030,67 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
+
   Widget _buildPetGridContent() {
     final whiteItems = [
-      {'id': 'white_1', 'image': 'assets/images/cat_white.png', 'label': '화이트 1'},
-      {'id': 'white_2', 'image': 'assets/images/cat_white.png', 'label': '화이트 2'},
-      {'id': 'white_3', 'image': 'assets/images/cat_white.png', 'label': '화이트 3'},
-      {'id': 'white_4', 'image': 'assets/images/cat_white.png', 'label': '화이트 4'},
-      {'id': 'white_5', 'image': 'assets/images/cat_white.png', 'label': '화이트 5'},
+      {
+        'id': 'white_1',
+        'image': 'assets/images/cat_white.png',
+        'label': '화이트 1'
+      },
+      {
+        'id': 'white_2',
+        'image': 'assets/images/cat_white.png',
+        'label': '화이트 2'
+      },
+      {
+        'id': 'white_3',
+        'image': 'assets/images/cat_white.png',
+        'label': '화이트 3'
+      },
+      {
+        'id': 'white_4',
+        'image': 'assets/images/cat_white.png',
+        'label': '화이트 4'
+      },
+      {
+        'id': 'white_5',
+        'image': 'assets/images/cat_white.png',
+        'label': '화이트 5'
+      },
     ];
 
     final blackItems = [
-      {'id': 'black_1', 'image': 'assets/images/cat_black_1.png', 'label': '블랙 1'},
-      {'id': 'black_2', 'image': 'assets/images/cat_black_2.png', 'label': '블랙 2'},
-      {'id': 'black_3', 'image': 'assets/images/cat_black_1.png', 'label': '블랙 3'},
-      {'id': 'black_4', 'image': 'assets/images/cat_black_2.png', 'label': '블랙 4'},
-      {'id': 'black_5', 'image': 'assets/images/cat_black_1.png', 'label': '블랙 5'},
-      {'id': 'black_6', 'image': 'assets/images/cat_black_2.png', 'label': '블랙 6'},
+      {
+        'id': 'black_1',
+        'image': 'assets/images/cat_black_1.png',
+        'label': '블랙 1'
+      },
+      {
+        'id': 'black_2',
+        'image': 'assets/images/cat_black_2.png',
+        'label': '블랙 2'
+      },
+      {
+        'id': 'black_3',
+        'image': 'assets/images/cat_black_1.png',
+        'label': '블랙 3'
+      },
+      {
+        'id': 'black_4',
+        'image': 'assets/images/cat_black_2.png',
+        'label': '블랙 4'
+      },
+      {
+        'id': 'black_5',
+        'image': 'assets/images/cat_black_1.png',
+        'label': '블랙 5'
+      },
+      {
+        'id': 'black_6',
+        'image': 'assets/images/cat_black_2.png',
+        'label': '블랙 6'
+      },
     ];
 
     final testWhiteItems = [
@@ -1816,30 +2104,42 @@ class _PetScreenState extends State<PetScreen>
     ];
 
     final List<Map<String, dynamic>> sections = [
-      {'title': '올화이트', 'items': testWhiteItems},
-      {'title': '올블랙', 'items': testBlackItems},
-      {'title': '화이트 테스트 1', 'items': testWhiteItems},
-      {'title': '블랙 테스트 1', 'items': testBlackItems},
-      {'title': '화이트 테스트 2', 'items': testWhiteItems},
-      {'title': '블랙 테스트 2', 'items': testBlackItems},
-      {'title': '화이트 테스트 3', 'items': testWhiteItems},
-      {'title': '블랙 테스트 3', 'items': testBlackItems},
+      {
+        'title': '올화이트',
+        'items': testWhiteItems,
+        'showSampleBadge': true,
+        'sampleDescription': '올화이트 리스트는 샘플 데이터로 표시되고 있어요.',
+      },
+      {
+        'title': '올블랙',
+        'items': testBlackItems,
+        'showSampleBadge': true,
+        'sampleDescription': '올블랙 리스트는 샘플 데이터로 표시되고 있어요.',
+      },
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
+        _buildSampleHeroCard(
+          title: '지금은 펫 관리만 이용 가능해요!',
+          subtitle: '지금 보이는 항목은 정식 테스트를 위한 샘플 데이터예요.',
+          icon: Icons.pets_rounded,
+        ),
         ...sections.map(
-              (section) => _buildPetCollectionCard(
-            title: section['title'] as String,
-            items: section['items'] as List<Map<String, String>>,
-          ),
+              (section) =>
+              _buildPetCollectionCard(
+                title: section['title'] as String,
+                items: List<Map<String, String>>.from(section['items'] as List),
+                showSampleBadge: section['showSampleBadge'] as bool,
+                sampleDescription: section['sampleDescription'] as String?,
+              ),
         ),
         const SizedBox(height: 8),
       ],
     );
   }
+
 
   Widget _buildPetCollectionSection({required bool isCat}) {
     final pets = _allPets.where((p) => p.isCat == isCat).toList();
@@ -2021,7 +2321,10 @@ class _PetScreenState extends State<PetScreen>
       return _buildEmptyPetPlaceholder(isCatTab);
     }
 
-    final double screenWidth = MediaQuery.of(context).size.width;
+    final double screenWidth = MediaQuery
+        .of(context)
+        .size
+        .width;
     final double cardWidth = screenWidth < 390 ? 280 : 296;
 
     return SizedBox(
@@ -2031,11 +2334,9 @@ class _PetScreenState extends State<PetScreen>
         padding: const EdgeInsets.only(left: 4, right: 10),
         itemCount: filteredPets.length,
         buildDefaultDragHandles: false,
-        proxyDecorator: (
-            Widget child,
+        proxyDecorator: (Widget child,
             int index,
-            Animation<double> animation,
-            ) {
+            Animation<double> animation,) {
           return AnimatedBuilder(
             animation: animation,
             builder: (BuildContext context, Widget? child) {
@@ -2176,7 +2477,8 @@ class _PetScreenState extends State<PetScreen>
                     child: Image.asset(
                       _imageAssetPath(pet.imagePath),
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
+                      errorBuilder: (_, __, ___) =>
+                      const Icon(
                         Icons.pets_rounded,
                         color: Color(0xFFFF8E7C),
                         size: 24,
@@ -2222,15 +2524,14 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
-  Widget _buildPetSummaryCard(
-      Pet pet, {
-        required double width,
-        required int reorderIndex,
-        bool isFirst = false,
-        bool isDragging = false,
-        bool showSnackLab = true,
-        Widget? reorderHandle,
-      }) {
+  Widget _buildPetSummaryCard(Pet pet, {
+    required double width,
+    required int reorderIndex,
+    bool isFirst = false,
+    bool isDragging = false,
+    bool showSnackLab = true,
+    Widget? reorderHandle,
+  }) {
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 160),
       opacity: isDragging ? 0.35 : 1.0,
@@ -2334,10 +2635,9 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
-  Widget _buildPetSummaryMainArea(
-      Pet pet, {
-        bool dragging = false,
-      }) {
+  Widget _buildPetSummaryMainArea(Pet pet, {
+    bool dragging = false,
+  }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2933,7 +3233,8 @@ class _PetScreenState extends State<PetScreen>
                             ),
                             Container(
                               height: 1,
-                              margin: const EdgeInsets.symmetric(horizontal: 14),
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 14),
                               color: const Color(0xFFF4F4F5),
                             ),
                             _buildPrettyMenuItem(
@@ -2944,16 +3245,18 @@ class _PetScreenState extends State<PetScreen>
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => ManagePetsScreen(
-                                      pets: _allPets,
-                                      onUpdate: (updatedList) {
-                                        setState(() => _allPets = updatedList);
-                                        _updatePetOrderOnServer();
-                                      },
-                                      deletePet: _deletePetFromServer,
-                                      onEdit: (Pet pet) =>
-                                          _showPetEditSheet(pet: pet),
-                                    ),
+                                    builder: (context) =>
+                                        ManagePetsScreen(
+                                          pets: _allPets,
+                                          onUpdate: (updatedList) {
+                                            setState(() =>
+                                            _allPets = updatedList);
+                                            _updatePetOrderOnServer();
+                                          },
+                                          deletePet: _deletePetFromServer,
+                                          onEdit: (Pet pet) =>
+                                              _showPetEditSheet(pet: pet),
+                                        ),
                                   ),
                                 );
                               },
@@ -3146,8 +3449,7 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
-  Widget _buildMenuTile(
-      IconData icon,
+  Widget _buildMenuTile(IconData icon,
       String title,
       VoidCallback onTap, {
         bool isDestructive = false,
@@ -3205,74 +3507,78 @@ class _PetScreenState extends State<PetScreen>
       context: context,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 20,
-          bottom: MediaQuery.of(context).padding.bottom + 24,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(28),
+      builder: (context) =>
+          Container(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 20,
+              bottom: MediaQuery
+                  .of(context)
+                  .padding
+                  .bottom + 24,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  '${pet.name} 관리',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildMenuTile(
+                  Icons.edit_rounded,
+                  '프로필 정보 변경',
+                      () {
+                    Navigator.pop(context);
+                    _showPetEditSheet(pet: pet);
+                  },
+                ),
+                _buildMenuTile(
+                  Icons.science_rounded,
+                  '최애 간식 실험실',
+                      () {
+                    Navigator.pop(context);
+                    _showSnackLabSheet(pet);
+                  },
+                ),
+                const Divider(
+                  height: 32,
+                  thickness: 0.5,
+                  color: Color(0xFFEEEEEE),
+                ),
+                _buildMenuTile(
+                  Icons.delete_outline_rounded,
+                  '반려동물 삭제',
+                      () {
+                    Navigator.pop(context);
+                    if (pet.id != null) {
+                      _showDeleteConfirm(pet);
+                    }
+                  },
+                  isDestructive: true,
+                ),
+              ],
+            ),
           ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              '${pet.name} 관리',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 24),
-            _buildMenuTile(
-              Icons.edit_rounded,
-              '프로필 정보 변경',
-                  () {
-                Navigator.pop(context);
-                _showPetEditSheet(pet: pet);
-              },
-            ),
-            _buildMenuTile(
-              Icons.science_rounded,
-              '최애 간식 실험실',
-                  () {
-                Navigator.pop(context);
-                _showSnackLabSheet(pet);
-              },
-            ),
-            const Divider(
-              height: 32,
-              thickness: 0.5,
-              color: Color(0xFFEEEEEE),
-            ),
-            _buildMenuTile(
-              Icons.delete_outline_rounded,
-              '반려동물 삭제',
-                  () {
-                Navigator.pop(context);
-                if (pet.id != null) {
-                  _showDeleteConfirm(pet);
-                }
-              },
-              isDestructive: true,
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -3290,211 +3596,223 @@ class _PetScreenState extends State<PetScreen>
       backgroundColor: Colors.transparent,
       builder: (context) {
         final double bottomPadding =
-            MediaQuery.of(context).viewInsets.bottom +
-                MediaQuery.of(context).padding.bottom +
+            MediaQuery
+                .of(context)
+                .viewInsets
+                .bottom +
+                MediaQuery
+                    .of(context)
+                    .padding
+                    .bottom +
                 24;
 
         return StatefulBuilder(
-          builder: (context, setSheetState) => Container(
-            padding: EdgeInsets.only(
-              bottom: bottomPadding,
-              left: 24,
-              right: 24,
-              top: 24,
-            ),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment:
-                CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
+          builder: (context, setSheetState) =>
+              Container(
+                padding: EdgeInsets.only(
+                  bottom: bottomPadding,
+                  left: 24,
+                  right: 24,
+                  top: 24,
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(28),
                   ),
-                  Text(
-                    isEdit ? '정보 수정' : '새 친구 등록',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Center(
-                    child: GestureDetector(
-                      onTap: () async {
-                        final XFile? image = await _picker.pickImage(
-                          source: ImageSource.gallery,
-                          maxWidth: 2048,
-                        );
-                        if (image == null) return;
-
-                        final ImageAdjustResult? adjusted =
-                        await Navigator.push<ImageAdjustResult>(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ImageAdjustScreen(
-                              imagePath: image.path,
-                              title: _tabController.index == 0 ? '고양이 사진 조정' : '강아지 사진 조정',
-                              shape: ImageAdjustShape.circle,
-                              viewportAspectRatio: 1.0,
-                            ),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
                           ),
-                        );
+                        ),
+                      ),
+                      Text(
+                        isEdit ? '정보 수정' : '새 친구 등록',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Center(
+                        child: GestureDetector(
+                          onTap: () async {
+                            final XFile? image = await _picker.pickImage(
+                              source: ImageSource.gallery,
+                              maxWidth: 2048,
+                            );
+                            if (image == null) return;
 
-                        if (adjusted == null) return;
-
-                        final tempDir = await getTemporaryDirectory();
-                        final filePath =
-                            '${tempDir.path}/pet_${DateTime.now().millisecondsSinceEpoch}.${adjusted.extension}';
-                        final file = File(filePath);
-                        await file.writeAsBytes(adjusted.bytes);
-
-                        setSheetState(() {
-                          tempImagePath = file.path;
-                        });
-                      },
-                      child: Stack(
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 3,
+                            final ImageAdjustResult? adjusted =
+                            await Navigator.push<ImageAdjustResult>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ImageAdjustScreen(
+                                      imagePath: image.path,
+                                      title: _tabController.index == 0
+                                          ? '고양이 사진 조정'
+                                          : '강아지 사진 조정',
+                                      shape: ImageAdjustShape.circle,
+                                      viewportAspectRatio: 1.0,
+                                    ),
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 10,
+                            );
+
+                            if (adjusted == null) return;
+
+                            final tempDir = await getTemporaryDirectory();
+                            final filePath =
+                                '${tempDir.path}/pet_${DateTime
+                                .now()
+                                .millisecondsSinceEpoch}.${adjusted.extension}';
+                            final file = File(filePath);
+                            await file.writeAsBytes(adjusted.bytes);
+
+                            setSheetState(() {
+                              tempImagePath = file.path;
+                            });
+                          },
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 3,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                  image: DecorationImage(
+                                    image: tempImagePath != null &&
+                                        File(tempImagePath!)
+                                            .existsSync()
+                                        ? FileImage(
+                                      File(tempImagePath!),
+                                    )
+                                        : const AssetImage(
+                                        'assets/images/pets.webp')
+                                    as ImageProvider,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
-                              ],
-                              image: DecorationImage(
-                                image: tempImagePath != null &&
-                                    File(tempImagePath!)
-                                        .existsSync()
-                                    ? FileImage(
-                                  File(tempImagePath!),
-                                )
-                                    : const AssetImage(
-                                    'assets/images/pets.webp')
-                                as ImageProvider,
-                                fit: BoxFit.cover,
                               ),
-                            ),
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFFF8E7C),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFFF8E7C),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: nameController,
-                    decoration: _dialogInputDecoration(
-                      hintText: '이름',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: breedController,
-                    decoration: _dialogInputDecoration(
-                      hintText: '종류',
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _isSubmitting
-                        ? null
-                        : () async {
-                      setSheetState(
-                            () => _isSubmitting = true,
-                      );
-                      setState(
-                            () => _isSubmitting = true,
-                      );
-                      try {
-                        await _savePetToServer(
-                          nameController.text.trim(),
-                          breedController.text.trim(),
-                          tempImagePath,
-                          existingId: pet?.id,
-                        );
-                        if (mounted) {
-                          Navigator.pop(context);
-                        }
-                      } finally {
-                        if (mounted) {
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: nameController,
+                        decoration: _dialogInputDecoration(
+                          hintText: '이름',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: breedController,
+                        decoration: _dialogInputDecoration(
+                          hintText: '종류',
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: _isSubmitting
+                            ? null
+                            : () async {
                           setSheetState(
-                                () => _isSubmitting = false,
+                                () => _isSubmitting = true,
                           );
                           setState(
-                                () => _isSubmitting = false,
+                                () => _isSubmitting = true,
                           );
-                        }
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF8E7C),
-                      foregroundColor: Colors.white,
-                      minimumSize:
-                      const Size(double.infinity, 56),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                          try {
+                            await _savePetToServer(
+                              nameController.text.trim(),
+                              breedController.text.trim(),
+                              tempImagePath,
+                              existingId: pet?.id,
+                            );
+                            if (mounted) {
+                              Navigator.pop(context);
+                            }
+                          } finally {
+                            if (mounted) {
+                              setSheetState(
+                                    () => _isSubmitting = false,
+                              );
+                              setState(
+                                    () => _isSubmitting = false,
+                              );
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF8E7C),
+                          foregroundColor: Colors.white,
+                          minimumSize:
+                          const Size(double.infinity, 56),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: _isSubmitting
+                            ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                            : Text(
+                          isEdit ? '저장하기' : '등록하기',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                       ),
-                      elevation: 0,
-                    ),
-                    child: _isSubmitting
-                        ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                        : Text(
-                      isEdit ? '저장하기' : '등록하기',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
         );
       },
     );
@@ -3503,37 +3821,38 @@ class _PetScreenState extends State<PetScreen>
   void _showDeleteConfirm(Pet pet) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text('반려동물 삭제'),
-        content: Text(
-          '${pet.name} 정보를 삭제할까요?\n삭제 후에는 되돌릴 수 없어요.',
-          style: const TextStyle(height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              '취소',
-              style: TextStyle(color: Color(0xFF8E8E93)),
+      builder: (context) =>
+          AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              if (pet.id != null) {
-                await _deletePetFromServer(pet.id!);
-              }
-            },
-            child: const Text(
-              '삭제',
-              style: TextStyle(color: Colors.redAccent),
+            title: const Text('반려동물 삭제'),
+            content: Text(
+              '${pet.name} 정보를 삭제할까요?\n삭제 후에는 되돌릴 수 없어요.',
+              style: const TextStyle(height: 1.4),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  '취소',
+                  style: TextStyle(color: Color(0xFF8E8E93)),
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  if (pet.id != null) {
+                    await _deletePetFromServer(pet.id!);
+                  }
+                },
+                child: const Text(
+                  '삭제',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -3547,358 +3866,405 @@ class _PetScreenState extends State<PetScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          final triedCount = pet.triedSnacks.length;
-          final favoriteSnack = pet.favoriteSnack;
-          final visibleFishList = _buildVisibleSnackFishList();
+      builder: (context) =>
+          StatefulBuilder(
+            builder: (context, setSheetState) {
+              final triedCount = pet.triedSnacks.length;
+              final favoriteSnack = pet.favoriteSnack;
+              final visibleFishList = _buildVisibleSnackFishList();
 
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            height: MediaQuery.of(context).size.height * 0.82,
-            padding: EdgeInsets.fromLTRB(
-              20,
-              16,
-              20,
-              MediaQuery.of(context).padding.bottom + 10,
-            ),
-            decoration: const BoxDecoration(
-              color: Color(0xFFFDFDFD),
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(30),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 18),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE2E2E2),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                margin: EdgeInsets.only(
+                  bottom: MediaQuery
+                      .of(context)
+                      .viewInsets
+                      .bottom,
+                ),
+                height: MediaQuery
+                    .of(context)
+                    .size
+                    .height * 0.82,
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  16,
+                  20,
+                  MediaQuery
+                      .of(context)
+                      .padding
+                      .bottom + 10,
+                ),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFDFDFD),
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(30),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF1EE),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: const Icon(
-                          Icons.phishing_rounded,
-                          color: Color(0xFFFF8E7C),
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${pet.name}의 간식 실험실',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              '먹여본 물고기를 체크하고 최애 간식을 골라주세요',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF8E8E93),
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _buildSnackInfoChip(
-                        icon: Icons.check_circle_rounded,
-                        label: '먹어본 간식',
-                        value: '$triedCount개',
-                        color: const Color(0xFFFF8E7C),
-                        bgColor: const Color(0xFFFFF1EE),
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 18),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E2E2),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 54,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF1EE),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: const Icon(
+                              Icons.phishing_rounded,
+                              color: Color(0xFFFF8E7C),
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${pet.name}의 간식 실험실',
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  '먹여본 물고기를 체크하고 최애 간식을 골라주세요',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF8E8E93),
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildSnackInfoChip(
+                            icon: Icons.check_circle_rounded,
+                            label: '먹어본 간식',
+                            value: '$triedCount개',
+                            color: const Color(0xFFFF8E7C),
+                            bgColor: const Color(0xFFFFF1EE),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildSnackInfoChip(
+                            icon: Icons.star_rounded,
+                            label: '최애 간식',
+                            value: favoriteSnack.isEmpty
+                                ? '아직 없음'
+                                : favoriteSnack,
+                            color: const Color(0xFFFFC24B),
+                            bgColor: const Color(0xFFFFF8E8),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _buildSnackSearchBar(setSheetState),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding:
+                      const EdgeInsets.only(left: 4, bottom: 6),
+                      child: Text(
+                        _snackSearchQuery
+                            .trim()
+                            .isNotEmpty
+                            ? '관련순'
+                            : '이름순',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
                     Expanded(
-                      child: _buildSnackInfoChip(
-                        icon: Icons.star_rounded,
-                        label: '최애 간식',
-                        value: favoriteSnack.isEmpty
-                            ? '아직 없음'
-                            : favoriteSnack,
-                        color: const Color(0xFFFFC24B),
-                        bgColor: const Color(0xFFFFF8E8),
+                      child: visibleFishList.isEmpty
+                          ? const Center(
+                        child: Text(
+                          '검색 결과가 없어요',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                      )
+                          : ListView.separated(
+                        controller: _snackFishScrollController,
+                        physics: const BouncingScrollPhysics(),
+
+                        itemCount: visibleFishList.length,
+                        separatorBuilder: (_, __) =>
+                        const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final fish = visibleFishList[index];
+                          final displayName =
+                          _displayFishName(fish);
+                          final isTried = pet.triedSnacks
+                              .contains(displayName);
+                          final isFav =
+                              pet.favoriteSnack == displayName;
+                          final isHighlighted =
+                              _highlightedSnackFishId == fish.id;
+
+                          return AnimatedContainer(
+                            duration: const Duration(
+                              milliseconds: 180,
+                            ),
+                            padding:
+                            const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isHighlighted
+                                  ? const Color(0xFFFFF4E8)
+                                  : isFav
+                                  ? const Color(0xFFFFFBF2)
+                                  : Colors.white,
+                              borderRadius:
+                              BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isHighlighted
+                                    ? const Color(0xFFFFC8A2)
+                                    : isFav
+                                    ? const Color(0xFFFFD67A)
+                                    : isTried
+                                    ? const Color(
+                                    0xFFFFD8D1)
+                                    : const Color(
+                                    0xFFF0F0F0),
+                                width: 1.2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                  Colors.black.withOpacity(0.04),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                        0xFFFFF4F1),
+                                    borderRadius:
+                                    BorderRadius.circular(14),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: fish.image.isNotEmpty
+                                      ? Image.asset(
+                                    _imageAssetPath(fish.image),
+                                    width: 28,
+                                    height: 28,
+                                    errorBuilder:
+                                        (_, __, ___) =>
+                                    const Icon(
+                                      Icons.phishing,
+                                      color: Color(
+                                          0xFFFF8E7C),
+                                    ),
+                                  )
+                                      : const Icon(
+                                    Icons.phishing,
+                                    color: Color(0xFFFF8E7C),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment
+                                        .start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              displayName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 14.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF2D3436),
+                                              ),
+                                            ),
+                                          ),
+                                          if (isFav)
+                                            Container(
+                                              padding: const EdgeInsets
+                                                  .symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFF1D6),
+                                                borderRadius: BorderRadius
+                                                    .circular(999),
+                                              ),
+                                              child: const Text(
+                                                '최애',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFFE0A100),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildSnackActionButton(
+                                      icon: isTried
+                                          ? Icons.check_rounded
+                                          : Icons.add_rounded,
+                                      label: isTried
+                                          ? '먹음'
+                                          : '기록',
+                                      active: isTried,
+                                      onTap: () async {
+                                        setSheetState(() {
+                                          if (isTried) {
+                                            pet.triedSnacks
+                                                .remove(displayName);
+                                            if (pet.favoriteSnack ==
+                                                displayName) {
+                                              pet.favoriteSnack = '';
+                                            }
+                                          } else {
+                                            pet.triedSnacks
+                                                .add(displayName);
+                                          }
+                                        });
+                                        await _updatePetSnacks(pet);
+                                        if (mounted) {
+                                          setState(() {});
+                                        }
+                                      },
+                                      activeColor: const Color(
+                                          0xFFFF8E7C),
+                                      activeBgColor:
+                                      const Color(0xFFFFF1EE),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _buildSnackActionButton(
+                                      icon: Icons.favorite_rounded,
+                                      label: '최애',
+                                      active: isFav,
+                                      onTap: () async {
+                                        setSheetState(() {
+                                          pet.triedSnacks
+                                              .add(displayName);
+                                          pet.favoriteSnack =
+                                          isFav
+                                              ? ''
+                                              : displayName;
+                                        });
+                                        await _updatePetSnacks(pet);
+                                        if (mounted) {
+                                          setState(() {});
+                                        }
+                                      },
+                                      activeColor: const Color(
+                                          0xFFFFB938),
+                                      activeBgColor:
+                                      const Color(0xFFFFF8E8),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                _buildSnackSearchBar(setSheetState),
-                const SizedBox(height: 12),
-                Padding(
-                  padding:
-                  const EdgeInsets.only(left: 4, bottom: 6),
-                  child: Text(
-                    _snackSearchQuery.trim().isNotEmpty
-                        ? '관련순'
-                        : '이름순',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: visibleFishList.isEmpty
-                      ? const Center(
-                    child: Text(
-                      '검색 결과가 없어요',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF8E8E93),
-                      ),
-                    ),
-                  )
-                      : ListView.separated(
-                    controller: _snackFishScrollController,
-                    physics: const BouncingScrollPhysics(),
+              );
+            },
+          ),
+    );
+  }
+}
 
-                    itemCount: visibleFishList.length,
-                    separatorBuilder: (_, __) =>
-                    const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final fish = visibleFishList[index];
-                      final displayName =
-                      _displayFishName(fish);
-                      final isTried = pet.triedSnacks
-                          .contains(displayName);
-                      final isFav =
-                          pet.favoriteSnack == displayName;
-                      final isHighlighted =
-                          _highlightedSnackFishId == fish.id;
+class _SampleStatusPill extends StatelessWidget {
+  final String label;
 
-                      return AnimatedContainer(
-                        duration: const Duration(
-                          milliseconds: 180,
-                        ),
-                        padding:
-                        const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isHighlighted
-                              ? const Color(0xFFFFF4E8)
-                              : isFav
-                              ? const Color(0xFFFFFBF2)
-                              : Colors.white,
-                          borderRadius:
-                          BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isHighlighted
-                                ? const Color(0xFFFFC8A2)
-                                : isFav
-                                ? const Color(0xFFFFD67A)
-                                : isTried
-                                ? const Color(
-                                0xFFFFD8D1)
-                                : const Color(
-                                0xFFF0F0F0),
-                            width: 1.2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color:
-                              Colors.black.withOpacity(0.04),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                    0xFFFFF4F1),
-                                borderRadius:
-                                BorderRadius.circular(14),
-                              ),
-                              alignment: Alignment.center,
-                              child: fish.image.isNotEmpty
-                                  ? Image.asset(
-                                _imageAssetPath(fish.image),
-                                width: 28,
-                                height: 28,
-                                errorBuilder:
-                                    (_, __, ___) =>
-                                const Icon(
-                                  Icons.phishing,
-                                  color: Color(
-                                      0xFFFF8E7C),
-                                ),
-                              )
-                                  : const Icon(
-                                Icons.phishing,
-                                color: Color(0xFFFF8E7C),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          displayName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontSize: 14.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF2D3436),
-                                          ),
-                                        ),
-                                      ),
-                                      if (isFav)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFFF1D6),
-                                            borderRadius: BorderRadius.circular(999),
-                                          ),
-                                          child: const Text(
-                                            '최애',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFFE0A100),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _buildSnackActionButton(
-                                  icon: isTried
-                                      ? Icons.check_rounded
-                                      : Icons.add_rounded,
-                                  label: isTried
-                                      ? '먹음'
-                                      : '기록',
-                                  active: isTried,
-                                  onTap: () async {
-                                    setSheetState(() {
-                                      if (isTried) {
-                                        pet.triedSnacks
-                                            .remove(displayName);
-                                        if (pet.favoriteSnack ==
-                                            displayName) {
-                                          pet.favoriteSnack = '';
-                                        }
-                                      } else {
-                                        pet.triedSnacks
-                                            .add(displayName);
-                                      }
-                                    });
-                                    await _updatePetSnacks(pet);
-                                    if (mounted) {
-                                      setState(() {});
-                                    }
-                                  },
-                                  activeColor: const Color(
-                                      0xFFFF8E7C),
-                                  activeBgColor:
-                                  const Color(0xFFFFF1EE),
-                                ),
-                                const SizedBox(width: 8),
-                                _buildSnackActionButton(
-                                  icon: Icons.favorite_rounded,
-                                  label: '최애',
-                                  active: isFav,
-                                  onTap: () async {
-                                    setSheetState(() {
-                                      pet.triedSnacks
-                                          .add(displayName);
-                                      pet.favoriteSnack =
-                                      isFav
-                                          ? ''
-                                          : displayName;
-                                    });
-                                    await _updatePetSnacks(pet);
-                                    if (mounted) {
-                                      setState(() {});
-                                    }
-                                  },
-                                  activeColor: const Color(
-                                      0xFFFFB938),
-                                  activeBgColor:
-                                  const Color(0xFFFFF8E8),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+  const _SampleStatusPill({
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4F1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xFFFFE0D9),
+        ),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF6E7683),
+        ),
       ),
     );
   }
 }
+
+

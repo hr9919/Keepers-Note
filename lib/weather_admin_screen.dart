@@ -15,36 +15,31 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
   static const String _baseUrl = 'http://161.33.30.40:8080';
 
   static const List<_WeatherOption> _weatherOptions = [
-    _WeatherOption(label: '맑음', value: 'SUNNY'),
-    _WeatherOption(label: '흐림', value: 'CLOUDY'),
-    _WeatherOption(label: '비', value: 'RAINY'),
-    _WeatherOption(label: '눈', value: 'SNOWY'),
-    _WeatherOption(label: '무지개', value: 'RAINBOW'),
+    _WeatherOption(label: '맑음', value: 'SUNNY', icon: Icons.wb_sunny_rounded),
+    _WeatherOption(label: '흐림', value: 'CLOUDY', icon: Icons.cloud_rounded),
+    _WeatherOption(label: '비', value: 'RAINY', icon: Icons.grain_rounded),
+    _WeatherOption(label: '눈', value: 'SNOWY', icon: Icons.ac_unit_rounded),
+    _WeatherOption(label: '무지개', value: 'RAINBOW', icon: Icons.auto_awesome_rounded),
   ];
 
   bool _isLoading = true;
+  bool _isRefreshing = false;
+  bool _isSavingHourly = false;
   bool _isSavingDaily = false;
-  bool _isSavingWeekly = false;
+  bool _isUpdatingHourly = false;
+  bool _isUpdatingDaily = false;
+
   String? _error;
   int? _kakaoId;
 
-  DateTime _selectedGameDate = DateTime.now();
-  DateTime _selectedMonday = _resolveMonday(DateTime.now());
+  List<dynamic> _hourlyItems = [];
+  List<dynamic> _dailyItems = [];
 
-  String _daily06 = 'SUNNY';
-  String _daily12 = 'SUNNY';
-  String _daily18 = 'SUNNY';
-  String _daily00 = 'SUNNY';
-  String _dailyNext06 = 'SUNNY';
+  String? _nextHourlyTime;
+  String? _nextDailyDate;
 
-  String _weekMon = 'SUNNY';
-  String _weekTue = 'SUNNY';
-  String _weekWed = 'SUNNY';
-  String _weekThu = 'SUNNY';
-  String _weekFri = 'SUNNY';
-  String _weekSat = 'SUNNY';
-  String _weekSun = 'SUNNY';
-  String _weekNextMon = 'SUNNY';
+  String _selectedHourlyWeather = 'SUNNY';
+  String _selectedDailyWeather = 'SUNNY';
 
   @override
   void initState() {
@@ -60,10 +55,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
       });
 
       await _loadKakaoId();
-      await Future.wait([
-        _loadDailyWeather(),
-        _loadWeeklyWeather(),
-      ]);
+      await _refreshAll(showLoading: false);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -77,172 +69,270 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
     }
   }
 
+  Future<void> _refreshAll({bool showLoading = true}) async {
+    try {
+      if (showLoading && mounted) {
+        setState(() {
+          _isRefreshing = true;
+        });
+      }
+
+      await Future.wait([
+        _loadHourlyWeather(),
+        _loadNextHourlySlot(),
+        _loadDailyForecast(),
+        _loadNextDailyDate(),
+      ]);
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isRefreshing = false;
+      });
+    }
+  }
+
   Future<void> _loadKakaoId() async {
     final user = await UserApi.instance.me();
     _kakaoId = user.id?.toInt();
   }
 
-  Future<void> _pickGameDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedGameDate,
-      firstDate: DateTime(2024),
-      lastDate: DateTime(2035),
-      locale: const Locale('ko'),
+  Future<void> _loadHourlyWeather() async {
+    final uri = Uri.parse('$_baseUrl/api/admin/weather/hourly/current');
+
+    final response = await http.get(
+      uri,
+      headers: _adminHeaders(withJson: false),
     );
 
-    if (picked == null) return;
+    if (response.statusCode != 200) {
+      throw Exception('시간대별 날씨 조회 실패: ${utf8.decode(response.bodyBytes)}');
+    }
 
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! List) {
+      throw Exception('시간대별 날씨 응답 형식이 올바르지 않아요.');
+    }
+
+    if (!mounted) return;
     setState(() {
-      _selectedGameDate = picked;
+      _hourlyItems = decoded;
     });
-
-    await _loadDailyWeather();
   }
 
-  Future<void> _pickMondayDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedMonday,
-      firstDate: DateTime(2024),
-      lastDate: DateTime(2035),
-      locale: const Locale('ko'),
+  Future<void> _loadNextHourlySlot() async {
+    final uri = Uri.parse('$_baseUrl/api/admin/weather/hourly/next-slot');
+
+    final response = await http.get(
+      uri,
+      headers: _adminHeaders(withJson: false),
     );
 
-    if (picked == null) return;
+    if (response.statusCode != 200) {
+      throw Exception('다음 시간 슬롯 조회 실패: ${utf8.decode(response.bodyBytes)}');
+    }
 
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (!mounted) return;
     setState(() {
-      _selectedMonday = _resolveMonday(picked);
+      _nextHourlyTime = decoded['forecastTime']?.toString();
     });
-
-    await _loadWeeklyWeather();
   }
 
-  Future<void> _loadDailyWeather() async {
+  Future<void> _loadDailyForecast() async {
+    final uri = Uri.parse('$_baseUrl/api/admin/weather/daily/current');
+
+    final response = await http.get(
+      uri,
+      headers: _adminHeaders(withJson: false),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('일별 날씨 조회 실패: ${utf8.decode(response.bodyBytes)}');
+    }
+
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! List) {
+      throw Exception('일별 날씨 응답 형식이 올바르지 않아요.');
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _dailyItems = decoded;
+    });
+  }
+
+  Future<void> _loadNextDailyDate() async {
+    final uri = Uri.parse('$_baseUrl/api/admin/weather/daily/next-date');
+
+    final response = await http.get(
+      uri,
+      headers: _adminHeaders(withJson: false),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('다음 날짜 조회 실패: ${utf8.decode(response.bodyBytes)}');
+    }
+
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (!mounted) return;
+    setState(() {
+      _nextDailyDate = decoded['forecastDate']?.toString();
+    });
+  }
+
+  Future<void> _saveHourlyWeather() async {
+    if (_kakaoId == null) {
+      _showSnack('카카오 ID를 불러오지 못했어요.');
+      return;
+    }
+    if (_nextHourlyTime == null || _nextHourlyTime!.isEmpty) {
+      _showSnack('다음 추가 가능 시간 정보를 불러오지 못했어요.');
+      return;
+    }
+
     try {
-      final uri = Uri.parse(
-        '$_baseUrl/api/admin/weather/daily?gameDate=${_formatDate(_selectedGameDate)}',
-      );
+      setState(() {
+        _isSavingHourly = true;
+      });
 
-      final response = await http.get(
-        uri,
-        headers: _adminHeaders(withJson: false),
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/admin/weather/hourly/append'),
+        headers: _adminHeaders(),
+        body: jsonEncode({
+          'weatherType': _selectedHourlyWeather,
+        }),
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        if (!mounted) return;
-        setState(() {
-          _daily06 = (data['weather06'] ?? 'SUNNY').toString();
-          _daily12 = (data['weather12'] ?? 'SUNNY').toString();
-          _daily18 = (data['weather18'] ?? 'SUNNY').toString();
-          _daily00 = (data['weather00'] ?? 'SUNNY').toString();
-          _dailyNext06 = (data['nextDay06'] ?? 'SUNNY').toString();
-        });
+        _showSnack('시간대별 날씨가 추가됐어요.');
+        await _refreshAll(showLoading: false);
+      } else {
+        _showSnack('저장 실패: ${utf8.decode(response.bodyBytes)}');
       }
-    } catch (_) {}
+    } catch (e) {
+      _showSnack('저장 실패: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isSavingHourly = false;
+      });
+    }
   }
 
-  Future<void> _loadWeeklyWeather() async {
-    try {
-      final uri = Uri.parse(
-        '$_baseUrl/api/admin/weather/weekly?mondayDate=${_formatDate(_selectedMonday)}',
-      );
+  Future<void> _saveDailyForecast() async {
+    if (_kakaoId == null) {
+      _showSnack('카카오 ID를 불러오지 못했어요.');
+      return;
+    }
+    if (_nextDailyDate == null || _nextDailyDate!.isEmpty) {
+      _showSnack('다음 추가 가능 날짜 정보를 불러오지 못했어요.');
+      return;
+    }
 
-      final response = await http.get(
-        uri,
-        headers: _adminHeaders(withJson: false),
+    try {
+      setState(() {
+        _isSavingDaily = true;
+      });
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/admin/weather/daily/append'),
+        headers: _adminHeaders(),
+        body: jsonEncode({
+          'weatherType': _selectedDailyWeather,
+        }),
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        if (!mounted) return;
-        setState(() {
-          _weekMon = (data['monday'] ?? 'SUNNY').toString();
-          _weekTue = (data['tuesday'] ?? 'SUNNY').toString();
-          _weekWed = (data['wednesday'] ?? 'SUNNY').toString();
-          _weekThu = (data['thursday'] ?? 'SUNNY').toString();
-          _weekFri = (data['friday'] ?? 'SUNNY').toString();
-          _weekSat = (data['saturday'] ?? 'SUNNY').toString();
-          _weekSun = (data['sunday'] ?? 'SUNNY').toString();
-          _weekNextMon = (data['nextMonday'] ?? 'SUNNY').toString();
-        });
+        _showSnack('일별 날씨가 추가됐어요.');
+        await _refreshAll(showLoading: false);
+      } else {
+        _showSnack('저장 실패: ${utf8.decode(response.bodyBytes)}');
       }
-    } catch (_) {}
+    } catch (e) {
+      _showSnack('저장 실패: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isSavingDaily = false;
+      });
+    }
   }
 
-  Future<void> _saveDailyWeather() async {
+  Future<void> _updateHourlyWeather({
+    required String forecastTime,
+    required String weatherType,
+  }) async {
     if (_kakaoId == null) {
       _showSnack('카카오 ID를 불러오지 못했어요.');
       return;
     }
 
     try {
-      setState(() => _isSavingDaily = true);
+      setState(() {
+        _isUpdatingHourly = true;
+      });
 
       final response = await http.post(
-        Uri.parse('$_baseUrl/api/admin/weather/daily'),
+        Uri.parse('$_baseUrl/api/admin/weather/hourly/update'),
         headers: _adminHeaders(),
         body: jsonEncode({
-          'gameDate': _formatDate(_selectedGameDate),
-          'weather06': _daily06,
-          'weather12': _daily12,
-          'weather18': _daily18,
-          'weather00': _daily00,
-          'nextDay06': _dailyNext06,
+          'forecastTime': forecastTime,
+          'weatherType': weatherType,
         }),
       );
 
       if (response.statusCode == 200) {
-        _showSnack('일별 날씨 저장 완료');
-        return;
+        _showSnack('시간대별 날씨를 수정했어요.');
+        await _refreshAll(showLoading: false);
+      } else {
+        _showSnack('수정 실패: ${utf8.decode(response.bodyBytes)}');
       }
-
-      _showSnack('저장 실패: ${utf8.decode(response.bodyBytes)}');
     } catch (e) {
-      _showSnack('저장 실패: $e');
+      _showSnack('수정 실패: $e');
     } finally {
       if (!mounted) return;
-      setState(() => _isSavingDaily = false);
+      setState(() {
+        _isUpdatingHourly = false;
+      });
     }
   }
 
-  Future<void> _saveWeeklyWeather() async {
+  Future<void> _updateDailyWeather({
+    required String forecastDate,
+    required String weatherType,
+  }) async {
     if (_kakaoId == null) {
       _showSnack('카카오 ID를 불러오지 못했어요.');
       return;
     }
 
     try {
-      setState(() => _isSavingWeekly = true);
+      setState(() {
+        _isUpdatingDaily = true;
+      });
 
       final response = await http.post(
-        Uri.parse('$_baseUrl/api/admin/weather/weekly'),
+        Uri.parse('$_baseUrl/api/admin/weather/daily/update'),
         headers: _adminHeaders(),
         body: jsonEncode({
-          'mondayDate': _formatDate(_selectedMonday),
-          'monday': _weekMon,
-          'tuesday': _weekTue,
-          'wednesday': _weekWed,
-          'thursday': _weekThu,
-          'friday': _weekFri,
-          'saturday': _weekSat,
-          'sunday': _weekSun,
-          'nextMonday': _weekNextMon,
+          'forecastDate': forecastDate,
+          'weatherType': weatherType,
         }),
       );
 
       if (response.statusCode == 200) {
-        _showSnack('주간 날씨 저장 완료');
-        return;
+        _showSnack('일별 날씨를 수정했어요.');
+        await _refreshAll(showLoading: false);
+      } else {
+        _showSnack('수정 실패: ${utf8.decode(response.bodyBytes)}');
       }
-
-      _showSnack('저장 실패: ${utf8.decode(response.bodyBytes)}');
     } catch (e) {
-      _showSnack('저장 실패: $e');
+      _showSnack('수정 실패: $e');
     } finally {
       if (!mounted) return;
-      setState(() => _isSavingWeekly = false);
+      setState(() {
+        _isUpdatingDaily = false;
+      });
     }
   }
 
@@ -260,84 +350,65 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
     );
   }
 
-  static DateTime _resolveMonday(DateTime date) {
-    final weekday = date.weekday;
-    return DateTime(date.year, date.month, date.day)
-        .subtract(Duration(days: weekday - DateTime.monday));
-  }
-
-  String _formatDate(DateTime date) {
-    final y = date.year.toString().padLeft(4, '0');
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
-  }
-
-  String _displayDate(DateTime date) {
+  String _formatDateDisplay(DateTime date) {
     return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
   }
 
-  Widget _buildWeatherDropdown({
-    required String title,
-    required String value,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.94),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFFFE2DB),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF334155),
-              ),
-            ),
-          ),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              borderRadius: BorderRadius.circular(16),
-              items: _weatherOptions
-                  .map(
-                    (e) => DropdownMenuItem<String>(
-                  value: e.value,
-                  child: Text(e.label),
-                ),
-              )
-                  .toList(),
-              onChanged: onChanged,
-            ),
-          ),
-        ],
-      ),
-    );
+  String _formatTimeSlotDisplay(String isoString) {
+    try {
+      final date = DateTime.parse(isoString).toLocal();
+      return '${_formatDateDisplay(date)} ${date.hour.toString().padLeft(2, '0')}:00';
+    } catch (_) {
+      return isoString;
+    }
+  }
+
+  String _formatDateOnlyDisplay(String isoString) {
+    try {
+      final date = DateTime.parse('$isoString 00:00:00');
+      return _formatDateDisplay(date);
+    } catch (_) {
+      return isoString;
+    }
+  }
+
+  String _dayOfWeekKoFromDate(String isoString) {
+    try {
+      final date = DateTime.parse('$isoString 00:00:00');
+      switch (date.weekday) {
+        case DateTime.monday:
+          return '월';
+        case DateTime.tuesday:
+          return '화';
+        case DateTime.wednesday:
+          return '수';
+        case DateTime.thursday:
+          return '목';
+        case DateTime.friday:
+          return '금';
+        case DateTime.saturday:
+          return '토';
+        case DateTime.sunday:
+          return '일';
+        default:
+          return '';
+      }
+    } catch (_) {
+      return '';
+    }
   }
 
   Widget _buildSectionCard({
     required String title,
     required String subtitle,
     required Widget child,
-    required VoidCallback onSave,
-    required bool isSaving,
   }) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.94),
+        color: Colors.white.withOpacity(0.95),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFFFFE2DB),
-        ),
+        border: Border.all(color: const Color(0xFFFFE2DB)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -368,7 +439,198 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
           ),
           const SizedBox(height: 16),
           child,
-          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeatherDropdown({
+    required String title,
+    required String value,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFE2DB)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              borderRadius: BorderRadius.circular(16),
+              items: _weatherOptions
+                  .map(
+                    (e) => DropdownMenuItem<String>(
+                  value: e.value,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        e.icon,
+                        size: 18,
+                        color: const Color(0xFFFF8E7C),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(e.label),
+                    ],
+                  ),
+                ),
+              )
+                  .toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditableItemRow({
+    required String leading,
+    required String value,
+    required ValueChanged<String?>? onChanged,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBF9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFE6DF)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              leading,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF2D3748),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 132,
+            child: DropdownButtonFormField<String>(
+              value: value,
+              isExpanded: true,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFFFE2DB)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFFFE2DB)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFFF8E7C),
+                    width: 1.4,
+                  ),
+                ),
+              ),
+              items: _weatherOptions.map((option) {
+                return DropdownMenuItem<String>(
+                  value: option.value,
+                  child: Row(
+                    children: [
+                      Icon(
+                        option.icon,
+                        size: 16,
+                        color: const Color(0xFFFF8E7C),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          option.label,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddBox({
+    required String title,
+    required String targetText,
+    required String selectedValue,
+    required ValueChanged<String?> onChanged,
+    required VoidCallback onSave,
+    required bool isSaving,
+    required String buttonText,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8F5),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFFDFD7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFFF8E7C),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            targetText,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF2D3436),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildWeatherDropdown(
+            title: '날씨 선택',
+            value: selectedValue,
+            onChanged: onChanged,
+          ),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -391,14 +653,175 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
                   color: Colors.white,
                 ),
               )
-                  : const Text(
-                '저장',
-                style: TextStyle(
+                  : Text(
+                buttonText,
+                style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHourlySection() {
+    return _buildSectionCard(
+      title: '시간대별 날씨',
+      subtitle: '6시간 단위 · 현재부터 5구간 표시 · 기존 항목 수정 가능',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                '현재 표시 중',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF3C4856),
+                ),
+              ),
+              if (_isUpdatingHourly) ...[
+                const SizedBox(width: 8),
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_hourlyItems.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                '표시할 시간대별 날씨가 없어요.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF7B8794),
+                ),
+              ),
+            )
+          else
+            ..._hourlyItems.map((item) {
+              final forecastTime = item['forecastTime']?.toString() ?? '';
+              final weatherType = item['weatherType']?.toString() ?? 'SUNNY';
+
+              return _buildEditableItemRow(
+                leading: _formatTimeSlotDisplay(forecastTime),
+                value: weatherType,
+                onChanged: _isUpdatingHourly
+                    ? null
+                    : (v) {
+                  if (v == null || v == weatherType) return;
+                  _updateHourlyWeather(
+                    forecastTime: forecastTime,
+                    weatherType: v,
+                  );
+                },
+              );
+            }),
+          const SizedBox(height: 8),
+          _buildAddBox(
+            title: '다음 추가 가능',
+            targetText: _nextHourlyTime == null
+                ? '불러오는 중...'
+                : _formatTimeSlotDisplay(_nextHourlyTime!),
+            selectedValue: _selectedHourlyWeather,
+            onChanged: (v) {
+              if (v == null) return;
+              setState(() {
+                _selectedHourlyWeather = v;
+              });
+            },
+            onSave: _saveHourlyWeather,
+            isSaving: _isSavingHourly,
+            buttonText: '시간대 추가',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDailySection() {
+    return _buildSectionCard(
+      title: '8일 예보',
+      subtitle: '게임 날짜 기준 · 현재부터 8일 표시 · 기존 항목 수정 가능',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                '현재 표시 중',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF3C4856),
+                ),
+              ),
+              if (_isUpdatingDaily) ...[
+                const SizedBox(width: 8),
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_dailyItems.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                '표시할 일별 예보가 없어요.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF7B8794),
+                ),
+              ),
+            )
+          else
+            ..._dailyItems.map((item) {
+              final forecastDate = item['forecastDate']?.toString() ?? '';
+              final weatherType = item['weatherType']?.toString() ?? 'SUNNY';
+              final dayOfWeek = _dayOfWeekKoFromDate(forecastDate);
+
+              return _buildEditableItemRow(
+                leading: '$dayOfWeek · ${_formatDateOnlyDisplay(forecastDate)}',
+                value: weatherType,
+                onChanged: _isUpdatingDaily
+                    ? null
+                    : (v) {
+                  if (v == null || v == weatherType) return;
+                  _updateDailyWeather(
+                    forecastDate: forecastDate,
+                    weatherType: v,
+                  );
+                },
+              );
+            }),
+          const SizedBox(height: 8),
+          _buildAddBox(
+            title: '다음 추가 가능',
+            targetText: _nextDailyDate == null
+                ? '불러오는 중...'
+                : '${_dayOfWeekKoFromDate(_nextDailyDate!)} · ${_formatDateOnlyDisplay(_nextDailyDate!)}',
+            selectedValue: _selectedDailyWeather,
+            onChanged: (v) {
+              if (v == null) return;
+              setState(() {
+                _selectedDailyWeather = v;
+              });
+            },
+            onSave: _saveDailyForecast,
+            isSaving: _isSavingDaily,
+            buttonText: '일별 추가',
           ),
         ],
       ),
@@ -431,6 +854,19 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      onPressed: _isRefreshing ? null : () => _refreshAll(),
+                      icon: _isRefreshing
+                          ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                          : const Icon(Icons.refresh_rounded),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -444,200 +880,41 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
                   child: Text(
                     _error!,
                     textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                    ),
                   ),
                 ),
               )
                   : RefreshIndicator(
-                onRefresh: _init,
+                onRefresh: _refreshAll,
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                   children: [
-                    _buildSectionCard(
-                      title: '일별 시간대 날씨',
-                      subtitle: '06시 / 12시 / 18시 / 00시 / 다음 06시',
-                      onSave: _saveDailyWeather,
-                      isSaving: _isSavingDaily,
-                      child: Column(
-                        children: [
-                          InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: _pickGameDate,
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 14,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF8F5),
-                                borderRadius:
-                                BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: const Color(0xFFFFE0D8),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.calendar_month_rounded,
-                                    color: Color(0xFFFF8E7C),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      '게임 날짜 ${_displayDate(_selectedGameDate)}',
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildWeatherDropdown(
-                            title: '06시',
-                            value: _daily06,
-                            onChanged: (v) =>
-                                setState(() => _daily06 = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '12시',
-                            value: _daily12,
-                            onChanged: (v) =>
-                                setState(() => _daily12 = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '18시',
-                            value: _daily18,
-                            onChanged: (v) =>
-                                setState(() => _daily18 = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '00시',
-                            value: _daily00,
-                            onChanged: (v) =>
-                                setState(() => _daily00 = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '다음날 06시',
-                            value: _dailyNext06,
-                            onChanged: (v) =>
-                                setState(() => _dailyNext06 = v!),
-                          ),
-                        ],
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF5F1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFFFE3DC),
+                        ),
+                      ),
+                      child: const Text(
+                        '현재 보여주는 예보는 바로 수정할 수 있고, 맨 뒤에 들어갈 다음 1칸도 추가할 수 있어요.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.45,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF7B8794),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 18),
-                    _buildSectionCard(
-                      title: '주간 날씨',
-                      subtitle: '월요일 기준 월~일 + 다음주 월요일',
-                      onSave: _saveWeeklyWeather,
-                      isSaving: _isSavingWeekly,
-                      child: Column(
-                        children: [
-                          InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: _pickMondayDate,
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 14,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF8F5),
-                                borderRadius:
-                                BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: const Color(0xFFFFE0D8),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.date_range_rounded,
-                                    color: Color(0xFFFF8E7C),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      '기준 월요일 ${_displayDate(_selectedMonday)}',
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildWeatherDropdown(
-                            title: '월요일',
-                            value: _weekMon,
-                            onChanged: (v) =>
-                                setState(() => _weekMon = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '화요일',
-                            value: _weekTue,
-                            onChanged: (v) =>
-                                setState(() => _weekTue = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '수요일',
-                            value: _weekWed,
-                            onChanged: (v) =>
-                                setState(() => _weekWed = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '목요일',
-                            value: _weekThu,
-                            onChanged: (v) =>
-                                setState(() => _weekThu = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '금요일',
-                            value: _weekFri,
-                            onChanged: (v) =>
-                                setState(() => _weekFri = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '토요일',
-                            value: _weekSat,
-                            onChanged: (v) =>
-                                setState(() => _weekSat = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '일요일',
-                            value: _weekSun,
-                            onChanged: (v) =>
-                                setState(() => _weekSun = v!),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildWeatherDropdown(
-                            title: '다음주 월요일',
-                            value: _weekNextMon,
-                            onChanged: (v) =>
-                                setState(() => _weekNextMon = v!),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildHourlySection(),
+                    const SizedBox(height: 18),
+                    _buildDailySection(),
                   ],
                 ),
               ),
@@ -652,9 +929,11 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
 class _WeatherOption {
   final String label;
   final String value;
+  final IconData icon;
 
   const _WeatherOption({
     required this.label,
     required this.value,
+    required this.icon,
   });
 }

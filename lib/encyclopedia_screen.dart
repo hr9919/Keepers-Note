@@ -875,11 +875,56 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   }
 
   Widget _buildFurnitureContent() {
-    final List<String> dummyTitles = List.generate(
-      12,
-          (index) => '가구 세트 ${index + 1}',
+    return _buildComingSoonContent(
+      controller: _furnitureScrollController,
+      title: '가구 도감은 준비중이에요!',
+      subtitle: '지금 보이는 항목은 테스트를 위한 샘플 데이터예요.',
+      emoji: '🪑',
+      previewTitle: '가구 샘플 데이터',
+      sampleItems: const [
+        '주방 가구 샘플',
+        '침실 가구 샘플',
+        '거실 가구 샘플',
+        '야외 장식 샘플',
+        '테마 가구 샘플',
+      ],
+      onRefresh: () async {},
     );
+  }
 
+  Widget _buildOutfitContent() {
+    return _buildComingSoonContent(
+      controller: _outfitScrollController,
+      title: '옷 도감은 준비중이에요!',
+      subtitle: '지금 보이는 항목은 테스트를 위한 샘플 데이터예요.',
+      emoji: '👗',
+      previewTitle: '옷 샘플 데이터',
+      sampleItems: const [
+        '몰린 옷가게 샘플',
+        '금토리 전시회 샘플',
+        '축제 패키지 샘플',
+        '한정 상품 샘플',
+        '이벤트 아이템 샘플',
+      ],
+      onRefresh: () async {
+        setState(() => _isRefreshing = true);
+        await Future.delayed(const Duration(seconds: 1));
+        if (mounted) {
+          setState(() => _isRefreshing = false);
+        }
+      },
+    );
+  }
+
+  Widget _buildComingSoonContent({
+    required ScrollController controller,
+    required String title,
+    required String subtitle,
+    required String emoji,
+    required String previewTitle,
+    required List<String> sampleItems,
+    required Future<void> Function() onRefresh,
+  }) {
     return NotificationListener<ScrollUpdateNotification>(
       onNotification: (notification) {
         if (notification.metrics.axis != Axis.vertical) return false;
@@ -904,71 +949,190 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
         return false;
       },
       child: RefreshIndicator(
-        onRefresh: () async {},
+        onRefresh: onRefresh,
         color: snackAccent,
-        child: ListView.builder(
-          controller: _furnitureScrollController,
+        child: ListView(
+          controller: controller,
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
           padding: const EdgeInsets.fromLTRB(16, 28, 16, 180),
-          itemCount: dummyTitles.length,
-          itemBuilder: (context, index) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _buildSeriesCard(dummyTitles[index]),
-            );
-          },
+          children: [
+            _buildComingSoonHeroCard(
+              title: title,
+              subtitle: subtitle,
+              emoji: emoji,
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 10),
+              child: Text(
+                previewTitle,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF5C6675),
+                ),
+              ),
+            ),
+            ...sampleItems.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+
+                // 👇 첫 번째 아이템만 "진짜 카드"
+                child: index == 0 && item.contains('몰린 옷가게')
+                    ? _buildSampleRealOutfitCard(item)
+                    : _buildSampleSeriesCard(item),
+              );
+            }),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildOutfitContent() {
-    return NotificationListener<ScrollUpdateNotification>(
-      onNotification: (notification) {
-        if (notification.metrics.axis != Axis.vertical) return false;
+  Widget _buildSampleRealOutfitCard(String title) {
+    return Stack(
+      children: [
+        // 👉 기존 카드 재사용 (여기 핵심)
+        _buildSeriesCard(title),
 
-        _dismissSearchFocus();
-
-        final double delta = notification.scrollDelta ?? 0;
-
-        if (notification.metrics.pixels <= 8) {
-          if (!_isFilterVisible) {
-            setState(() => _isFilterVisible = true);
-          }
-          return false;
-        }
-
-        if (delta > 2 && _isFilterVisible) {
-          setState(() => _isFilterVisible = false);
-        } else if (delta < -2 && !_isFilterVisible) {
-          setState(() => _isFilterVisible = true);
-        }
-
-        return false;
-      },
-      child: RefreshIndicator(
-        onRefresh: () async {
-          setState(() => _isRefreshing = true);
-          await Future.delayed(const Duration(seconds: 1));
-          if (mounted) setState(() => _isRefreshing = false);
-        },
-        color: snackAccent,
-        child: ListView.builder(
-          controller: _outfitScrollController,
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 28, 16, 180),
-          itemCount: 20,
-          itemBuilder: (context, index) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _buildSeriesCard('숲의 주문 (${index + 1})'),
-            );
-          },
+        // 👉 샘플 뱃지 (우상단)
+        Positioned(
+          top: 10,
+          right: 12,
+          child: _buildSampleBadge(),
         ),
+      ],
+    );
+  }
+
+  Widget _buildComingSoonHeroCard({
+    required String title,
+    required String subtitle,
+    required String emoji,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFFFD9D1),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3EF),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFFFE1D9),
+                  ),
+                ),
+                child: Text(
+                  emoji,
+                  style: const TextStyle(fontSize: 24),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF2D3436),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.45,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF7B8794),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildInfoPill(
+                icon: Icons.science_rounded,
+                label: '샘플 데이터',
+              ),
+              _buildInfoPill(
+                icon: Icons.construction_rounded,
+                label: '정식 도감 준비중',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoPill({
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4F1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xFFFFE0D9),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: const Color(0xFFFF8E7C),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF6E7683),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1026,6 +1190,135 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
                   ],
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildSampleSeriesCard(String seriesTitle) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: ShapeDecoration(
+        color: Colors.white.withOpacity(0.92),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(
+            color: const Color(0xFFFF8E7C).withOpacity(0.12),
+            width: 1,
+          ),
+        ),
+        shadows: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  seriesTitle,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF333333),
+                  ),
+                ),
+              ),
+              _buildSampleBadge(),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFAF8),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFFFFE3DC),
+              ),
+            ),
+            child: const Column(
+              children: [
+                Icon(
+                  Icons.inventory_2_outlined,
+                  size: 32,
+                  color: Color(0xFFFF8E7C),
+                ),
+                SizedBox(height: 10),
+                Text(
+                  '샘플 데이터가 표시되고 있어요',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF444B55),
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  '가구/옷 도감은 준비중이며, 현재 화면은 테스트용 샘플 데이터입니다.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.45,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF7B8794),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSampleBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFFFA08F),
+            Color(0xFFFF8E7C),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF8E7C).withOpacity(0.20),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.auto_awesome_rounded,
+            size: 14,
+            color: Colors.white,
+          ),
+          SizedBox(width: 5),
+          Text(
+            'SAMPLE',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.3,
             ),
           ),
         ],
@@ -1161,7 +1454,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
                   imagePath,
                   fit: BoxFit.contain,
                   errorBuilder: (c, e, s) =>
-                  const SizedBox(height: 100, child: Icon(Icons.broken_image)),
+                      const SizedBox(height: 100, child: Icon(Icons.broken_image)),
                 ),
               ),
             ),
@@ -1186,7 +1479,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(
         4,
-            (index) => Container(
+        (index) => Container(
           width: 20,
           height: 20,
           margin: const EdgeInsets.symmetric(horizontal: 1.5),
@@ -1200,6 +1493,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
       ),
     );
   }
+
 
   Widget _buildTabBar() {
     return Container(
