@@ -1,10 +1,7 @@
-import 'dart:convert';
 import 'package:home_widget/home_widget.dart';
 
 class KeepersHomeWidgetService {
-  static const String androidProviderName =
-      'com.townhelpers.keepers_note.TodayInfoWidgetProvider';
-
+  static const String androidProviderName = 'TodayInfoWidgetProvider';
   static const String iOSName = 'TodayInfoWidget';
 
   static const String keyWeather = 'weather';
