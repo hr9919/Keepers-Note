@@ -41,8 +41,11 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
     }
 
     private fun animateRefreshAndUpdate(context: Context) {
+        // 먼저 날씨만 로딩 상태로 바꾸고, 자원 위치는 유지
+        renderLoadingState(context)
+
         val handler = Handler(Looper.getMainLooper())
-        val frames = listOf("↻", "↺", "⟳", "↻")
+        val frames = listOf("⟳", "⟲", "⟳", "⟲")
 
         frames.forEachIndexed { index, frame ->
             handler.postDelayed({
@@ -78,36 +81,49 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
             appWidgetId: Int,
             prefs: SharedPreferences
         ) {
-            val weather = prefs.getString("weather", "맑음") ?: "맑음"
+            val weatherRaw = prefs.getString("weather", "") ?: ""
             val fluorite = prefs.getString("fluorite_text", "위치 확인 중") ?: "위치 확인 중"
             val oak = prefs.getString("oak_text", "위치 확인 중") ?: "위치 확인 중"
 
-            val h0Time = prefs.getString("hourly_0_time", "-") ?: "-"
-            val h0Weather = prefs.getString("hourly_0_weather", "-") ?: "-"
-            val h1Time = prefs.getString("hourly_1_time", "-") ?: "-"
-            val h1Weather = prefs.getString("hourly_1_weather", "-") ?: "-"
-            val h2Time = prefs.getString("hourly_2_time", "-") ?: "-"
-            val h2Weather = prefs.getString("hourly_2_weather", "-") ?: "-"
+            val h0TimeRaw = prefs.getString("hourly_0_time", "") ?: ""
+            val h0WeatherRaw = prefs.getString("hourly_0_weather", "") ?: ""
+            val h1TimeRaw = prefs.getString("hourly_1_time", "") ?: ""
+            val h1WeatherRaw = prefs.getString("hourly_1_weather", "") ?: ""
+            val h2TimeRaw = prefs.getString("hourly_2_time", "") ?: ""
+            val h2WeatherRaw = prefs.getString("hourly_2_weather", "") ?: ""
+
+            val isLoading = weatherRaw.isBlank()
+
+            val displayWeather = if (isLoading) "로딩중.." else weatherRaw
+            val displayWeatherIcon = if (isLoading) "⏳" else getWeatherEmoji(weatherRaw)
+
+            val h0Time = if (h0TimeRaw.isBlank()) "--시" else h0TimeRaw
+            val h1Time = if (h1TimeRaw.isBlank()) "--시" else h1TimeRaw
+            val h2Time = if (h2TimeRaw.isBlank()) "--시" else h2TimeRaw
+
+            val h0Weather = if (h0WeatherRaw.isBlank()) "·" else getWeatherEmoji(h0WeatherRaw)
+            val h1Weather = if (h1WeatherRaw.isBlank()) "·" else getWeatherEmoji(h1WeatherRaw)
+            val h2Weather = if (h2WeatherRaw.isBlank()) "·" else getWeatherEmoji(h2WeatherRaw)
 
             val views = RemoteViews(context.packageName, R.layout.today_info_widget)
 
             views.setInt(
                 R.id.widget_root,
                 "setBackgroundResource",
-                getWeatherBackgroundRes(weather)
+                getWeatherBackgroundRes(weatherRaw)
             )
 
-            val primaryTextColor = getPrimaryTextColor(weather)
-            val secondaryTextColor = getSecondaryTextColor(weather)
-            val emojiColor = getEmojiColor(weather)
+            val primaryTextColor = getPrimaryTextColor(weatherRaw)
+            val secondaryTextColor = getSecondaryTextColor(weatherRaw)
+            val emojiColor = getEmojiColor(weatherRaw)
 
-            views.setTextViewText(R.id.widget_title, "현재 날씨")
+            views.setTextViewText(R.id.widget_title, "키퍼노트")
             views.setTextColor(R.id.widget_title, secondaryTextColor)
 
-            views.setTextViewText(R.id.widget_weather_text, weather)
+            views.setTextViewText(R.id.widget_weather_text, displayWeather)
             views.setTextColor(R.id.widget_weather_text, primaryTextColor)
 
-            views.setTextViewText(R.id.widget_weather_icon, getWeatherEmoji(weather))
+            views.setTextViewText(R.id.widget_weather_icon, displayWeatherIcon)
             views.setTextColor(R.id.widget_weather_icon, emojiColor)
 
             views.setImageViewResource(R.id.widget_fluorite_icon, R.drawable.ic_widget_fluorite)
@@ -124,20 +140,20 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
 
             views.setTextViewText(R.id.widget_hourly_0_time, h0Time)
             views.setTextColor(R.id.widget_hourly_0_time, secondaryTextColor)
-            views.setTextViewText(R.id.widget_hourly_0_weather, getWeatherEmoji(h0Weather))
+            views.setTextViewText(R.id.widget_hourly_0_weather, h0Weather)
             views.setTextColor(R.id.widget_hourly_0_weather, emojiColor)
 
             views.setTextViewText(R.id.widget_hourly_1_time, h1Time)
             views.setTextColor(R.id.widget_hourly_1_time, secondaryTextColor)
-            views.setTextViewText(R.id.widget_hourly_1_weather, getWeatherEmoji(h1Weather))
+            views.setTextViewText(R.id.widget_hourly_1_weather, h1Weather)
             views.setTextColor(R.id.widget_hourly_1_weather, emojiColor)
 
             views.setTextViewText(R.id.widget_hourly_2_time, h2Time)
             views.setTextColor(R.id.widget_hourly_2_time, secondaryTextColor)
-            views.setTextViewText(R.id.widget_hourly_2_weather, getWeatherEmoji(h2Weather))
+            views.setTextViewText(R.id.widget_hourly_2_weather, h2Weather)
             views.setTextColor(R.id.widget_hourly_2_weather, emojiColor)
 
-            views.setTextViewText(R.id.widget_refresh_button, "↻")
+            views.setTextViewText(R.id.widget_refresh_button, "⟳")
             views.setTextColor(R.id.widget_refresh_button, primaryTextColor)
 
             val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
@@ -149,6 +165,7 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 views.setOnClickPendingIntent(R.id.main_weather, openAppPendingIntent)
+                views.setOnClickPendingIntent(R.id.hourly_container, openAppPendingIntent)
                 views.setOnClickPendingIntent(R.id.resource_row, openAppPendingIntent)
             }
 
@@ -182,12 +199,95 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
             val component = ComponentName(context, TodayInfoWidgetProvider::class.java)
             val ids = manager.getAppWidgetIds(component)
             val prefs = HomeWidgetPlugin.getData(context)
-            val weather = prefs.getString("weather", "맑음") ?: "맑음"
+            val weather = prefs.getString("weather", "") ?: ""
 
             ids.forEach { id ->
                 val views = RemoteViews(context.packageName, R.layout.today_info_widget)
                 views.setTextViewText(R.id.widget_refresh_button, text)
                 views.setTextColor(R.id.widget_refresh_button, getPrimaryTextColor(weather))
+                manager.updateAppWidget(id, views)
+            }
+        }
+
+        fun renderLoadingState(context: Context) {
+            val manager = AppWidgetManager.getInstance(context)
+            val component = ComponentName(context, TodayInfoWidgetProvider::class.java)
+            val ids = manager.getAppWidgetIds(component)
+            val prefs = HomeWidgetPlugin.getData(context)
+
+            val fluorite = prefs.getString("fluorite_text", "위치 확인 중") ?: "위치 확인 중"
+            val oak = prefs.getString("oak_text", "위치 확인 중") ?: "위치 확인 중"
+            val weather = prefs.getString("weather", "") ?: ""
+
+            ids.forEach { id ->
+                val views = RemoteViews(context.packageName, R.layout.today_info_widget)
+
+                views.setInt(
+                    R.id.widget_root,
+                    "setBackgroundResource",
+                    getWeatherBackgroundRes(weather)
+                )
+
+                val primaryTextColor = getPrimaryTextColor(weather)
+                val secondaryTextColor = getSecondaryTextColor(weather)
+
+                views.setTextViewText(R.id.widget_title, "키퍼노트")
+                views.setTextColor(R.id.widget_title, secondaryTextColor)
+
+                views.setTextViewText(R.id.widget_weather_text, "로딩중..")
+                views.setTextColor(R.id.widget_weather_text, primaryTextColor)
+
+                views.setTextViewText(R.id.widget_weather_icon, "⏳")
+                views.setTextColor(R.id.widget_weather_icon, primaryTextColor)
+
+                views.setTextViewText(R.id.widget_hourly_0_time, "--시")
+                views.setTextColor(R.id.widget_hourly_0_time, secondaryTextColor)
+                views.setTextViewText(R.id.widget_hourly_0_weather, "·")
+                views.setTextColor(R.id.widget_hourly_0_weather, primaryTextColor)
+
+                views.setTextViewText(R.id.widget_hourly_1_time, "--시")
+                views.setTextColor(R.id.widget_hourly_1_time, secondaryTextColor)
+                views.setTextViewText(R.id.widget_hourly_1_weather, "·")
+                views.setTextColor(R.id.widget_hourly_1_weather, primaryTextColor)
+
+                views.setTextViewText(R.id.widget_hourly_2_time, "--시")
+                views.setTextColor(R.id.widget_hourly_2_time, secondaryTextColor)
+                views.setTextViewText(R.id.widget_hourly_2_weather, "·")
+                views.setTextColor(R.id.widget_hourly_2_weather, primaryTextColor)
+
+                // 자원 위치는 유지
+                views.setTextViewText(R.id.widget_fluorite_value, normalizePlaceLabel(fluorite))
+                views.setTextColor(R.id.widget_fluorite_value, primaryTextColor)
+                views.setTextViewText(R.id.widget_oak_value, normalizePlaceLabel(oak))
+                views.setTextColor(R.id.widget_oak_value, primaryTextColor)
+
+                views.setTextViewText(R.id.widget_refresh_button, "⟳")
+                views.setTextColor(R.id.widget_refresh_button, primaryTextColor)
+
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                if (launchIntent != null) {
+                    val openAppPendingIntent = PendingIntent.getActivity(
+                        context,
+                        1001,
+                        launchIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    views.setOnClickPendingIntent(R.id.main_weather, openAppPendingIntent)
+                    views.setOnClickPendingIntent(R.id.hourly_container, openAppPendingIntent)
+                    views.setOnClickPendingIntent(R.id.resource_row, openAppPendingIntent)
+                }
+
+                val refreshIntent = Intent(context, TodayInfoWidgetProvider::class.java).apply {
+                    action = ACTION_REFRESH_WIDGET
+                }
+                val refreshPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    2001,
+                    refreshIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.widget_refresh_button, refreshPendingIntent)
+
                 manager.updateAppWidget(id, views)
             }
         }
@@ -204,7 +304,7 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
                 "비" -> "🌧️"
                 "눈" -> "❄️"
                 "무지개" -> "🌈"
-                else -> "🌤️"
+                else -> "·"
             }
         }
 

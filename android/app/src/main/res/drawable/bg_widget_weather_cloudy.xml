@@ -11,16 +11,4 @@
             <corners android:radius="22dp" />
         </shape>
     </item>
-
-    <!-- 하단 번짐만 유지 -->
-    <item
-        android:left="44dp"
-        android:top="122dp"
-        android:right="62dp"
-        android:bottom="-14dp">
-        <shape android:shape="oval">
-            <solid android:color="#12FFFFFF" />
-        </shape>
-    </item>
-
 </layer-list>
