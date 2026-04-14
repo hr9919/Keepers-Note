@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:home_widget/home_widget.dart';
+import 'services/home_widget_service.dart';
 
 class WeatherAdminScreen extends StatefulWidget {
   const WeatherAdminScreen({super.key});
@@ -204,6 +206,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
       );
 
       if (response.statusCode == 200) {
+        await _pushCurrentWeatherToWidget(_selectedHourlyWeather);
         _showSnack('시간대별 날씨가 추가됐어요.');
         await _refreshAll(showLoading: false);
       } else {
@@ -282,6 +285,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
       );
 
       if (response.statusCode == 200) {
+        await _pushCurrentWeatherToWidget(weatherType);
         _showSnack('시간대별 날씨를 수정했어요.');
         await _refreshAll(showLoading: false);
       } else {
@@ -584,6 +588,41 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  String _normalizeWidgetWeather(String raw) {
+    switch (raw) {
+      case 'SUNNY':
+      case 'CLEAR':
+      case '맑음':
+        return '맑음';
+      case 'CLOUDY':
+      case 'OVERCAST':
+      case '흐림':
+        return '흐림';
+      case 'RAIN':
+      case 'RAINY':
+      case '비':
+        return '비';
+      case 'SNOW':
+      case 'SNOWY':
+      case '눈':
+        return '눈';
+      case 'RAINBOW':
+      case '무지개':
+        return '무지개';
+      default:
+        return raw;
+    }
+  }
+
+  Future<void> _pushCurrentWeatherToWidget(String weatherType) async {
+    final normalized = _normalizeWidgetWeather(weatherType);
+
+    await HomeWidget.saveWidgetData<String>('weather', normalized);
+    await HomeWidget.updateWidget(
+      androidName: 'TodayInfoWidgetProvider',
     );
   }
 

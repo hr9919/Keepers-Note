@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:startColor="#FF3D5A80"
+                android:centerColor="#FF2B4162"
+                android:endColor="#FF1B2840" />
+            <corners android:radius="22dp" />
+        </shape>
+    </item>
+
+    <!-- 비줄기 느낌 1 -->
+    <item
+        android:left="36dp"
+        android:top="18dp"
+        android:right="176dp"
+        android:bottom="36dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#14FFFFFF" />
+            <corners android:radius="999dp" />
+            <size android:width="2dp" />
+        </shape>
+    </item>
+
+    <!-- 비줄기 느낌 2 -->
+    <item
+        android:left="96dp"
+        android:top="34dp"
+        android:right="110dp"
+        android:bottom="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#12FFFFFF" />
+            <corners android:radius="999dp" />
+            <size android:width="2dp" />
+        </shape>
+    </item>
+
+    <!-- 비줄기 느낌 3 -->
+    <item
+        android:left="156dp"
+        android:top="10dp"
+        android:right="54dp"
+        android:bottom="48dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#10FFFFFF" />
+            <corners android:radius="999dp" />
+            <size android:width="2dp" />
+        </shape>
+    </item>
+
+    <!-- 번짐 -->
+    <item
+        android:left="-12dp"
+        android:top="-8dp"
+        android:right="122dp"
+        android:bottom="124dp">
+        <shape android:shape="oval">
+            <solid android:color="#12FFFFFF" />
+        </shape>
+    </item>
+
+</layer-list>

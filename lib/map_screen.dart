@@ -1316,7 +1316,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     String? fallbackIconPath;
     if (resourceName == 'roaming_oak') {
-      fallbackIconPath = 'assets/images/resources/oak.png';
+      fallbackIconPath = 'assets/images/resources/roaming-oak.png';
     } else if (resourceName == 'fluorite') {
       fallbackIconPath = 'assets/images/resources/fluorite.png';
     }
@@ -1592,7 +1592,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             left: 2,
             bottom: 2,
             child: Image.asset(
-              'assets/images/resources/oak.png',
+              'assets/images/resources/roaming-oak.png',
               width: 16,
               height: 16,
             ),
@@ -1640,7 +1640,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               left: 1,
               bottom: 2,
               child: Image.asset(
-                'assets/images/resources/oak.png',
+                'assets/images/resources/roaming-oak.png',
                 width: 16,
                 height: 16,
               ),

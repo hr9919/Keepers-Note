@@ -395,11 +395,6 @@ class _HomeScreenState extends State<HomeScreen>
   bool _didSetPreviewInitialTransform = false;
   bool _isPointerDownOnMapPreview = false;
 
-  bool _isProgressiveVotePin(ResourceModel res) {
-    final key = _normalizePreviewFilterKey(res);
-    return key == 'roaming_oak' || key == 'fluorite';
-  }
-
   bool _isPreviewVotableResource(ResourceModel res) {
     final key = _normalizePreviewFilterKey(res);
     return key == 'roaming_oak' || key == 'fluorite';
@@ -513,8 +508,8 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _syncTodayInfoToWidget() async {
-    String oakText = '미확정';
-    String fluoriteText = '미확정';
+    String oakText = '위치 확인 중';
+    String fluoriteText = '위치 확인 중';
 
     SpawnPointModel? oakPoint;
     SpawnPointModel? fluoritePoint;
@@ -552,11 +547,22 @@ class _HomeScreenState extends State<HomeScreen>
         '${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')} '
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
+    final nextThree = _hourlyWeather.take(3).map((e) {
+      return {
+        'time': _formatHourlyWeatherLabel((e['time'] ?? '').trim()),
+        'weather': _normalizeWeatherLabel((e['weather'] ?? '').trim()),
+      };
+    }).toList();
+
     await KeepersHomeWidgetService.saveAndRefresh(
       weather: _normalizeWeatherLabel(_currentWeather),
       oakText: oakText,
       fluoriteText: fluoriteText,
       updatedAt: updatedAt,
+      oakVerified: oakPoint != null,
+      fluoriteVerified: fluoritePoint != null,
+      voterId: _voterId,
+      hourlyWeather: nextThree,
     );
   }
 
@@ -792,21 +798,13 @@ class _HomeScreenState extends State<HomeScreen>
     final value = raw.trim();
     if (value.isEmpty) return '';
 
-    final lower = value.toLowerCase();
-
     final timeMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(value);
     if (timeMatch == null) {
       return value;
     }
 
     final hour = timeMatch.group(1)!.padLeft(2, '0');
-    final formattedHour = '$hour시';
-
-    if (lower.contains('내일')) {
-      return '내일 $formattedHour';
-    }
-
-    return formattedHour;
+    return '$hour시';
   }
 
   String _weekdayLabelFromDate(String rawDate) {
@@ -936,27 +934,11 @@ class _HomeScreenState extends State<HomeScreen>
 
 
   Color _getWeatherTextColor(String weather) {
-    switch (weather) {
-      case '맑음':
-      case '눈':
-      case '무지개':
-      // 생검정 대신 배경색과 조화로운 짙은 블루-그레이 사용
-        return const Color(0xFF334155).withOpacity(0.9);
-      default:
-        return Colors.white;
-    }
+    return const Color(0xFF334155).withOpacity(0.92);
   }
 
   Color _getWeatherSubTextColor(String weather) {
-    switch (weather) {
-      case '맑음':
-      case '눈':
-      case '무지개':
-      // 메인 글자보다 약간 연한 톤
-        return const Color(0xFF475569).withOpacity(0.8);
-      default:
-        return Colors.white.withOpacity(0.9);
-    }
+    return const Color(0xFF475569).withOpacity(0.86);
   }
 
   BoxDecoration _buildWeatherBackground(String weather) {
@@ -1043,24 +1025,32 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildWeatherIcon(String weather, {double size = 24}) {
+    final shadow = [
+      Shadow(
+        color: Colors.black.withOpacity(0.2),
+        blurRadius: 6,
+        offset: const Offset(0, 2),
+      ),
+    ];
+
     switch (weather) {
       case '맑음':
-        return Text('☀️', style: TextStyle(fontSize: size));
+        return Text('☀️', style: TextStyle(fontSize: size, shadows: shadow));
 
       case '흐림':
-        return Text('☁️', style: TextStyle(fontSize: size));
+        return Text('☁️', style: TextStyle(fontSize: size, shadows: shadow));
 
       case '비':
-        return Text('🌧️', style: TextStyle(fontSize: size));
+        return Text('🌧️', style: TextStyle(fontSize: size, shadows: shadow));
 
       case '무지개':
-        return Text('🌈', style: TextStyle(fontSize: size));
+        return Text('🌈', style: TextStyle(fontSize: size, shadows: shadow));
 
       case '눈':
-        return Text('❄️', style: TextStyle(fontSize: size));
+        return Text('❄️', style: TextStyle(fontSize: size, shadows: shadow));
 
       default:
-        return Text('🌤️', style: TextStyle(fontSize: size));
+        return Text('🌤️', style: TextStyle(fontSize: size, shadows: shadow));
     }
   }
 
@@ -1369,7 +1359,7 @@ class _HomeScreenState extends State<HomeScreen>
 
               String? fallbackIconPath;
               if (resourceName == 'roaming_oak') {
-                fallbackIconPath = 'assets/images/resources/oak.png';
+                fallbackIconPath = 'assets/images/resources/roaming-oak.png';
               } else if (resourceName == 'fluorite') {
                 fallbackIconPath = 'assets/images/resources/fluorite.png';
               }
@@ -2168,7 +2158,7 @@ class _HomeScreenState extends State<HomeScreen>
                         child: _buildSectionTitle('진행중 이벤트'),
                       ),
                       _buildEventSection(context),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 14),
 
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2182,7 +2172,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   _buildSectionTitle('오늘의 할 일'),
                                   const SizedBox(height: 6),
                                   SizedBox(
-                                    height: 246,
+                                    height: 266,
                                     child: _buildTodoSummaryCard(),
                                   ),
                                 ],
@@ -2196,7 +2186,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   _buildSectionTitle('날씨'),
                                   const SizedBox(height: 6),
                                   SizedBox(
-                                    height: 246,
+                                    height: 266,
                                     child: _buildWeatherCard(_currentWeather),
                                   ),
                                 ],
@@ -2206,7 +2196,7 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
 
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2214,7 +2204,7 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                       _buildMapSection(context),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -2705,85 +2695,124 @@ class _HomeScreenState extends State<HomeScreen>
                         child: _buildAnimatedWeatherBackground(weather),
                       ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                        padding: const EdgeInsets.fromLTRB(14, 11, 14, 10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Center(
-                              child: Text(
-                                '현재 날씨',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: subColor.withOpacity(0.9),
-                                  letterSpacing: -0.1,
-                                ),
+                            Text(
+                              '현재 날씨',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: subColor.withOpacity(0.95),
+                                letterSpacing: -0.1,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 6),
-                                  child: SizedBox(
-                                    width: 64,
-                                    height: 64,
-                                    child: Center(
-                                      child: Transform.translate(
-                                        offset: const Offset(0, -2),
-                                        child: _buildWeatherAnimatedIcon(weather),
+
+                            const SizedBox(height: 6),
+
+                            _buildWeatherGlassPanel(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 11),
+                              borderRadius: BorderRadius.circular(18),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 64,
+                                        height: 64,
+                                        child: Center(
+                                          child: OverflowBox(
+                                            maxWidth: 72,
+                                            maxHeight: 72,
+                                            child: _buildWeatherAnimatedIcon(weather),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            final baseStyle = TextStyle(
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.w800,
+                                              height: 1.0,
+                                              color: textColor,
+                                              letterSpacing: -0.3,
+                                            );
+
+                                            final fittedFontSize = _fitSingleLineFontSize(
+                                              text: weather,
+                                              baseStyle: baseStyle,
+                                              maxWidth: constraints.maxWidth,
+                                              minFontSize: 14,
+                                            );
+
+                                            return Center(
+                                              child: Text(
+                                                weather,
+                                                textAlign: TextAlign.center,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: baseStyle.copyWith(
+                                                  fontSize: fittedFontSize,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    child: Text(
+                                      _getWeatherDescription(weather),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        height: 1.14,
+                                        fontWeight: FontWeight.w600,
+                                        color: subColor,
                                       ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Text(
-                                    weather,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w700,
-                                      height: 1.0,
-                                      color: textColor,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Center(
-                              child: Padding(
-                                padding:
-                                const EdgeInsets.symmetric(horizontal: 6),
-                                child: Text(
-                                  _getWeatherDescription(weather),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    height: 1.32,
-                                    fontWeight: FontWeight.w500,
-                                    color: subColor,
-                                  ),
-                                ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 14),
+
+                            const SizedBox(height: 13),
+
+                            Text(
+                              '시간대별 날씨',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: subColor.withOpacity(0.94),
+                              ),
+                            ),
+
+                            const SizedBox(height: 6),
+
                             _buildHourlyWeatherStrip(weather),
+
                             const Spacer(),
+
                             Center(
                               child: Padding(
-                                padding: const EdgeInsets.only(bottom: 2),
+                                padding: const EdgeInsets.only(bottom: 1),
                                 child: Text(
-                                  '탭해서 주간 날씨 보기',
+                                  '탭하여 주간 날씨 보기',
                                   style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w500,
-                                    color: subColor.withOpacity(0.52),
+                                    fontSize: 10.8,
+                                    fontWeight: FontWeight.w600,
+                                    color: subColor.withOpacity(0.64),
                                   ),
                                 ),
                               ),
@@ -2802,9 +2831,42 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildWeatherGlassPanel({
+    required Widget child,
+    EdgeInsets padding = const EdgeInsets.all(14),
+    BorderRadius? borderRadius,
+  }) {
+    final radius = borderRadius ?? BorderRadius.circular(20);
+
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.22),
+            borderRadius: radius,
+            border: Border.all(
+              color: Colors.white.withOpacity(0.42),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
   Widget _buildHourlyWeatherStrip(String currentWeather) {
-    final bool isLightBg = ['맑음', '눈', '무지개'].contains(currentWeather);
-    final textColor = _getWeatherTextColor(currentWeather);
+    const chipTextColor = Color(0xFF334155);
 
     final hourly = _hourlyWeather.isEmpty
         ? [
@@ -2814,76 +2876,85 @@ class _HomeScreenState extends State<HomeScreen>
       {'time': '00시', 'weather': currentWeather},
       {'time': '내일 06시', 'weather': currentWeather},
     ]
-        : _hourlyWeather;
+        : _hourlyWeather
+        .take(5)
+        .map((e) => {
+      'time': _formatHourlyWeatherLabel((e['time'] ?? '').trim()),
+      'weather': _normalizeWeatherLabel((e['weather'] ?? '').trim()),
+    })
+        .toList();
 
     return SizedBox(
-      height: 58,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.zero,
-        itemCount: hourly.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final item = hourly[index];
-          final weather = item['weather']!;
-          final bool isNow = index == 0;
-          final String displayTime =
-          _formatHourlyWeatherLabel(item['time'] ?? '');
+      height: 52,
+      width: double.infinity,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: _buildWeatherGlassPanel(
+              padding: EdgeInsets.zero,
+              borderRadius: BorderRadius.circular(18),
+              child: const SizedBox(),
+            ),
+          ),
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: Row(
+                children: List.generate(hourly.length, (index) {
+                  final item = hourly[index];
+                  final weather = item['weather'] ?? currentWeather;
 
-          return Container(
-            width: 60,
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-            decoration: BoxDecoration(
-              color: isLightBg
-                  ? Colors.white.withOpacity(isNow ? 0.54 : 0.34)
-                  : Colors.white.withOpacity(isNow ? 0.20 : 0.11),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.white.withOpacity(isNow ? 0.34 : 0.18),
-                width: isNow ? 1.1 : 1,
-              ),
-              boxShadow: isNow
-                  ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(
-                    isLightBg ? 0.05 : 0.08,
-                  ),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ]
-                  : null,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Flexible(
-                  child: Text(
-                    displayTime,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: displayTime.length >= 6 ? 8.4 : 9.4,
-                      fontWeight: isNow ? FontWeight.w800 : FontWeight.w700,
-                      height: 1.05,
-                      color: textColor,
+                  return Expanded(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  item['time'] ?? '',
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 8.4,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.05,
+                                    color: chipTextColor,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                SizedBox(
+                                  width: 15,
+                                  height: 15,
+                                  child: Center(
+                                    child: _buildWeatherIcon(weather, size: 12.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (index != hourly.length - 1)
+                          Container(
+                            width: 1,
+                            height: 24,
+                            margin: const EdgeInsets.symmetric(horizontal: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.42),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: Center(
-                    child: _buildWeatherIcon(weather, size: 14),
-                  ),
-                ),
-              ],
+                  );
+                }),
+              ),
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -3182,12 +3253,10 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildTodoSummaryCard() {
-    const int displayLimit = 4;
-
     final items = widget.todoList;
-    final visibleItems = items.take(displayLimit).toList();
+    final visibleItems = items.take(5).toList(); // 한 줄 더 보이게
     final int extraCount =
-    items.length > displayLimit ? items.length - displayLimit : 0;
+    items.length > visibleItems.length ? items.length - visibleItems.length : 0;
 
     return GestureDetector(
       onTapDown: (_) {
@@ -3215,7 +3284,7 @@ class _HomeScreenState extends State<HomeScreen>
           duration: const Duration(milliseconds: 120),
           width: double.infinity,
           height: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.95),
             borderRadius: BorderRadius.circular(24),
@@ -3247,7 +3316,7 @@ class _HomeScreenState extends State<HomeScreen>
 
                 return Padding(
                   padding: EdgeInsets.only(
-                    bottom: index == visibleItems.length - 1 ? 0 : 10,
+                    bottom: index == visibleItems.length - 1 ? 0 : 6,
                   ),
                   child: _buildTodoSummaryRow(
                     index: index,
@@ -4086,7 +4155,7 @@ class _HomeScreenState extends State<HomeScreen>
             left: 2,
             bottom: 2,
             child: Image.asset(
-              'assets/images/resources/oak.png',
+              'assets/images/resources/roaming-oak.png',
               width: 16,
               height: 16,
             ),
@@ -4114,7 +4183,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (point.isOakOnly) {
       return Image.asset(
-        'assets/images/resources/oak.png',
+        'assets/images/resources/roaming-oak.png',
         width: 24,
         height: 24,
         color: const Color(0xFFFFC7BE),

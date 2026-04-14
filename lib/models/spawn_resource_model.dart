@@ -58,7 +58,7 @@ class SpawnResourceModel {
   String get iconPath {
     switch (resourceName) {
       case 'roaming_oak':
-        return 'assets/images/resources/oak.png';
+        return 'assets/images/resources/roaming-oak.png';
       case 'fluorite':
       case 'flawless_fluorite':
         return 'assets/images/resources/fluorite.png';

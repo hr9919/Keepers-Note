@@ -6,9 +6,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetPlugin
 import es.antonborri.home_widget.HomeWidgetProvider
+import java.util.concurrent.Executors
 
 class TodayInfoWidgetProvider : HomeWidgetProvider() {
 
@@ -18,12 +22,56 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: SharedPreferences
     ) {
-        appWidgetIds.forEach { appWidgetId ->
-            updateAppWidget(context, appWidgetManager, appWidgetId, widgetData)
+        appWidgetIds.forEach { id ->
+            updateAppWidget(context, appWidgetManager, id, widgetData)
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+
+        when (intent.action) {
+            ACTION_REFRESH_WIDGET -> animateRefreshAndUpdate(context)
+
+            ACTION_AUTO_REFRESH_WIDGET,
+            AppWidgetManager.ACTION_APPWIDGET_UPDATE -> {
+                refreshFromServerAndUpdate(context)
+            }
+        }
+    }
+
+    private fun animateRefreshAndUpdate(context: Context) {
+        val handler = Handler(Looper.getMainLooper())
+        val frames = listOf("↻", "↺", "⟳", "↻")
+
+        frames.forEachIndexed { index, frame ->
+            handler.postDelayed({
+                setRefreshButtonText(context, frame)
+            }, index * 120L)
+        }
+
+        handler.postDelayed({
+            refreshFromServerAndUpdate(context)
+        }, 520L)
+    }
+
+    private fun refreshFromServerAndUpdate(context: Context) {
+        Executors.newSingleThreadExecutor().execute {
+            try {
+                WidgetUpdateRepository.refreshTodayInfo(context)
+            } catch (_: Exception) {
+            } finally {
+                forceUpdateAll(context)
+            }
         }
     }
 
     companion object {
+        const val ACTION_REFRESH_WIDGET =
+            "com.townhelpers.keepers_note.ACTION_REFRESH_WIDGET"
+        const val ACTION_AUTO_REFRESH_WIDGET =
+            "com.townhelpers.keepers_note.ACTION_AUTO_REFRESH_WIDGET"
+
         fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
@@ -31,26 +79,89 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
             prefs: SharedPreferences
         ) {
             val weather = prefs.getString("weather", "맑음") ?: "맑음"
-            val oakText = prefs.getString("oak_text", "미확정") ?: "미확정"
-            val fluoriteText = prefs.getString("fluorite_text", "미확정") ?: "미확정"
-            val updatedAt = prefs.getString("updated_at", "-") ?: "-"
+            val fluorite = prefs.getString("fluorite_text", "위치 확인 중") ?: "위치 확인 중"
+            val oak = prefs.getString("oak_text", "위치 확인 중") ?: "위치 확인 중"
+
+            val h0Time = prefs.getString("hourly_0_time", "-") ?: "-"
+            val h0Weather = prefs.getString("hourly_0_weather", "-") ?: "-"
+            val h1Time = prefs.getString("hourly_1_time", "-") ?: "-"
+            val h1Weather = prefs.getString("hourly_1_weather", "-") ?: "-"
+            val h2Time = prefs.getString("hourly_2_time", "-") ?: "-"
+            val h2Weather = prefs.getString("hourly_2_weather", "-") ?: "-"
 
             val views = RemoteViews(context.packageName, R.layout.today_info_widget)
-            views.setTextViewText(R.id.widget_weather, "현재 날씨 · $weather")
-            views.setTextViewText(R.id.widget_oak, "참나무 · $oakText")
-            views.setTextViewText(R.id.widget_fluorite, "형광석 · $fluoriteText")
-            views.setTextViewText(R.id.widget_updated_at, "업데이트 $updatedAt")
+
+            views.setInt(
+                R.id.widget_root,
+                "setBackgroundResource",
+                getWeatherBackgroundRes(weather)
+            )
+
+            val primaryTextColor = getPrimaryTextColor(weather)
+            val secondaryTextColor = getSecondaryTextColor(weather)
+            val emojiColor = getEmojiColor(weather)
+
+            views.setTextViewText(R.id.widget_title, "현재 날씨")
+            views.setTextColor(R.id.widget_title, secondaryTextColor)
+
+            views.setTextViewText(R.id.widget_weather_text, weather)
+            views.setTextColor(R.id.widget_weather_text, primaryTextColor)
+
+            views.setTextViewText(R.id.widget_weather_icon, getWeatherEmoji(weather))
+            views.setTextColor(R.id.widget_weather_icon, emojiColor)
+
+            views.setImageViewResource(R.id.widget_fluorite_icon, R.drawable.ic_widget_fluorite)
+            views.setTextViewText(R.id.widget_fluorite_label, "형광석")
+            views.setTextColor(R.id.widget_fluorite_label, secondaryTextColor)
+            views.setTextViewText(R.id.widget_fluorite_value, normalizePlaceLabel(fluorite))
+            views.setTextColor(R.id.widget_fluorite_value, primaryTextColor)
+
+            views.setImageViewResource(R.id.widget_oak_icon, R.drawable.ic_widget_oak)
+            views.setTextViewText(R.id.widget_oak_label, "참나무")
+            views.setTextColor(R.id.widget_oak_label, secondaryTextColor)
+            views.setTextViewText(R.id.widget_oak_value, normalizePlaceLabel(oak))
+            views.setTextColor(R.id.widget_oak_value, primaryTextColor)
+
+            views.setTextViewText(R.id.widget_hourly_0_time, h0Time)
+            views.setTextColor(R.id.widget_hourly_0_time, secondaryTextColor)
+            views.setTextViewText(R.id.widget_hourly_0_weather, getWeatherEmoji(h0Weather))
+            views.setTextColor(R.id.widget_hourly_0_weather, emojiColor)
+
+            views.setTextViewText(R.id.widget_hourly_1_time, h1Time)
+            views.setTextColor(R.id.widget_hourly_1_time, secondaryTextColor)
+            views.setTextViewText(R.id.widget_hourly_1_weather, getWeatherEmoji(h1Weather))
+            views.setTextColor(R.id.widget_hourly_1_weather, emojiColor)
+
+            views.setTextViewText(R.id.widget_hourly_2_time, h2Time)
+            views.setTextColor(R.id.widget_hourly_2_time, secondaryTextColor)
+            views.setTextViewText(R.id.widget_hourly_2_weather, getWeatherEmoji(h2Weather))
+            views.setTextColor(R.id.widget_hourly_2_weather, emojiColor)
+
+            views.setTextViewText(R.id.widget_refresh_button, "↻")
+            views.setTextColor(R.id.widget_refresh_button, primaryTextColor)
 
             val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
             if (launchIntent != null) {
-                val pendingIntent = PendingIntent.getActivity(
+                val openAppPendingIntent = PendingIntent.getActivity(
                     context,
                     1001,
                     launchIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-                views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
+                views.setOnClickPendingIntent(R.id.main_weather, openAppPendingIntent)
+                views.setOnClickPendingIntent(R.id.resource_row, openAppPendingIntent)
             }
+
+            val refreshIntent = Intent(context, TodayInfoWidgetProvider::class.java).apply {
+                action = ACTION_REFRESH_WIDGET
+            }
+            val refreshPendingIntent = PendingIntent.getBroadcast(
+                context,
+                2001,
+                refreshIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_refresh_button, refreshPendingIntent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
@@ -59,11 +170,76 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, TodayInfoWidgetProvider::class.java)
             val ids = manager.getAppWidgetIds(component)
-
             val prefs = HomeWidgetPlugin.getData(context)
 
             ids.forEach { id ->
                 updateAppWidget(context, manager, id, prefs)
+            }
+        }
+
+        fun setRefreshButtonText(context: Context, text: String) {
+            val manager = AppWidgetManager.getInstance(context)
+            val component = ComponentName(context, TodayInfoWidgetProvider::class.java)
+            val ids = manager.getAppWidgetIds(component)
+            val prefs = HomeWidgetPlugin.getData(context)
+            val weather = prefs.getString("weather", "맑음") ?: "맑음"
+
+            ids.forEach { id ->
+                val views = RemoteViews(context.packageName, R.layout.today_info_widget)
+                views.setTextViewText(R.id.widget_refresh_button, text)
+                views.setTextColor(R.id.widget_refresh_button, getPrimaryTextColor(weather))
+                manager.updateAppWidget(id, views)
+            }
+        }
+
+        private fun normalizePlaceLabel(raw: String): String {
+            val value = raw.trim()
+            return if (value.isEmpty()) "위치 확인 중" else value
+        }
+
+        private fun getWeatherEmoji(weather: String): String {
+            return when (weather.trim()) {
+                "맑음" -> "☀️"
+                "흐림" -> "☁️"
+                "비" -> "🌧️"
+                "눈" -> "❄️"
+                "무지개" -> "🌈"
+                else -> "🌤️"
+            }
+        }
+
+        private fun getWeatherBackgroundRes(weather: String): Int {
+            return when (weather.trim()) {
+                "맑음" -> R.drawable.bg_widget_weather_sunny
+                "흐림" -> R.drawable.bg_widget_weather_cloudy
+                "비" -> R.drawable.bg_widget_weather_rain
+                "눈" -> R.drawable.bg_widget_weather_snow
+                "무지개" -> R.drawable.bg_widget_weather_rainbow
+                else -> R.drawable.bg_widget_weather_sunny
+            }
+        }
+
+        private fun getPrimaryTextColor(weather: String): Int {
+            return when (weather.trim()) {
+                "맑음", "눈" -> Color.parseColor("#E6334155")
+                "무지개" -> Color.parseColor("#FF2F3A4D")
+                else -> Color.WHITE
+            }
+        }
+
+        private fun getSecondaryTextColor(weather: String): Int {
+            return when (weather.trim()) {
+                "맑음", "눈" -> Color.parseColor("#CC475569")
+                "무지개" -> Color.parseColor("#E0556275")
+                else -> Color.parseColor("#D9FFFFFF")
+            }
+        }
+
+        private fun getEmojiColor(weather: String): Int {
+            return when (weather.trim()) {
+                "무지개" -> Color.parseColor("#FF2F3A4D")
+                "맑음", "눈" -> Color.parseColor("#E6334155")
+                else -> Color.WHITE
             }
         }
     }

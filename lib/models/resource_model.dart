@@ -217,7 +217,7 @@ class ResourceModel {
       case 'gold_bubble':
         return 'assets/images/resources/gold_bubbles.png';
       case 'roaming_oak':
-        return 'assets/images/resources/oak.png';
+        return 'assets/images/resources/roaming-oak.png.png';
       case 'fluorite':
       case 'flawless_fluorite':
         return 'assets/images/resources/fluorite.png';
