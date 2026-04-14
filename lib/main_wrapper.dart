@@ -13,6 +13,7 @@ import 'cooking_screen.dart';
 import 'gathering_screen.dart';
 import 'pet_screen.dart';
 import 'setting_screen.dart';
+import 'pet_admin_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'tip_guide_screen.dart';
 import 'models/global_search_item.dart';
@@ -1635,6 +1636,39 @@ class _MainWrapperState extends State<MainWrapper> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => const WeatherAdminScreen(),
+                                ),
+                              );
+
+                              if (!mounted) return;
+
+                              if (changed == true) {
+                                setState(() {
+                                  _homeRefreshKey++;
+                                });
+                              }
+                            },
+                          ),
+                          _buildDrawerItem(
+                            icon: Icons.pets_rounded,
+                            title: '펫 등록',
+                            subtitle: '관리자 전용 메뉴',
+                            isSelected: false,
+                            accentColor: const Color(0xFFFFB36B),
+                            onTap: () async {
+                              FocusManager.instance.primaryFocus?.unfocus();
+
+                              await Future.delayed(const Duration(milliseconds: 110));
+                              if (!mounted) return;
+
+                              await _closeDrawerSmooth();
+                              if (!mounted) return;
+
+                              final changed = await Navigator.push<bool>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PetAdminScreen(
+                                    kakaoId: _kakaoId,
+                                  ),
                                 ),
                               );
 

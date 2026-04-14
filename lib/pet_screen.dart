@@ -16,6 +16,100 @@ import 'models/global_search_item.dart';
 import 'models/pet_model.dart';
 import 'setting_screen.dart';
 
+class PetCatalogVariant {
+  final String id;
+  final bool isCat;
+  final String breedId;
+  final String breedName;
+  final String colorId;
+  final String colorName;
+  final String eyeId;
+  final String eyeName;
+  final String eyeStyle;
+  final String eyeStyleKo;
+  final String? eyeColorId;
+  final String? eyeColorNameKo;
+  final int variantNo;
+  final String? imagePath;
+  final bool isUploaded;
+
+  const PetCatalogVariant({
+    required this.id,
+    required this.isCat,
+    required this.breedId,
+    required this.breedName,
+    required this.colorId,
+    required this.colorName,
+    required this.eyeId,
+    required this.eyeName,
+    required this.eyeStyle,
+    required this.eyeStyleKo,
+    required this.eyeColorId,
+    required this.eyeColorNameKo,
+    required this.variantNo,
+    required this.imagePath,
+    required this.isUploaded,
+  });
+
+  factory PetCatalogVariant.fromCatJson(Map<String, dynamic> json) {
+    return PetCatalogVariant(
+      id: (json['id'] ?? '').toString(),
+      isCat: true,
+      breedId: (json['catTypeId'] ?? '').toString(),
+      breedName: (json['catTypeNameKo'] ?? json['catTypeId'] ?? '').toString(),
+      colorId: (json['colorId'] ?? '').toString(),
+      colorName: (json['colorNameKo'] ?? json['colorId'] ?? '').toString(),
+      eyeId: (json['eyeId'] ?? '').toString(),
+      eyeName: (json['eyeNameKo'] ?? json['eyeId'] ?? '').toString(),
+      eyeStyle: (json['eyeStyle'] ?? '').toString(),
+      eyeStyleKo: (json['eyeStyleKo'] ?? '').toString(),
+      eyeColorId: json['eyeColorId']?.toString(),
+      eyeColorNameKo: json['eyeColorNameKo']?.toString(),
+      variantNo: int.tryParse('${json['variantNo'] ?? 1}') ?? 1,
+      imagePath: json['imagePath']?.toString(),
+      isUploaded: (json['isUploaded'] ?? false) == true,
+    );
+  }
+
+  factory PetCatalogVariant.fromDogJson(Map<String, dynamic> json) {
+    return PetCatalogVariant(
+      id: (json['id'] ?? '').toString(),
+      isCat: false,
+      breedId: (json['dogTypeId'] ?? '').toString(),
+      breedName: (json['dogTypeNameKo'] ?? json['dogTypeId'] ?? '').toString(),
+      colorId: (json['colorId'] ?? '').toString(),
+      colorName: (json['colorNameKo'] ?? json['colorId'] ?? '').toString(),
+      eyeId: (json['eyeId'] ?? '').toString(),
+      eyeName: (json['eyeNameKo'] ?? json['eyeId'] ?? '').toString(),
+      eyeStyle: (json['eyeStyle'] ?? '').toString(),
+      eyeStyleKo: (json['eyeStyleKo'] ?? '').toString(),
+      eyeColorId: json['eyeColorId']?.toString(),
+      eyeColorNameKo: json['eyeColorNameKo']?.toString(),
+      variantNo: int.tryParse('${json['variantNo'] ?? 1}') ?? 1,
+      imagePath: json['imagePath']?.toString(),
+      isUploaded: (json['isUploaded'] ?? false) == true,
+    );
+  }
+
+  String get miniLabel {
+    final pieces = <String>[
+      if (eyeStyleKo.trim().isNotEmpty) eyeStyleKo,
+      if (colorName.trim().isNotEmpty) colorName,
+      if ((eyeColorNameKo ?? '').trim().isNotEmpty) eyeColorNameKo!,
+    ];
+    return pieces.join(' · ');
+  }
+
+  String get detailKey {
+    final pieces = <String>[
+      if (colorName.trim().isNotEmpty) colorName,
+      if (eyeStyleKo.trim().isNotEmpty) eyeStyleKo,
+      if ((eyeColorNameKo ?? '').trim().isNotEmpty) eyeColorNameKo!,
+    ];
+    return pieces.join(' · ');
+  }
+}
+
 class PetScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
   final GlobalSearchItem? initialSearchItem;
@@ -49,8 +143,22 @@ class _PetScreenState extends State<PetScreen>
   final ScrollController _dogScrollController = ScrollController();
   bool _showTopBtn = false;
 
-  String _selectedColor = '전체';
-  String _selectedEyeType = '전체';
+  final String _catVariantApiUrl =
+      'http://161.33.30.40:8080/api/cat-variants?uploadedOnly=true';
+  final String _dogVariantApiUrl =
+      'http://161.33.30.40:8080/api/dog-variants?uploadedOnly=true';
+  final String _baseUrl = 'http://161.33.30.40:8080';
+
+  List<PetCatalogVariant> _catVariants = [];
+  List<PetCatalogVariant> _dogVariants = [];
+
+  final Set<String> _selectedBreedFilters = {};
+  final Set<String> _selectedColorFilters = {};
+  final Set<String> _selectedEyeStyleFilters = {};
+  final Set<String> _selectedEyeColorFilters = {};
+
+  final Set<String> _likedVariantIds = {};
+
   bool _isMenuOpen = false;
   bool _isSubmitting = false;
 
@@ -72,7 +180,6 @@ class _PetScreenState extends State<PetScreen>
 
   final String _petApiUrl = 'http://161.33.30.40:8080/api/pets';
   final String _fishApiUrl = 'http://161.33.30.40:8080/api/fish';
-  final String _baseUrl = 'http://161.33.30.40:8080';
 
   String _resolvePetImageUrl(String? path) {
     if (path == null || path.trim().isEmpty) return '';
@@ -128,6 +235,7 @@ class _PetScreenState extends State<PetScreen>
   Future<void> _initData() async {
     await _loadUserInfo();
     await _fetchFishData();
+    await _fetchCatalogData();
     if (_kakaoId != null) {
       await _fetchPetData();
     } else {
@@ -145,6 +253,44 @@ class _PetScreenState extends State<PetScreen>
       }
     } catch (e) {
       debugPrint('사용자 정보 로드 실패: $e');
+    }
+  }
+
+  Future<void> _fetchCatalogData() async {
+    try {
+      final results = await Future.wait([
+        http.get(Uri.parse(_catVariantApiUrl)),
+        http.get(Uri.parse(_dogVariantApiUrl)),
+      ]);
+
+      final catResponse = results[0];
+      final dogResponse = results[1];
+
+      if (catResponse.statusCode == 200) {
+        final List<dynamic> raw =
+        jsonDecode(utf8.decode(catResponse.bodyBytes)) as List<dynamic>;
+        _catVariants = raw
+            .map((e) => PetCatalogVariant.fromCatJson(e as Map<String, dynamic>))
+            .where((e) => e.isUploaded && (e.imagePath ?? '').trim().isNotEmpty)
+            .toList();
+      } else {
+        _catVariants = [];
+      }
+
+      if (dogResponse.statusCode == 200) {
+        final List<dynamic> raw =
+        jsonDecode(utf8.decode(dogResponse.bodyBytes)) as List<dynamic>;
+        _dogVariants = raw
+            .map((e) => PetCatalogVariant.fromDogJson(e as Map<String, dynamic>))
+            .where((e) => e.isUploaded && (e.imagePath ?? '').trim().isNotEmpty)
+            .toList();
+      } else {
+        _dogVariants = [];
+      }
+    } catch (e) {
+      debugPrint('도감 데이터 로드 실패: $e');
+      _catVariants = [];
+      _dogVariants = [];
     }
   }
 
@@ -436,6 +582,185 @@ class _PetScreenState extends State<PetScreen>
         setState(() => _showTopBtn = showBtn);
       }
     });
+  }
+
+  List<PetCatalogVariant> _currentVariantList(bool isCat) {
+    return isCat ? _catVariants : _dogVariants;
+  }
+
+  bool _matchesVariantFilters(PetCatalogVariant item) {
+    if (_selectedBreedFilters.isNotEmpty &&
+        !_selectedBreedFilters.contains(item.breedName)) {
+      return false;
+    }
+    if (_selectedColorFilters.isNotEmpty &&
+        !_selectedColorFilters.contains(item.colorName)) {
+      return false;
+    }
+    if (_selectedEyeStyleFilters.isNotEmpty &&
+        !_selectedEyeStyleFilters.contains(item.eyeStyleKo)) {
+      return false;
+    }
+    final eyeColor = (item.eyeColorNameKo ?? '미지정');
+    if (_selectedEyeColorFilters.isNotEmpty &&
+        !_selectedEyeColorFilters.contains(eyeColor)) {
+      return false;
+    }
+    return true;
+  }
+
+  Map<String, List<PetCatalogVariant>> _groupVariantsByBreed({
+    required bool isCat,
+  }) {
+    const eyeOrder = ['콩눈', '땡눈', '고양이눈', '졸린눈'];
+
+    int eyeStyleRank(String value) {
+      final index = eyeOrder.indexOf(value.trim());
+      return index == -1 ? 999 : index;
+    }
+
+    List<PetCatalogVariant> interleaveByColor(List<PetCatalogVariant> items) {
+      final Map<String, List<PetCatalogVariant>> byColor = {};
+
+      for (final item in items) {
+        final colorKey = item.colorName.trim().isEmpty ? '기본' : item.colorName.trim();
+        byColor.putIfAbsent(colorKey, () => []);
+        byColor[colorKey]!.add(item);
+      }
+
+      final colorKeys = byColor.keys.toList()..sort();
+
+      for (final color in colorKeys) {
+        byColor[color]!.sort((a, b) {
+          final eyeColorCompare =
+          (a.eyeColorNameKo ?? '').compareTo(b.eyeColorNameKo ?? '');
+          if (eyeColorCompare != 0) return eyeColorCompare;
+
+          final noCompare = a.variantNo.compareTo(b.variantNo);
+          if (noCompare != 0) return noCompare;
+
+          return a.id.compareTo(b.id);
+        });
+      }
+
+      final List<PetCatalogVariant> arranged = [];
+      int addedCount = 0;
+
+      while (true) {
+        bool addedInRound = false;
+
+        for (final color in colorKeys) {
+          final list = byColor[color]!;
+          if (addedCount < list.length) {
+            arranged.add(list[addedCount]);
+            addedInRound = true;
+          }
+        }
+
+        if (!addedInRound) break;
+        addedCount++;
+      }
+
+      return arranged;
+    }
+
+    final filtered = _currentVariantList(isCat)
+        .where(_matchesVariantFilters)
+        .toList();
+
+    final Map<String, List<PetCatalogVariant>> groupedByBreed = {};
+
+    for (final item in filtered) {
+      groupedByBreed.putIfAbsent(item.breedName, () => []);
+      groupedByBreed[item.breedName]!.add(item);
+    }
+
+    final Map<String, List<PetCatalogVariant>> result = {};
+    final breedNames = groupedByBreed.keys.toList()..sort();
+
+    for (final breedName in breedNames) {
+      final items = groupedByBreed[breedName]!;
+
+      final Map<String, List<PetCatalogVariant>> byEyeStyle = {
+        for (final eye in eyeOrder) eye: [],
+      };
+      final List<PetCatalogVariant> others = [];
+
+      for (final item in items) {
+        final eye = item.eyeStyleKo.trim();
+        if (byEyeStyle.containsKey(eye)) {
+          byEyeStyle[eye]!.add(item);
+        } else {
+          others.add(item);
+        }
+      }
+
+      final Map<String, List<PetCatalogVariant>> arrangedByEye = {};
+      for (final eye in eyeOrder) {
+        arrangedByEye[eye] = interleaveByColor(byEyeStyle[eye]!);
+      }
+
+      others.sort((a, b) {
+        final eyeCompare =
+        eyeStyleRank(a.eyeStyleKo).compareTo(eyeStyleRank(b.eyeStyleKo));
+        if (eyeCompare != 0) return eyeCompare;
+
+        final colorCompare = a.colorName.compareTo(b.colorName);
+        if (colorCompare != 0) return colorCompare;
+
+        final eyeColorCompare =
+        (a.eyeColorNameKo ?? '').compareTo(b.eyeColorNameKo ?? '');
+        if (eyeColorCompare != 0) return eyeColorCompare;
+
+        final noCompare = a.variantNo.compareTo(b.variantNo);
+        if (noCompare != 0) return noCompare;
+
+        return a.id.compareTo(b.id);
+      });
+
+      final List<PetCatalogVariant> arranged = [];
+      int rowIndex = 0;
+
+      while (true) {
+        bool addedInRound = false;
+
+        for (final eye in eyeOrder) {
+          final list = arrangedByEye[eye]!;
+          if (rowIndex < list.length) {
+            arranged.add(list[rowIndex]);
+            addedInRound = true;
+          }
+        }
+
+        if (!addedInRound) break;
+        rowIndex++;
+      }
+
+      arranged.addAll(others);
+      result[breedName] = arranged;
+    }
+
+    return result;
+  }
+
+  List<String> _availableBreedFilters({required bool isCat}) {
+    return _currentVariantList(isCat).map((e) => e.breedName).toSet().toList()..sort();
+  }
+
+  List<String> _availableColorFilters({required bool isCat}) {
+    return _currentVariantList(isCat).map((e) => e.colorName).toSet().toList()..sort();
+  }
+
+  List<String> _availableEyeStyleFilters({required bool isCat}) {
+    return _currentVariantList(isCat).map((e) => e.eyeStyleKo).toSet().toList()..sort();
+  }
+
+  List<String> _availableEyeColorFilters({required bool isCat}) {
+    return _currentVariantList(isCat)
+        .map((e) => (e.eyeColorNameKo ?? '미지정'))
+        .toSet()
+        .toList()
+      ..sort();
   }
 
   String _imageAssetPath(String? image) {
@@ -793,71 +1118,11 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
-  String _getPetColor(Pet pet) {
-    final breed = pet.breed.toLowerCase();
-    final name = pet.name.toLowerCase();
-    final image = (pet.imagePath ?? '').toLowerCase();
-
-    final source = '$breed $name $image';
-
-    if (source.contains('white') || source.contains('흰') ||
-        source.contains('화이트')) {
-      return '화이트';
-    }
-    if (source.contains('black') || source.contains('검') ||
-        source.contains('블랙')) {
-      return '블랙';
-    }
-    if (source.contains('cheese') || source.contains('치즈') ||
-        source.contains('yellow') || source.contains('노랑')) {
-      return '치즈';
-    }
-    if (source.contains('tabby') || source.contains('얼룩') ||
-        source.contains('stripe') || source.contains('줄무늬')) {
-      return '얼룩';
-    }
-    if (source.contains('tricolor') || source.contains('calico') ||
-        source.contains('삼색')) {
-      return '삼색';
-    }
-
-    return '기타';
-  }
-
-  String _getPetEyeType(Pet pet) {
-    final breed = pet.breed.toLowerCase();
-    final name = pet.name.toLowerCase();
-    final image = (pet.imagePath ?? '').toLowerCase();
-
-    final source = '$breed $name $image';
-
-    if (source.contains('콩눈')) return '콩눈';
-    if (source.contains('땡눈')) return '땡눈';
-
-    return '기타';
-  }
-
-  List<Pet> _applyPetFilters(List<Pet> list) {
-    return list.where((pet) {
-      final color = _getPetColor(pet);
-      final eyeType = _getPetEyeType(pet);
-
-      if (_selectedColor != '전체' && color != _selectedColor) {
-        return false;
-      }
-
-      if (_selectedEyeType != '전체' && eyeType != _selectedEyeType) {
-        return false;
-      }
-
-      return true;
-    }).toList();
-  }
-
   Widget _buildPetFilterActionButton() {
-    final bool hasColorFilter = _selectedColor != '전체';
-    final bool hasEyeFilter = _selectedEyeType != '전체';
-    final bool hasAnyFilter = hasColorFilter || hasEyeFilter;
+    final bool hasAnyFilter = _selectedBreedFilters.isNotEmpty ||
+        _selectedColorFilters.isNotEmpty ||
+        _selectedEyeStyleFilters.isNotEmpty ||
+        _selectedEyeColorFilters.isNotEmpty;
 
     return StatefulBuilder(
       builder: (context, setLocalState) {
@@ -888,17 +1153,13 @@ class _PetScreenState extends State<PetScreen>
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: hasAnyFilter
-                    ? const Color(0xFFFFF3F0).withOpacity(
-                    isPressed ? 0.98 : 0.95)
+                    ? const Color(0xFFFFF3F0).withOpacity(isPressed ? 0.98 : 0.95)
                     : Colors.white.withOpacity(isPressed ? 0.98 : 0.92),
                 borderRadius: BorderRadius.circular(20),
-
-                // 👇 항상 코랄 테두리
                 border: Border.all(
                   color: const Color(0xFFFFD6CC),
                   width: 1,
                 ),
-
                 boxShadow: [
                   BoxShadow(
                     color: hasAnyFilter
@@ -948,27 +1209,6 @@ class _PetScreenState extends State<PetScreen>
                           : const Color(0xFFE58F7C),
                     ),
                   ),
-                  if (hasAnyFilter) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF8E7C).withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        'ON',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFFFF8E7C),
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -979,19 +1219,66 @@ class _PetScreenState extends State<PetScreen>
   }
 
   void _showPetFilterSheet() {
+    final bool isCatTab = _tabController.index == 0;
+
+    final tempBreed = Set<String>.from(_selectedBreedFilters);
+    final tempColor = Set<String>.from(_selectedColorFilters);
+    final tempEyeStyle = Set<String>.from(_selectedEyeStyleFilters);
+    final tempEyeColor = Set<String>.from(_selectedEyeColorFilters);
+
+    final breedFilters = _availableBreedFilters(isCat: isCatTab);
+    final colorFilters = _availableColorFilters(isCat: isCatTab);
+    final eyeStyleFilters = _availableEyeStyleFilters(isCat: isCatTab);
+    final eyeColorFilters = _availableEyeColorFilters(isCat: isCatTab);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
-        String tempColor = _selectedColor;
-        String tempEyeType = _selectedEyeType;
-
-        final colorFilters = ['전체', '화이트', '블랙', '치즈', '얼룩', '삼색'];
-        final eyeFilters = ['전체', '콩눈', '땡눈'];
-
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            Widget buildSection(
+                String title,
+                List<String> filters,
+                Set<String> selected,
+                ) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: filters.map((filter) {
+                      final isSelected = selected.contains(filter);
+                      return _buildPopupFilterChip(
+                        label: filter,
+                        isSelected: isSelected,
+                        onTap: () {
+                          setSheetState(() {
+                            if (isSelected) {
+                              selected.remove(filter);
+                            } else {
+                              selected.add(filter);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              );
+            }
+
             return SafeArea(
               child: Container(
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -1007,143 +1294,111 @@ class _PetScreenState extends State<PetScreen>
                     ),
                   ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text(
-                          '필터',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF2D3436),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            '필터',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF2D3436),
+                            ),
                           ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          splashRadius: 20,
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: Color(0xFF94A3B8),
+                          const Spacer(),
+                          IconButton(
+                            splashRadius: 20,
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Color(0xFF94A3B8),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      '색상',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF64748B),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: colorFilters.map((filter) {
-                        final isSelected = tempColor == filter;
-                        return _buildPopupFilterChip(
-                          label: filter,
-                          isSelected: isSelected,
-                          onTap: () {
-                            setSheetState(() {
-                              tempColor = filter;
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      '눈 모양',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF64748B),
+                      const SizedBox(height: 8),
+                      buildSection(isCatTab ? '종류' : '견종', breedFilters, tempBreed),
+                      const SizedBox(height: 18),
+                      buildSection('털색', colorFilters, tempColor),
+                      const SizedBox(height: 18),
+                      buildSection('눈 모양', eyeStyleFilters, tempEyeStyle),
+                      const SizedBox(height: 18),
+                      buildSection('눈 색', eyeColorFilters, tempEyeColor),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _selectedBreedFilters.clear();
+                                  _selectedColorFilters.clear();
+                                  _selectedEyeStyleFilters.clear();
+                                  _selectedEyeColorFilters.clear();
+                                });
+                                Navigator.pop(context);
+                              },
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                side: const BorderSide(color: Color(0xFFE9EEF4)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                '초기화',
+                                style: TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _selectedBreedFilters
+                                    ..clear()
+                                    ..addAll(tempBreed);
+                                  _selectedColorFilters
+                                    ..clear()
+                                    ..addAll(tempColor);
+                                  _selectedEyeStyleFilters
+                                    ..clear()
+                                    ..addAll(tempEyeStyle);
+                                  _selectedEyeColorFilters
+                                    ..clear()
+                                    ..addAll(tempEyeColor);
+                                });
+                                Navigator.pop(context);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                elevation: 0,
+                                backgroundColor: const Color(0xFFFF8E7C),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                '적용',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: eyeFilters.map((filter) {
-                        final isSelected = tempEyeType == filter;
-                        return _buildPopupFilterChip(
-                          label: filter,
-                          isSelected: isSelected,
-                          onTap: () {
-                            setSheetState(() {
-                              tempEyeType = filter;
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              setState(() {
-                                _selectedColor = '전체';
-                                _selectedEyeType = '전체';
-                              });
-                              Navigator.pop(context);
-                            },
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              side: const BorderSide(
-                                color: Color(0xFFE9EEF4),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: const Text(
-                              '초기화',
-                              style: TextStyle(
-                                color: Color(0xFF64748B),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _selectedColor = tempColor;
-                                _selectedEyeType = tempEyeType;
-                              });
-                              Navigator.pop(context);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              elevation: 0,
-                              backgroundColor: const Color(0xFFFF8E7C),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: const Text(
-                              '적용',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -1231,11 +1486,9 @@ class _PetScreenState extends State<PetScreen>
   }
 
 
-  Widget _buildPetCollectionCard({
+  ard({
     required String title,
-    required List<Map<String, String>> items,
-    bool showSampleBadge = false,
-    String? sampleDescription,
+    required List<PetCatalogVariant> items,
   }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -1254,58 +1507,296 @@ class _PetScreenState extends State<PetScreen>
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openBreedDetail(title, items),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF2D3748),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3F0),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${items.length}',
+                      style: const TextStyle(
+                        fontSize: 11.2,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFF8E7C),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: Colors.grey.shade400,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 150,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return _buildMiniVariantCard(item);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniVariantCard(PetCatalogVariant item) {
+    final bool isFavorite = _likedVariantIds.contains(item.id);
+
+    return Container(
+      width: 92,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFFF8E7C).withOpacity(0.14), // 🔥 살짝 강조
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF8E7C).withOpacity(0.06), // 🔥 코랄톤 그림자
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _showVariantImagePreview(item),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+            child: Stack(
               children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF2D3748),
+                // 🐱 이미지 영역 (더 구분감 있게)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7F5), // 🔥 바깥보다 살짝 톤 차이
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(4, 4, 4, 14),
+                    child: _buildPetImage(
+                      item.imagePath,
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ),
-                if (showSampleBadge) ...[
-                  _buildSampleBadge(),
-                  const SizedBox(width: 8),
-                ],
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: Colors.grey.shade400,
+
+                // ❤️ 좋아요 버튼
+                Positioned(
+                  top: -8,   // 🔥 살짝 밖으로
+                  right: -8, // 🔥 더 오른쪽으로 붙이기
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent, // 🔥 터치 영역 넓힘
+                    onTap: () => _toggleLikedVariant(item.id),
+                    child: Container(
+                      width: 40,   // 🔥 크게 (터치 영역)
+                      height: 40,
+                      alignment: Alignment.center,
+                      color: Colors.transparent,
+                      child: Icon(
+                        isFavorite
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 20, // 🔥 아이콘도 살짝 키움
+                        color: isFavorite
+                            ? const Color(0xFFFF8E7C)
+                            : const Color(0xFF9CA3AF), // 🔥 자연스러운 회색
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 🏷 캡슐 (투명 + 텍스트 강조)
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: 4,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.65), // 🔥 더 투명
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: const Color(0xFFEDEFF2), // 🔥 거의 안보이게
+                          width: 0.8,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 3,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        item.eyeStyleKo.isEmpty ? '기본' : item.eyeStyleKo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B7280), // 🔥 살짝 더 진한 회색
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            if (sampleDescription != null) ...[
-              _buildSampleInfoBanner(sampleDescription),
-              const SizedBox(height: 10),
-            ],
-            SizedBox(
-              height: 150,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return _buildMiniPetCard(
-                    id: item['id']!,
-                    imagePath: item['image']!,
-                    label: item['label']!,
-                  );
-                },
-              ),
-            ),
-          ],
+          ),
         ),
       ),
+    );
+  }
+
+  void _showVariantImagePreview(PetCatalogVariant item) {
+    final String? imagePath = item.imagePath;
+    final bool hasLocalFile =
+        imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync();
+    final bool isRemote = _isRemotePetImage(imagePath);
+    final String remoteUrl = _resolvePetImageUrl(imagePath);
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.72),
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Stack(
+            children: [
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.96),
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.22),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: AspectRatio(
+                          aspectRatio: 1,
+                          child: hasLocalFile
+                              ? Image.file(
+                            File(imagePath!),
+                            fit: BoxFit.contain,
+                          )
+                              : isRemote
+                              ? Image.network(
+                            remoteUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) {
+                              return Image.asset(
+                                'assets/images/pets.webp',
+                                fit: BoxFit.contain,
+                              );
+                            },
+                          )
+                              : Image.asset(
+                            'assets/images/pets.webp',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        item.breedName,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2D3436),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${item.eyeStyleKo} · ${item.colorName} · ${item.eyeColorNameKo ?? '미지정'}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Material(
+                  color: Colors.white.withOpacity(0.92),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.pop(context),
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1687,69 +2178,6 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
-  Widget _buildDogSampleContent() {
-    final dogItems = [
-      {
-        'id': 'dog_sample_1',
-        'image': 'assets/images/dogs_1.png',
-        'label': '강아지 샘플 1'
-      },
-      {
-        'id': 'dog_sample_2',
-        'image': 'assets/images/dogs_2.png',
-        'label': '강아지 샘플 2'
-      },
-      {
-        'id': 'dog_sample_3',
-        'image': 'assets/images/dogs_3.png',
-        'label': '강아지 샘플 3'
-      },
-      {
-        'id': 'dog_sample_4',
-        'image': 'assets/images/dogs_4.png',
-        'label': '강아지 샘플 4'
-      },
-      {
-        'id': 'dog_sample_5',
-        'image': 'assets/images/dogs_5.png',
-        'label': '강아지 샘플 5'
-      },
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSampleHeroCard(
-          title: '지금은 펫 관리만 이용 가능해요!',
-          subtitle: '지금 보이는 항목은 정식 테스트를 위한 샘플 데이터예요.',
-          icon: Icons.pets_rounded,
-        ),
-        _buildPetCollectionCard(
-          title: '강아지 샘플 리스트',
-          items: dogItems,
-          sampleDescription: '현재 강아지 리스트는 샘플 데이터로 표시되고 있어요.',
-        ),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-
-
-  Widget _buildFilterSectionLabel(String label,
-      {Color color = const Color(0xFF64748B)}) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12.5,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
   Widget _buildIntegratedAppBar(BuildContext context, double topPadding) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
@@ -1893,9 +2321,7 @@ class _PetScreenState extends State<PetScreen>
 
   Widget _buildPetProfileDropdown() {
     final bool isCatTab = _tabController.index == 0;
-    final pets = _applyPetFilters(
-      _allPets.where((p) => p.isCat == isCatTab).toList(),
-    );
+    final pets = _allPets.where((p) => p.isCat == isCatTab).toList();
 
     return Material(
       color: Colors.transparent,
@@ -2124,6 +2550,7 @@ class _PetScreenState extends State<PetScreen>
       onRefresh: () async {
         await _fetchFishData();
         await _fetchPetData();
+        await _fetchCatalogData();
       },
       color: const Color(0xFFFF8E7C),
       backgroundColor: Colors.white,
@@ -2137,8 +2564,7 @@ class _PetScreenState extends State<PetScreen>
           bottom: 120,
         ),
         children: [
-          if (isCat) _buildPetGridContent() else
-            _buildDogSampleContent(),
+          _buildPetGridContent(),
         ],
       ),
     );
@@ -2160,125 +2586,55 @@ class _PetScreenState extends State<PetScreen>
 
 
   Widget _buildPetGridContent() {
-    final whiteItems = [
-      {
-        'id': 'white_1',
-        'image': 'assets/images/cat_white.png',
-        'label': '화이트 1'
-      },
-      {
-        'id': 'white_2',
-        'image': 'assets/images/cat_white.png',
-        'label': '화이트 2'
-      },
-      {
-        'id': 'white_3',
-        'image': 'assets/images/cat_white.png',
-        'label': '화이트 3'
-      },
-      {
-        'id': 'white_4',
-        'image': 'assets/images/cat_white.png',
-        'label': '화이트 4'
-      },
-      {
-        'id': 'white_5',
-        'image': 'assets/images/cat_white.png',
-        'label': '화이트 5'
-      },
-    ];
+    final bool isCatTab = _tabController.index == 0;
+    final sections = _groupVariantsByBreed(isCat: isCatTab);
 
-    final blackItems = [
-      {
-        'id': 'black_1',
-        'image': 'assets/images/cat_black_1.png',
-        'label': '블랙 1'
-      },
-      {
-        'id': 'black_2',
-        'image': 'assets/images/cat_black_2.png',
-        'label': '블랙 2'
-      },
-      {
-        'id': 'black_3',
-        'image': 'assets/images/cat_black_1.png',
-        'label': '블랙 3'
-      },
-      {
-        'id': 'black_4',
-        'image': 'assets/images/cat_black_2.png',
-        'label': '블랙 4'
-      },
-      {
-        'id': 'black_5',
-        'image': 'assets/images/cat_black_1.png',
-        'label': '블랙 5'
-      },
-      {
-        'id': 'black_6',
-        'image': 'assets/images/cat_black_2.png',
-        'label': '블랙 6'
-      },
-    ];
-
-    final testWhiteItems = [
-      ...whiteItems,
-      ...whiteItems,
-    ];
-
-    final testBlackItems = [
-      ...blackItems,
-      ...blackItems,
-    ];
-
-    final List<Map<String, dynamic>> sections = [
-      {
-        'title': '올화이트',
-        'items': testWhiteItems,
-        'showSampleBadge': true,
-        'sampleDescription': '올화이트 리스트는 샘플 데이터로 표시되고 있어요.',
-      },
-      {
-        'title': '올블랙',
-        'items': testBlackItems,
-        'showSampleBadge': true,
-        'sampleDescription': '올블랙 리스트는 샘플 데이터로 표시되고 있어요.',
-      },
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSampleHeroCard(
-          title: '지금은 펫 관리만 이용 가능해요!',
-          subtitle: '지금 보이는 항목은 정식 테스트를 위한 샘플 데이터예요.',
-          icon: Icons.pets_rounded,
-        ),
-        ...sections.map(
-              (section) =>
-              _buildPetCollectionCard(
-                title: section['title'] as String,
-                items: List<Map<String, String>>.from(section['items'] as List),
-                showSampleBadge: section['showSampleBadge'] as bool,
-                sampleDescription: section['sampleDescription'] as String?,
-              ),
-        ),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-
-
-  Widget _buildPetCollectionSection({required bool isCat}) {
-    final pets = _allPets.where((p) => p.isCat == isCat).toList();
-
-    if (_isLoading) {
-      return const Padding(
-        padding: EdgeInsets.only(top: 70),
-        child: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFFFF8E7C),
+    if (sections.isEmpty) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFFFFDDD6),
+            width: 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.menu_book_rounded,
+              size: 36,
+              color: const Color(0xFFFF8E7C).withOpacity(0.75),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isCatTab ? '고양이 도감 준비중이에요' : '강아지 도감 준비중이에요',
+              style: const TextStyle(
+                fontSize: 15.5,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF374151),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'pet admin에서 업로드한 variant가 하나라도 생기면 여기서 카드 리스트로 보여줄게요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: Color(0xFF8E8E93),
+                height: 1.4,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -2286,109 +2642,103 @@ class _PetScreenState extends State<PetScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF1ED),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  isCat
-                      ? Icons.pets_rounded
-                      : Icons.cruelty_free_rounded,
-                  size: 18,
-                  color: const Color(0xFFFF8E7C),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  isCat ? '우리 고양이' : '우리 강아지',
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
-                  ),
-                ),
-              ),
-            ],
+        ...sections.entries.map(
+              (entry) => _buildPetCollectionCard(
+            title: entry.key,
+            items: entry.value,
           ),
         ),
-        if (pets.isEmpty)
-          _buildEmptyPetStateCard(isCat: isCat)
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: pets.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final pet = pets[index];
-              return _buildPetDetailCard(pet);
-            },
-          ),
+        const SizedBox(height: 8),
       ],
     );
   }
 
-  Widget _buildEmptyPetStateCard({required bool isCat}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GestureDetector(
-        onTap: () => _showPetEditSheet(),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 22,
+  void _toggleLikedVariant(String id) {
+    setState(() {
+      if (_likedVariantIds.contains(id)) {
+        _likedVariantIds.remove(id);
+      } else {
+        _likedVariantIds.add(id);
+      }
+    });
+  }
+
+  Widget _buildPetCollectionCard({
+    required String title,
+    required List<PetCatalogVariant> items,
+  }) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFFF8E7C).withOpacity(0.28),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.82),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: const Color(0xFFFFE2DB),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openBreedDetail(title, items),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                isCat
-                    ? Icons.pets_rounded
-                    : Icons.cruelty_free_rounded,
-                size: 34,
-                color: const Color(0xFFFF8E7C).withOpacity(0.75),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF2D3748),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3F0),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${items.length}',
+                      style: const TextStyle(
+                        fontSize: 11.2,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFF8E7C),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: Colors.grey.shade400,
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
-              Text(
-                isCat ? '등록된 고양이가 없어요' : '등록된 강아지가 없어요',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF374151),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                isCat
-                    ? '오른쪽 아래 + 버튼으로 고양이를 추가해보세요'
-                    : '오른쪽 아래 + 버튼으로 강아지를 추가해보세요',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: Color(0xFF8E8E93),
-                  height: 1.4,
+              SizedBox(
+                height: 132,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return _buildMiniVariantCard(item);
+                  },
                 ),
               ),
             ],
@@ -2449,10 +2799,7 @@ class _PetScreenState extends State<PetScreen>
       return _buildEmptyPetPlaceholder(isCatTab);
     }
 
-    final double screenWidth = MediaQuery
-        .of(context)
-        .size
-        .width;
+    final double screenWidth = MediaQuery.of(context).size.width;
     final double cardWidth = screenWidth < 390 ? 280 : 296;
 
     return SizedBox(
@@ -2462,9 +2809,7 @@ class _PetScreenState extends State<PetScreen>
         padding: const EdgeInsets.only(left: 4, right: 10),
         itemCount: filteredPets.length,
         buildDefaultDragHandles: false,
-        proxyDecorator: (Widget child,
-            int index,
-            Animation<double> animation,) {
+        proxyDecorator: (Widget child, int index, Animation<double> animation) {
           return AnimatedBuilder(
             animation: animation,
             builder: (BuildContext context, Widget? child) {
@@ -2506,22 +2851,18 @@ class _PetScreenState extends State<PetScreen>
             ),
           );
         },
-        onReorder: (oldIndex, newIndex) {
+        onReorder: (oldIndex, newIndex) async {
+          if (newIndex > oldIndex) newIndex -= 1;
+
           setState(() {
-            if (oldIndex < newIndex) newIndex -= 1;
+            final pet = filteredPets.removeAt(oldIndex);
+            filteredPets.insert(newIndex, pet);
 
-            final movedPet = filteredPets.removeAt(oldIndex);
-            filteredPets.insert(newIndex, movedPet);
-
-            final otherTabPets =
-            _allPets.where((p) => p.isCat != isCatTab).toList();
-
-            _allPets = isCatTab
-                ? [...filteredPets, ...otherTabPets]
-                : [...otherTabPets, ...filteredPets];
+            final otherPets = _allPets.where((p) => p.isCat != isCatTab).toList();
+            _allPets = [...filteredPets, ...otherPets];
           });
 
-          _updatePetOrderOnServer();
+          await _updatePetOrderOnServer();
         },
       ),
     );
@@ -2951,6 +3292,22 @@ class _PetScreenState extends State<PetScreen>
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _openBreedDetail(String breed, List<PetCatalogVariant> items) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PetBreedDetailScreen(
+          breed: breed,
+          items: items,
+          onPreview: _showVariantImagePreview,
+          imageBuilder: _buildPetImage,
+          likedIds: _likedVariantIds,
+          onToggleLike: _toggleLikedVariant,
         ),
       ),
     );
@@ -4798,4 +5155,272 @@ class _SampleStatusPill extends StatelessWidget {
   }
 }
 
+class PetBreedDetailScreen extends StatelessWidget {
+  final String breed;
+  final List<PetCatalogVariant> items;
+  final Set<String> likedIds;
+  final void Function(PetCatalogVariant item) onPreview;
+  final void Function(String id) onToggleLike;
+  final Widget Function(
+      String? imagePath, {
+      BoxFit fit,
+      }) imageBuilder;
 
+  const PetBreedDetailScreen({
+    super.key,
+    required this.breed,
+    required this.items,
+    required this.likedIds,
+    required this.onPreview,
+    required this.onToggleLike,
+    required this.imageBuilder,
+  });
+
+  static const List<String> _eyeOrder = ['콩눈', '땡눈', '고양이눈', '졸린눈'];
+
+  int _eyeRank(String value) {
+    final index = _eyeOrder.indexOf(value.trim());
+    return index == -1 ? 999 : index;
+  }
+
+  Map<String, Map<String, List<PetCatalogVariant>>> _groupByColorAndEye() {
+    final List<PetCatalogVariant> sorted = List.of(items)
+      ..sort((a, b) {
+        final colorCompare = a.colorName.compareTo(b.colorName);
+        if (colorCompare != 0) return colorCompare;
+
+        final eyeCompare =
+        _eyeRank(a.eyeStyleKo).compareTo(_eyeRank(b.eyeStyleKo));
+        if (eyeCompare != 0) return eyeCompare;
+
+        final eyeColorCompare =
+        (a.eyeColorNameKo ?? '').compareTo(b.eyeColorNameKo ?? '');
+        if (eyeColorCompare != 0) return eyeColorCompare;
+
+        final noCompare = a.variantNo.compareTo(b.variantNo);
+        if (noCompare != 0) return noCompare;
+
+        return a.id.compareTo(b.id);
+      });
+
+    final Map<String, Map<String, List<PetCatalogVariant>>> grouped = {};
+
+    for (final item in sorted) {
+      final colorKey = item.colorName.trim().isEmpty ? '기본' : item.colorName;
+      final eyeKey = item.eyeStyleKo.trim().isEmpty ? '기본' : item.eyeStyleKo;
+
+      grouped.putIfAbsent(colorKey, () => {});
+      grouped[colorKey]!.putIfAbsent(eyeKey, () => []);
+      grouped[colorKey]![eyeKey]!.add(item);
+    }
+
+    final colorEntries = grouped.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return {
+      for (final colorEntry in colorEntries)
+        colorEntry.key: {
+          for (final eyeEntry in (colorEntry.value.entries.toList()
+            ..sort((a, b) =>
+                _eyeRank(a.key).compareTo(_eyeRank(b.key))))
+          )
+            eyeEntry.key: eyeEntry.value
+        }
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = _groupByColorAndEye();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFBFA),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 12, 10, 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '$breed 도감',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF2D3436),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFFFE0D9)),
+                    ),
+                    child: const Text(
+                      '털색별로 먼저 나누고, 그 안에서 눈 종류별로 정리했어요.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        height: 1.45,
+                        color: Color(0xFF7C8796),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  ...sections.entries.map((colorEntry) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 22),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            colorEntry.key,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF2D3436),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          ...colorEntry.value.entries.map((eyeEntry) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding:
+                                    const EdgeInsets.fromLTRB(2, 0, 2, 10),
+                                    child: Text(
+                                      eyeEntry.key,
+                                      style: const TextStyle(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF5C6675),
+                                      ),
+                                    ),
+                                  ),
+                                  GridView.builder(
+                                    itemCount: eyeEntry.value.length,
+                                    shrinkWrap: true,
+                                    physics:
+                                    const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      mainAxisSpacing: 12,
+                                      crossAxisSpacing: 12,
+                                      childAspectRatio: 0.86,
+                                    ),
+                                    itemBuilder: (context, index) {
+                                      final item = eyeEntry.value[index];
+                                      final isLiked = likedIds.contains(item.id);
+
+                                      return GestureDetector(
+                                        onTap: () => onPreview(item),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius:
+                                            BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color:
+                                              const Color(0xFFFFE0D9),
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black
+                                                    .withOpacity(0.045),
+                                                blurRadius: 12,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Stack(
+                                            children: [
+                                              Padding(
+                                                padding:
+                                                const EdgeInsets.all(10),
+                                                child: Center(
+                                                  child: imageBuilder(
+                                                    item.imagePath,
+                                                    fit: BoxFit.contain,
+                                                  ),
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: 8,
+                                                right: 8,
+                                                child: Material(
+                                                  color: isLiked
+                                                      ? const Color(0xFFFFF1EC)
+                                                      : const Color(0xFFF8FAFC),
+                                                  borderRadius:
+                                                  BorderRadius.circular(12),
+                                                  child: InkWell(
+                                                    borderRadius:
+                                                    BorderRadius.circular(
+                                                        12),
+                                                    onTap: () =>
+                                                        onToggleLike(item.id),
+                                                    child: SizedBox(
+                                                      width: 32,
+                                                      height: 32,
+                                                      child: Icon(
+                                                        isLiked
+                                                            ? Icons
+                                                            .favorite_rounded
+                                                            : Icons
+                                                            .favorite_border_rounded,
+                                                        color: isLiked
+                                                            ? const Color(
+                                                            0xFFFF8E7C)
+                                                            : const Color(
+                                                            0xFF9AA4B2),
+                                                        size: 17,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
