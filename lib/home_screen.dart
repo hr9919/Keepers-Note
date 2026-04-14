@@ -629,9 +629,8 @@ class _HomeScreenState extends State<HomeScreen>
 
     _weatherController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 14),
-    )
-      ..repeat();
+      duration: const Duration(seconds: 10),
+    )..repeat();
 
     _previewTransformController.addListener(_onPreviewTransformChanged);
     _checkAndResetAtStart();
@@ -934,11 +933,47 @@ class _HomeScreenState extends State<HomeScreen>
 
 
   Color _getWeatherTextColor(String weather) {
-    return const Color(0xFF334155).withOpacity(0.92);
+    switch (weather) {
+      case '맑음':
+        return const Color(0xFF2F4858); // 밝은 하늘 배경용 진한 블루그레이
+
+      case '흐림':
+        return const Color(0xFFFFFFFF).withOpacity(0.96); // 중간~어두운 회청 배경용
+
+      case '비':
+        return const Color(0xFFFFFFFF).withOpacity(0.98); // 가장 어두운 배경용
+
+      case '눈':
+        return const Color(0xFF16324A); // 차가운 밝은 배경용 더 진한 네이비톤
+
+      case '무지개':
+        return const Color(0xFF4A345E); // 파스텔 다색 배경용 진한 퍼플그레이
+
+      default:
+        return const Color(0xFF334155);
+    }
   }
 
   Color _getWeatherSubTextColor(String weather) {
-    return const Color(0xFF475569).withOpacity(0.86);
+    switch (weather) {
+      case '맑음':
+        return const Color(0xFF486577).withOpacity(0.92);
+
+      case '흐림':
+        return const Color(0xFFFFFFFF).withOpacity(0.86);
+
+      case '비':
+        return const Color(0xFFFFFFFF).withOpacity(0.90);
+
+      case '눈':
+        return const Color(0xFF244761).withOpacity(0.90);
+
+      case '무지개':
+        return const Color(0xFF5B4771).withOpacity(0.92);
+
+      default:
+        return const Color(0xFF475569).withOpacity(0.86);
+    }
   }
 
   BoxDecoration _buildWeatherBackground(String weather) {
@@ -2404,196 +2439,322 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildAnimatedWeatherBackground(String weather) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
-      child: AnimatedBuilder(
-        animation: _weatherController,
-        builder: (context, child) {
-          final t = _weatherController.value;
-          final wave = sin(t * pi * 2);
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
 
-          switch (weather) {
-            case '맑음':
-              final skyOffset = wave * 10;
-              final cloudOffset1 = sin(t * pi * 2) * 12;
-              final cloudOffset2 = sin((t * pi * 2) + 1.2) * 10;
-              final cloudOffset3 = sin((t * pi * 2) + 2.1) * 8;
+          return AnimatedBuilder(
+            animation: _weatherController,
+            builder: (context, child) {
+              final t = _weatherController.value;
+              final glow = 0.5 + 0.5 * sin(t * pi * 2);
 
-              return Stack(
-                children: [
-                  Transform.translate(
-                    offset: Offset(skyOffset, 0),
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0x6698E2FF),
-                            Color(0x3398E2FF),
-                            Color(0x0098E2FF),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+              double loop(double start, double distance, double phase) {
+                return start + ((t + phase) % 1.0) * distance;
+              }
 
-                  Positioned(
-                    top: 18,
-                    left: 18 + cloudOffset1,
-                    child: _weatherBlob(
-                      width: 70,
-                      height: 24,
-                      color: Colors.white.withOpacity(0.28),
-                    ),
-                  ),
+              switch (weather) {
+                case '맑음':
+                  final cloud1X = loop(w + 20, -(w + 120), 0.00);
+                  final cloud2X = loop(w + 90, -(w + 160), 0.38);
+                  final cloud3X = loop(w + 180, -(w + 110), 0.67);
 
-                  Positioned(
-                    bottom: 24,
-                    right: 18 - cloudOffset2,
-                    child: _weatherBlob(
-                      width: 60,
-                      height: 21,
-                      color: Colors.white.withOpacity(0.18),
-                    ),
-                  ),
-
-                  Positioned(
-                    bottom: 52,
-                    right: 82 - cloudOffset3,
-                    child: _weatherBlob(
-                      width: 56,
-                      height: 20,
-                      color: Colors.white.withOpacity(0.20),
-                    ),
-                  ),
-                ],
-              );
-
-            case '흐림':
-              final cloudDrift = wave * 8;
-
-              return Stack(
-                children: [
-                  Positioned(
-                    top: 22,
-                    left: 18 + cloudDrift,
-                    child: _weatherBlob(
-                      width: 84,
-                      height: 28,
-                      color: Colors.white.withOpacity(0.14),
-                    ),
-                  ),
-                  Positioned(
-                    top: 56,
-                    right: 20 - cloudDrift * 0.8,
-                    child: _weatherBlob(
-                      width: 66,
-                      height: 24,
-                      color: Colors.white.withOpacity(0.10),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 34,
-                    left: 36 + cloudDrift * 0.5,
-                    child: _weatherBlob(
-                      width: 92,
-                      height: 30,
-                      color: Colors.white.withOpacity(0.08),
-                    ),
-                  ),
-                ],
-              );
-
-            case '비':
-              final rainShift = wave * 5;
-
-              return Stack(
-                children: List.generate(9, (index) {
-                  final double left = 20 + (index * 28).toDouble();
-                  final double top = 12 + ((index % 3) * 24).toDouble();
-
-                  return Positioned(
-                    left: left,
-                    top: top + (index.isEven ? rainShift : -rainShift),
-                    child: Container(
-                      width: 2,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  );
-                }),
-              );
-
-            case '무지개':
-              final glow = 0.08 + ((wave + 1) / 2) * 0.08;
-
-              return Stack(
-                children: [
-                  Positioned(
-                    left: -10,
-                    right: -10,
-                    bottom: -28,
-                    child: Opacity(
-                      opacity: 0.22,
-                      child: Container(
-                        height: 110,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(120),
-                          gradient: const SweepGradient(
-                            startAngle: 3.2,
-                            endAngle: 6.2,
-                            colors: [
-                              Color(0xFFFF8BA7),
-                              Color(0xFFFFC46B),
-                              Color(0xFFFFF08A),
-                              Color(0xFF8DE3B7),
-                              Color(0xFF82CFFF),
-                              Color(0xFFC5A3FF),
-                              Color(0xFFFF8BA7),
-                            ],
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0x6698E2FF),
+                                Color(0x3398E2FF),
+                                Color(0x0098E2FF),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.white.withOpacity(glow),
-                    ),
-                  ),
-                ],
-              );
-
-            case '눈':
-              final snowShift = wave * 4;
-
-              return Stack(
-                children: List.generate(10, (index) {
-                  final double left = 18 + (index * 26).toDouble();
-                  final double top = 10 + ((index % 4) * 22).toDouble();
-
-                  return Positioned(
-                    left: left,
-                    top: top + (index.isEven ? snowShift : -snowShift),
-                    child: Opacity(
-                      opacity: 0.25,
-                      child: Text(
-                        '✦',
-                        style: TextStyle(
-                          fontSize: index.isEven ? 12 : 9,
-                          color: Colors.white.withOpacity(0.65),
+                      Positioned(
+                        top: 18,
+                        left: cloud1X,
+                        child: _weatherBlob(
+                          width: 72,
+                          height: 24,
+                          color: Colors.white.withOpacity(0.28),
                         ),
                       ),
-                    ),
+                      Positioned(
+                        top: 44,
+                        left: cloud2X,
+                        child: _weatherBlob(
+                          width: 58,
+                          height: 20,
+                          color: Colors.white.withOpacity(0.18),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 28,
+                        left: cloud3X,
+                        child: _weatherBlob(
+                          width: 64,
+                          height: 22,
+                          color: Colors.white.withOpacity(0.20),
+                        ),
+                      ),
+                    ],
                   );
-                }),
-              );
 
-            default:
-              return const SizedBox.shrink();
-          }
+                case '흐림':
+                  final cloud1X = loop(w + 10, -(w + 150), 0.05);
+                  final cloud2X = loop(w + 120, -(w + 180), 0.42);
+                  final cloud3X = loop(w + 220, -(w + 170), 0.78);
+
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF93A4B8),
+                                Color(0xFF6E7F94),
+                                Color(0xFF536273),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 18,
+                        left: cloud1X,
+                        child: _weatherBlob(
+                          width: 86,
+                          height: 28,
+                          color: Colors.white.withOpacity(0.14),
+                        ),
+                      ),
+                      Positioned(
+                        top: 54,
+                        left: cloud2X,
+                        child: _weatherBlob(
+                          width: 68,
+                          height: 24,
+                          color: Colors.white.withOpacity(0.10),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 24,
+                        left: cloud3X,
+                        child: _weatherBlob(
+                          width: 96,
+                          height: 30,
+                          color: Colors.white.withOpacity(0.09),
+                        ),
+                      ),
+                    ],
+                  );
+
+                case '비':
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF3D5A80),
+                                Color(0xFF2B4162),
+                                Color(0xFF1B2840),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 14,
+                        left: loop(w + 20, -(w + 120), 0.15),
+                        child: _weatherBlob(
+                          width: 84,
+                          height: 26,
+                          color: Colors.white.withOpacity(0.08),
+                        ),
+                      ),
+                      ...List.generate(16, (index) {
+                        final column = index % 8;
+                        final laneOffset = (index ~/ 8) * 8.0;
+                        final x = 14.0 + column * ((w - 28) / 8) + laneOffset;
+
+                        final length = 16.0 + (index % 3) * 3.0;
+                        final fallDistance = h + 70.0 + length;
+                        final y = -32.0 - length + ((t + index * 0.083) % 1.0) * fallDistance;
+
+                        return Positioned(
+                          left: x,
+                          top: y,
+                          child: Transform.rotate(
+                            angle: -0.30,
+                            child: Container(
+                              width: 2.1,
+                              height: length,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(
+                                  0.18 + (index % 3) * 0.05,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  );
+
+                case '눈':
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFFA9D0E7),
+                                Color(0xFF8BB7D9),
+                                Color(0xFF6A9CC9),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 10,
+                        left: loop(w + 10, -(w + 110), 0.2),
+                        child: _weatherBlob(
+                          width: 70,
+                          height: 23,
+                          color: Colors.white.withOpacity(0.08),
+                        ),
+                      ),
+                      ...List.generate(14, (index) {
+                        final column = index % 5;
+                        final band = index ~/ 5;
+                        final baseX = 16.0 + column * ((w - 32) / 5);
+                        final sway = sin((t * pi * 2 * 1.2) + index * 0.9) * (4.0 + band);
+
+                        final size = 8.0 + (index % 3) * 2.0;
+                        final fallDistance = h + 60.0 + size;
+                        final y = -24.0 - size + ((t + index * 0.071) % 1.0) * fallDistance;
+
+                        return Positioned(
+                          left: baseX + sway,
+                          top: y,
+                          child: Opacity(
+                            opacity: 0.34 + band * 0.08,
+                            child: Text(
+                              '✦',
+                              style: TextStyle(
+                                fontSize: size,
+                                color: Colors.white.withOpacity(0.74),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  );
+
+                case '무지개':
+                  final shimmer = 0.05 + glow * 0.08;
+
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFFFFC6DA),
+                                Color(0xFFFFE29A),
+                                Color(0xFFCDB4FF),
+                                Color(0xFFB8F2E6),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: -12,
+                        right: -12,
+                        bottom: -26,
+                        child: Opacity(
+                          opacity: 0.24,
+                          child: Container(
+                            height: 110,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(120),
+                              gradient: const SweepGradient(
+                                startAngle: 3.2,
+                                endAngle: 6.2,
+                                colors: [
+                                  Color(0xFFFF8BA7),
+                                  Color(0xFFFFC46B),
+                                  Color(0xFFFFF08A),
+                                  Color(0xFF8DE3B7),
+                                  Color(0xFF82CFFF),
+                                  Color(0xFFC5A3FF),
+                                  Color(0xFFFF8BA7),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.white.withOpacity(shimmer),
+                        ),
+                      ),
+                      Positioned(
+                        top: 18,
+                        right: 22,
+                        child: Opacity(
+                          opacity: 0.18 + glow * 0.18,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.white.withOpacity(0.55),
+                                  blurRadius: 18,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+
+                default:
+                  return Container(
+                    color: Colors.white,
+                  );
+              }
+            },
+          );
         },
       ),
     );
@@ -2845,10 +3006,10 @@ class _HomeScreenState extends State<HomeScreen>
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.22),
+            color: Colors.white.withOpacity(0.08),
             borderRadius: radius,
             border: Border.all(
-              color: Colors.white.withOpacity(0.42),
+              color: Colors.white.withOpacity(0.22),
               width: 1,
             ),
             boxShadow: [
@@ -2866,7 +3027,10 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildHourlyWeatherStrip(String currentWeather) {
-    const chipTextColor = Color(0xFF334155);
+    final chipTextColor = _getWeatherTextColor(currentWeather);
+    final dividerColor = chipTextColor.withOpacity(
+      currentWeather == '비' || currentWeather == '흐림' ? 0.28 : 0.18,
+    );
 
     final hourly = _hourlyWeather.isEmpty
         ? [
@@ -2918,7 +3082,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   textAlign: TextAlign.center,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 8.4,
                                     fontWeight: FontWeight.w800,
                                     height: 1.05,
@@ -2943,7 +3107,7 @@ class _HomeScreenState extends State<HomeScreen>
                             height: 24,
                             margin: const EdgeInsets.symmetric(horizontal: 2),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.42),
+                              color: dividerColor,
                               borderRadius: BorderRadius.circular(999),
                             ),
                           ),
@@ -4470,7 +4634,7 @@ class _HomeScreenState extends State<HomeScreen>
         child: Transform.scale(
           scale: visualScale,
           alignment: Alignment.center,
-            child: _buildPreviewPin(res),
+          child: _buildPreviewPin(res),
         ),
       ),
     );
