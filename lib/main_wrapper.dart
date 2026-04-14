@@ -37,6 +37,7 @@ class _MainWrapperState extends State<MainWrapper> {
   bool _isDrawerOpen = false;
   bool _isEndDrawerOpen = false;
   bool _isAdmin = false;
+  int _homeRefreshKey = 0;
 
   String _userName = "로그인 중...";
   String _userUid = "";
@@ -332,27 +333,6 @@ class _MainWrapperState extends State<MainWrapper> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Future<void> _openWeatherAdminScreen() async {
-    FocusManager.instance.primaryFocus?.unfocus();
-
-    if (_isDrawerOpen) {
-      await _closeDrawerSmooth();
-    }
-
-    if (_isEndDrawerOpen) {
-      await _closeEndDrawerSmooth();
-    }
-
-    if (!mounted) return;
-
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const WeatherAdminScreen(),
       ),
     );
   }
@@ -905,6 +885,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
     final List<Widget> pages = [
       HomeScreen(
+        key: ValueKey('home_$_homeRefreshKey'),
         openDrawer: _openDrawerSmooth,
         openEndDrawer: _openEndDrawerSmooth,
         openEventScreen: _openEventScreen,
@@ -1602,7 +1583,6 @@ class _MainWrapperState extends State<MainWrapper> {
                             await _openTipGuideScreen();
                           },
                         ),
-
                         _buildDrawerItem(
                           icon: Icons.forum_rounded,
                           title: '미니 커뮤니티',
@@ -1620,7 +1600,6 @@ class _MainWrapperState extends State<MainWrapper> {
                             );
                           },
                         ),
-
                         _buildDrawerItem(
                           icon: Icons.mail_outline_rounded,
                           title: '피드백 보내기',
@@ -1635,7 +1614,6 @@ class _MainWrapperState extends State<MainWrapper> {
                             await _confirmAndSendMail();
                           },
                         ),
-
                         if (_isAdmin) ...[
                           const SizedBox(height: 10),
                           _buildDrawerItem(
@@ -1653,35 +1631,23 @@ class _MainWrapperState extends State<MainWrapper> {
                               await _closeDrawerSmooth();
                               if (!mounted) return;
 
-                              await Navigator.push(
+                              final changed = await Navigator.push<bool>(
                                 context,
-                                PageRouteBuilder(
-                                  transitionDuration: const Duration(milliseconds: 240),
-                                  reverseTransitionDuration: const Duration(milliseconds: 200),
-                                  pageBuilder: (_, animation, __) => const WeatherAdminScreen(),
-                                  transitionsBuilder: (_, animation, __, child) {
-                                    final curved = CurvedAnimation(
-                                      parent: animation,
-                                      curve: Curves.easeOutCubic,
-                                    );
-
-                                    return FadeTransition(
-                                      opacity: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
-                                      child: SlideTransition(
-                                        position: Tween<Offset>(
-                                          begin: const Offset(0.02, 0.0),
-                                          end: Offset.zero,
-                                        ).animate(curved),
-                                        child: child,
-                                      ),
-                                    );
-                                  },
+                                MaterialPageRoute(
+                                  builder: (_) => const WeatherAdminScreen(),
                                 ),
                               );
+
+                              if (!mounted) return;
+
+                              if (changed == true) {
+                                setState(() {
+                                  _homeRefreshKey++;
+                                });
+                              }
                             },
                           ),
                         ],
-
                         SizedBox(height: bottomPadding > 0 ? bottomPadding : 20),
                       ],
                     ),
@@ -2052,21 +2018,6 @@ class _MainWrapperState extends State<MainWrapper> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDrawerSectionLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          color: Color(0xFF94A3B8),
-          letterSpacing: 0.2,
         ),
       ),
     );

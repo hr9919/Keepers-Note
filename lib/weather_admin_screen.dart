@@ -21,7 +21,8 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
     _WeatherOption(label: '흐림', value: 'CLOUDY', icon: Icons.cloud_rounded),
     _WeatherOption(label: '비', value: 'RAINY', icon: Icons.grain_rounded),
     _WeatherOption(label: '눈', value: 'SNOWY', icon: Icons.ac_unit_rounded),
-    _WeatherOption(label: '무지개', value: 'RAINBOW', icon: Icons.auto_awesome_rounded),
+    _WeatherOption(
+        label: '무지개', value: 'RAINBOW', icon: Icons.auto_awesome_rounded),
   ];
 
   bool _isLoading = true;
@@ -30,6 +31,10 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
   bool _isSavingDaily = false;
   bool _isUpdatingHourly = false;
   bool _isUpdatingDaily = false;
+  bool _hasWeatherChanged = false;
+
+  final Map<String, String> _editedHourlyWeather = {};
+  final Map<String, String> _editedDailyWeather = {};
 
   String? _error;
   int? _kakaoId;
@@ -206,6 +211,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
       );
 
       if (response.statusCode == 200) {
+        _hasWeatherChanged = true;
         await _pushCurrentWeatherToWidget(_selectedHourlyWeather);
         _showSnack('시간대별 날씨가 추가됐어요.');
         await _refreshAll(showLoading: false);
@@ -246,6 +252,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
       );
 
       if (response.statusCode == 200) {
+        _hasWeatherChanged = true;
         _showSnack('일별 날씨가 추가됐어요.');
         await _refreshAll(showLoading: false);
       } else {
@@ -285,6 +292,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
       );
 
       if (response.statusCode == 200) {
+        _hasWeatherChanged = true;
         await _pushCurrentWeatherToWidget(weatherType);
         _showSnack('시간대별 날씨를 수정했어요.');
         await _refreshAll(showLoading: false);
@@ -325,6 +333,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
       );
 
       if (response.statusCode == 200) {
+        _hasWeatherChanged = true;
         _showSnack('일별 날씨를 수정했어요.');
         await _refreshAll(showLoading: false);
       } else {
@@ -349,19 +358,33 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
 
   void _showSnack(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(text),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
   String _formatDateDisplay(DateTime date) {
-    return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+    return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day
+        .toString().padLeft(2, '0')}';
   }
 
   String _formatTimeSlotDisplay(String isoString) {
     try {
       final date = DateTime.parse(isoString).toLocal();
-      return '${_formatDateDisplay(date)} ${date.hour.toString().padLeft(2, '0')}:00';
+      return '${_formatDateDisplay(date)} ${date.hour.toString().padLeft(
+          2, '0')}:00';
     } catch (_) {
       return isoString;
     }
@@ -478,21 +501,22 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
               borderRadius: BorderRadius.circular(16),
               items: _weatherOptions
                   .map(
-                    (e) => DropdownMenuItem<String>(
-                  value: e.value,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        e.icon,
-                        size: 18,
-                        color: const Color(0xFFFF8E7C),
+                    (e) =>
+                    DropdownMenuItem<String>(
+                      value: e.value,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            e.icon,
+                            size: 18,
+                            color: const Color(0xFFFF8E7C),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(e.label),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(e.label),
-                    ],
-                  ),
-                ),
+                    ),
               )
                   .toList(),
               onChanged: onChanged,
@@ -507,6 +531,9 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
     required String leading,
     required String value,
     required ValueChanged<String?>? onChanged,
+    required VoidCallback? onApply,
+    required bool isApplying,
+    required bool isDirty,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -516,75 +543,117 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFFFE6DF)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              leading,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF2D3748),
-              ),
+          Text(
+            leading,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF2D3748),
             ),
           ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 132,
-            child: DropdownButtonFormField<String>(
-              value: value,
-              isExpanded: true,
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: value,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFFFE2DB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color: isDirty
+                            ? const Color(0xFFFFB4A6)
+                            : const Color(0xFFFFE2DB),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(
+                        color: Color(0xFFFF8E7C),
+                        width: 1.4,
+                      ),
+                    ),
+                  ),
+                  items: _weatherOptions.map((option) {
+                    return DropdownMenuItem<String>(
+                      value: option.value,
+                      child: Row(
+                        children: [
+                          Icon(
+                            option.icon,
+                            size: 16,
+                            color: const Color(0xFFFF8E7C),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              option.label,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: onChanged,
                 ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFFFE2DB)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFFFE2DB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(
-                    color: Color(0xFFFF8E7C),
-                    width: 1.4,
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 84,
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: (onApply != null && !isApplying && isDirty)
+                      ? onApply
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8E7C),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFFF3F4F6),
+                    disabledForegroundColor: const Color(0xFF9CA3AF),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: isApplying
+                      ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                      : const Text(
+                    '수정',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
-              items: _weatherOptions.map((option) {
-                return DropdownMenuItem<String>(
-                  value: option.value,
-                  child: Row(
-                    children: [
-                      Icon(
-                        option.icon,
-                        size: 16,
-                        color: const Color(0xFFFF8E7C),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          option.label,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: onChanged,
-            ),
+            ],
           ),
         ],
       ),
@@ -748,19 +817,37 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
           else
             ..._hourlyItems.map((item) {
               final forecastTime = item['forecastTime']?.toString() ?? '';
-              final weatherType = item['weatherType']?.toString() ?? 'SUNNY';
+              final originalWeatherType =
+                  item['weatherType']?.toString() ?? 'SUNNY';
+              final currentValue =
+                  _editedHourlyWeather[forecastTime] ?? originalWeatherType;
+              final isDirty = currentValue != originalWeatherType;
 
               return _buildEditableItemRow(
                 leading: _formatTimeSlotDisplay(forecastTime),
-                value: weatherType,
+                value: currentValue,
+                isApplying: _isUpdatingHourly,
+                isDirty: isDirty,
                 onChanged: _isUpdatingHourly
                     ? null
                     : (v) {
-                  if (v == null || v == weatherType) return;
-                  _updateHourlyWeather(
+                  if (v == null) return;
+                  setState(() {
+                    _editedHourlyWeather[forecastTime] = v;
+                  });
+                },
+                onApply: () async {
+                  if (!isDirty) return;
+
+                  await _updateHourlyWeather(
                     forecastTime: forecastTime,
-                    weatherType: v,
+                    weatherType: currentValue,
                   );
+
+                  if (!mounted) return;
+                  setState(() {
+                    _editedHourlyWeather.remove(forecastTime);
+                  });
                 },
               );
             }),
@@ -828,20 +915,38 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
           else
             ..._dailyItems.map((item) {
               final forecastDate = item['forecastDate']?.toString() ?? '';
-              final weatherType = item['weatherType']?.toString() ?? 'SUNNY';
+              final originalWeatherType =
+                  item['weatherType']?.toString() ?? 'SUNNY';
               final dayOfWeek = _dayOfWeekKoFromDate(forecastDate);
+              final currentValue =
+                  _editedDailyWeather[forecastDate] ?? originalWeatherType;
+              final isDirty = currentValue != originalWeatherType;
 
               return _buildEditableItemRow(
                 leading: '$dayOfWeek · ${_formatDateOnlyDisplay(forecastDate)}',
-                value: weatherType,
+                value: currentValue,
+                isApplying: _isUpdatingDaily,
+                isDirty: isDirty,
                 onChanged: _isUpdatingDaily
                     ? null
                     : (v) {
-                  if (v == null || v == weatherType) return;
-                  _updateDailyWeather(
+                  if (v == null) return;
+                  setState(() {
+                    _editedDailyWeather[forecastDate] = v;
+                  });
+                },
+                onApply: () async {
+                  if (!isDirty) return;
+
+                  await _updateDailyWeather(
                     forecastDate: forecastDate,
-                    weatherType: v,
+                    weatherType: currentValue,
                   );
+
+                  if (!mounted) return;
+                  setState(() {
+                    _editedDailyWeather.remove(forecastDate);
+                  });
                 },
               );
             }),
@@ -850,7 +955,8 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
             title: '다음 추가 가능',
             targetText: _nextDailyDate == null
                 ? '불러오는 중...'
-                : '${_dayOfWeekKoFromDate(_nextDailyDate!)} · ${_formatDateOnlyDisplay(_nextDailyDate!)}',
+                : '${_dayOfWeekKoFromDate(
+                _nextDailyDate!)} · ${_formatDateOnlyDisplay(_nextDailyDate!)}',
             selectedValue: _selectedDailyWeather,
             onChanged: (v) {
               if (v == null) return;
@@ -869,96 +975,107 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFFBF8),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios_new),
-                    ),
-                  ),
-                  const Text(
-                    '날씨 관리',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      onPressed: _isRefreshing ? null : () => _refreshAll(),
-                      icon: _isRefreshing
-                          ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                          : const Icon(Icons.refresh_rounded),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                  ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Text(
-                    _error!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.45,
-                    ),
-                  ),
-                ),
-              )
-                  : RefreshIndicator(
-                onRefresh: _refreshAll,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context, _hasWeatherChanged);
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFFFBF8),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF5F1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: const Color(0xFFFFE3DC),
-                        ),
-                      ),
-                      child: const Text(
-                        '현재 보여주는 예보는 바로 수정할 수 있고, 맨 뒤에 들어갈 다음 1칸도 추가할 수 있어요.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.45,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF7B8794),
-                        ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        onPressed: () =>
+                            Navigator.pop(context, _hasWeatherChanged),
+                        icon: const Icon(Icons.arrow_back_ios_new),
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    _buildHourlySection(),
-                    const SizedBox(height: 18),
-                    _buildDailySection(),
+                    const Text(
+                      '날씨 관리',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        onPressed: _isRefreshing ? null : () => _refreshAll(),
+                        icon: _isRefreshing
+                            ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                            : const Icon(Icons.refresh_rounded),
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-          ],
+              Expanded(
+                child: _isLoading
+                    ? const Center(
+                  child: CircularProgressIndicator(),
+                )
+                    : _error != null
+                    ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                )
+                    : RefreshIndicator(
+                  onRefresh: _refreshAll,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF5F1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: const Color(0xFFFFE3DC),
+                          ),
+                        ),
+                        child: const Text(
+                          '현재 보여주는 예보는 바로 수정할 수 있고, 맨 뒤에 들어갈 다음 1칸도 추가할 수 있어요.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.45,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF7B8794),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _buildHourlySection(),
+                      const SizedBox(height: 18),
+                      _buildDailySection(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

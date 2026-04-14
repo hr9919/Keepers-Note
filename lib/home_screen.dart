@@ -2456,9 +2456,83 @@ class _HomeScreenState extends State<HomeScreen>
 
               switch (weather) {
                 case '맑음':
-                  final cloud1X = loop(w + 20, -(w + 120), 0.00);
-                  final cloud2X = loop(w + 90, -(w + 160), 0.38);
-                  final cloud3X = loop(w + 180, -(w + 110), 0.67);
+                  double cloudLoop({
+                    required double cloudWidth,
+                    required double phase,
+                    required double speedMultiplier,
+                    double startPadding = 24,
+                    double endPadding = 24,
+                  }) {
+                    final startX = w + startPadding;
+                    final endX = -cloudWidth - endPadding;
+                    final progress = (t * speedMultiplier + phase) % 1.0;
+                    return startX + progress * (endX - startX);
+                  }
+
+                  Widget buildCloudPair({
+                    required double top,
+                    double? bottom,
+                    required double width,
+                    required double height,
+                    required double opacity,
+                    required double phase,
+                    required double speedMultiplier,
+                  }) {
+                    final x1 = cloudLoop(
+                      cloudWidth: width,
+                      phase: phase,
+                      speedMultiplier: speedMultiplier,
+                    );
+                    final x2 = cloudLoop(
+                      cloudWidth: width,
+                      phase: (phase + 0.5) % 1.0,
+                      speedMultiplier: speedMultiplier,
+                    );
+
+                    return Stack(
+                      children: [
+                        if (bottom == null) ...[
+                          Positioned(
+                            top: top,
+                            left: x1,
+                            child: _weatherBlob(
+                              width: width,
+                              height: height,
+                              color: Colors.white.withOpacity(opacity),
+                            ),
+                          ),
+                          Positioned(
+                            top: top,
+                            left: x2,
+                            child: _weatherBlob(
+                              width: width,
+                              height: height,
+                              color: Colors.white.withOpacity(opacity),
+                            ),
+                          ),
+                        ] else ...[
+                          Positioned(
+                            bottom: bottom,
+                            left: x1,
+                            child: _weatherBlob(
+                              width: width,
+                              height: height,
+                              color: Colors.white.withOpacity(opacity),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: bottom,
+                            left: x2,
+                            child: _weatherBlob(
+                              width: width,
+                              height: height,
+                              color: Colors.white.withOpacity(opacity),
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  }
 
                   return Stack(
                     children: [
@@ -2477,40 +2551,124 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ),
                       ),
-                      Positioned(
-                        top: 18,
-                        left: cloud1X,
-                        child: _weatherBlob(
-                          width: 72,
-                          height: 24,
-                          color: Colors.white.withOpacity(0.28),
-                        ),
+
+                      buildCloudPair(
+                        top: 16,
+                        width: 72,
+                        height: 24,
+                        opacity: 0.28,
+                        phase: 0.00,
+                        speedMultiplier: 1.10,
                       ),
-                      Positioned(
-                        top: 44,
-                        left: cloud2X,
-                        child: _weatherBlob(
-                          width: 58,
-                          height: 20,
-                          color: Colors.white.withOpacity(0.18),
-                        ),
+
+                      buildCloudPair(
+                        top: 46,
+                        width: 52,
+                        height: 18,
+                        opacity: 0.16,
+                        phase: 0.20,
+                        speedMultiplier: 0.88,
                       ),
-                      Positioned(
-                        bottom: 28,
-                        left: cloud3X,
-                        child: _weatherBlob(
-                          width: 64,
-                          height: 22,
-                          color: Colors.white.withOpacity(0.20),
-                        ),
+
+                      buildCloudPair(
+                        top: 84,
+                        width: 82,
+                        height: 26,
+                        opacity: 0.20,
+                        phase: 0.42,
+                        speedMultiplier: 0.72,
+                      ),
+
+                      buildCloudPair(
+                        bottom: 22,
+                        top: 0,
+                        width: 66,
+                        height: 22,
+                        opacity: 0.18,
+                        phase: 0.66,
+                        speedMultiplier: 0.54,
                       ),
                     ],
                   );
 
                 case '흐림':
-                  final cloud1X = loop(w + 10, -(w + 150), 0.05);
-                  final cloud2X = loop(w + 120, -(w + 180), 0.42);
-                  final cloud3X = loop(w + 220, -(w + 170), 0.78);
+                  double cloudLoop({
+                    required double cloudWidth,
+                    required double phase,
+                    required double speedMultiplier,
+                    double startPadding = 24,
+                    double endPadding = 24,
+                  }) {
+                    final startX = w + startPadding;
+                    final endX = -cloudWidth - endPadding;
+                    final progress = (t * speedMultiplier + phase) % 1.0;
+                    return startX + progress * (endX - startX);
+                  }
+
+                  Widget buildCloudPair({
+                    required double top,
+                    double? bottom,
+                    required double width,
+                    required double height,
+                    required double opacity,
+                    required double phase,
+                    required double speedMultiplier,
+                  }) {
+                    final x1 = cloudLoop(
+                      cloudWidth: width,
+                      phase: phase,
+                      speedMultiplier: speedMultiplier,
+                    );
+                    final x2 = cloudLoop(
+                      cloudWidth: width,
+                      phase: (phase + 0.5) % 1.0,
+                      speedMultiplier: speedMultiplier,
+                    );
+
+                    return Stack(
+                      children: [
+                        if (bottom == null) ...[
+                          Positioned(
+                            top: top,
+                            left: x1,
+                            child: _weatherBlob(
+                              width: width,
+                              height: height,
+                              color: Colors.white.withOpacity(opacity),
+                            ),
+                          ),
+                          Positioned(
+                            top: top,
+                            left: x2,
+                            child: _weatherBlob(
+                              width: width,
+                              height: height,
+                              color: Colors.white.withOpacity(opacity),
+                            ),
+                          ),
+                        ] else ...[
+                          Positioned(
+                            bottom: bottom,
+                            left: x1,
+                            child: _weatherBlob(
+                              width: width,
+                              height: height,
+                              color: Colors.white.withOpacity(opacity),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: bottom,
+                            left: x2,
+                            child: _weatherBlob(
+                              width: width,
+                              height: height,
+                              color: Colors.white.withOpacity(opacity),
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  }
 
                   return Stack(
                     children: [
@@ -2529,32 +2687,42 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ),
                       ),
-                      Positioned(
-                        top: 18,
-                        left: cloud1X,
-                        child: _weatherBlob(
-                          width: 86,
-                          height: 28,
-                          color: Colors.white.withOpacity(0.14),
-                        ),
+
+                      buildCloudPair(
+                        top: 16,
+                        width: 86,
+                        height: 28,
+                        opacity: 0.14,
+                        phase: 0.02,
+                        speedMultiplier: 1.00,
                       ),
-                      Positioned(
-                        top: 54,
-                        left: cloud2X,
-                        child: _weatherBlob(
-                          width: 68,
-                          height: 24,
-                          color: Colors.white.withOpacity(0.10),
-                        ),
+
+                      buildCloudPair(
+                        top: 50,
+                        width: 60,
+                        height: 20,
+                        opacity: 0.08,
+                        phase: 0.22,
+                        speedMultiplier: 0.78,
                       ),
-                      Positioned(
-                        bottom: 24,
-                        left: cloud3X,
-                        child: _weatherBlob(
-                          width: 96,
-                          height: 30,
-                          color: Colors.white.withOpacity(0.09),
-                        ),
+
+                      buildCloudPair(
+                        top: 88,
+                        width: 94,
+                        height: 28,
+                        opacity: 0.11,
+                        phase: 0.44,
+                        speedMultiplier: 0.62,
+                      ),
+
+                      buildCloudPair(
+                        bottom: 16,
+                        top: 0,
+                        width: 108,
+                        height: 32,
+                        opacity: 0.10,
+                        phase: 0.70,
+                        speedMultiplier: 0.46,
                       ),
                     ],
                   );
@@ -2672,7 +2840,7 @@ class _HomeScreenState extends State<HomeScreen>
                   );
 
                 case '무지개':
-                  final shimmer = 0.05 + glow * 0.08;
+                  final shimmer = 0.08 + glow * 0.1;
 
                   return Stack(
                     children: [
