@@ -72,6 +72,31 @@ class _PetScreenState extends State<PetScreen>
 
   final String _petApiUrl = 'http://161.33.30.40:8080/api/pets';
   final String _fishApiUrl = 'http://161.33.30.40:8080/api/fish';
+  final String _baseUrl = 'http://161.33.30.40:8080';
+
+  String _resolvePetImageUrl(String? path) {
+    if (path == null || path.trim().isEmpty) return '';
+
+    final value = path.trim();
+
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+
+    if (value.startsWith('/')) {
+      return '$_baseUrl$value';
+    }
+
+    return value;
+  }
+
+  bool _isRemotePetImage(String? path) {
+    if (path == null || path.trim().isEmpty) return false;
+    final value = path.trim();
+    return value.startsWith('http://') ||
+        value.startsWith('https://') ||
+        value.startsWith('/uploads/');
+  }
 
   @override
   void initState() {
@@ -217,7 +242,8 @@ class _PetScreenState extends State<PetScreen>
     }
   }
 
-  Future<void> _savePetToServer(String name,
+  Future<void> _savePetToServer(
+      String name,
       String breed,
       String? imagePath, {
         int? existingId,
@@ -225,12 +251,20 @@ class _PetScreenState extends State<PetScreen>
     if (_kakaoId == null) return;
 
     try {
+      final bool isLocalFile =
+          imagePath != null &&
+              imagePath.isNotEmpty &&
+              !_isRemotePetImage(imagePath) &&
+              File(imagePath).existsSync();
+
       final Map<String, dynamic> petData = {
         'kakaoId': int.parse(_kakaoId!),
         'name': name,
         'breed': breed,
         'isCat': _tabController.index == 0,
-        'imagePath': imagePath,
+
+        // 로컬 파일 경로는 서버에 그대로 보내지 않음
+        'imagePath': isLocalFile ? null : imagePath,
       };
 
       http.Response response;
@@ -254,10 +288,56 @@ class _PetScreenState extends State<PetScreen>
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> savedPet =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+        final int? savedPetId = (savedPet['id'] as num?)?.toInt();
+
+        if (savedPetId != null && isLocalFile) {
+          await _uploadPetImageToServer(
+            petId: savedPetId,
+            localImagePath: imagePath!,
+          );
+        }
+
         await _fetchPetData();
+      } else {
+        debugPrint('저장/수정 실패: ${response.statusCode} ${response.body}');
       }
     } catch (e) {
       debugPrint('저장/수정 실패: $e');
+    }
+  }
+
+  Future<String?> _uploadPetImageToServer({
+    required int petId,
+    required String localImagePath,
+  }) async {
+    try {
+      final file = File(localImagePath);
+      if (!file.existsSync()) return null;
+
+      final uri = Uri.parse('$_petApiUrl/$petId/image');
+      final request = http.MultipartRequest('POST', uri);
+
+      request.files.add(
+        await http.MultipartFile.fromPath('file', file.path),
+      );
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return data['imagePath']?.toString();
+      }
+
+      debugPrint('펫 이미지 업로드 실패: ${response.statusCode} ${response.body}');
+      return null;
+    } catch (e) {
+      debugPrint('펫 이미지 업로드 에러: $e');
+      return null;
     }
   }
 
@@ -295,6 +375,43 @@ class _PetScreenState extends State<PetScreen>
     } catch (e) {
       debugPrint('삭제 실패: $e');
     }
+  }
+
+  Widget _buildPetImage(
+      String? imagePath, {
+        BoxFit fit = BoxFit.cover,
+      }) {
+    final bool hasLocalFile =
+        imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync();
+    final bool isRemote = _isRemotePetImage(imagePath);
+    final String remoteUrl = _resolvePetImageUrl(imagePath);
+
+    if (hasLocalFile) {
+      return Image.file(
+        File(imagePath!),
+        fit: fit,
+        errorBuilder: (_, __, ___) => const Icon(
+          Icons.pets_rounded,
+          color: Color(0xFFFF8E7C),
+        ),
+      );
+    }
+
+    if (isRemote) {
+      return Image.network(
+        remoteUrl,
+        fit: fit,
+        errorBuilder: (_, __, ___) => Image.asset(
+          'assets/images/pets.webp',
+          fit: fit,
+        ),
+      );
+    }
+
+    return Image.asset(
+      'assets/images/pets.webp',
+      fit: fit,
+    );
   }
 
   void _scrollToTop() {
@@ -1206,8 +1323,9 @@ class _PetScreenState extends State<PetScreen>
   void _showPetImagePreview(Pet pet) {
     final String? imagePath = pet.imagePath;
     final bool hasLocalFile =
-        imagePath != null && imagePath.isNotEmpty &&
-            File(imagePath).existsSync();
+        imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync();
+    final bool isRemote = _isRemotePetImage(imagePath);
+    final String remoteUrl = _resolvePetImageUrl(imagePath);
 
     showDialog(
       context: context,
@@ -1215,8 +1333,7 @@ class _PetScreenState extends State<PetScreen>
       builder: (context) {
         return Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(
-              horizontal: 20, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: Stack(
             children: [
               Center(
@@ -1244,6 +1361,17 @@ class _PetScreenState extends State<PetScreen>
                               ? Image.file(
                             File(imagePath!),
                             fit: BoxFit.contain,
+                          )
+                              : isRemote
+                              ? Image.network(
+                            remoteUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Image.asset(
+                                'assets/images/pets.webp',
+                                fit: BoxFit.contain,
+                              );
+                            },
                           )
                               : Image.asset(
                             'assets/images/pets.webp',
@@ -2474,15 +2602,9 @@ class _PetScreenState extends State<PetScreen>
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      _imageAssetPath(pet.imagePath),
+                    child: _buildPetImage(
+                      pet.imagePath,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                      const Icon(
-                        Icons.pets_rounded,
-                        color: Color(0xFFFF8E7C),
-                        size: 24,
-                      ),
                     ),
                   ),
                 ),
@@ -2848,12 +2970,10 @@ class _PetScreenState extends State<PetScreen>
             offset: const Offset(0, 3),
           ),
         ],
-        image: DecorationImage(
-          image: (pet.imagePath != null &&
-              File(pet.imagePath!).existsSync())
-              ? FileImage(File(pet.imagePath!))
-              : const AssetImage('assets/images/pets.webp')
-          as ImageProvider,
+      ),
+      child: ClipOval(
+        child: _buildPetImage(
+          pet.imagePath,
           fit: BoxFit.cover,
         ),
       ),
@@ -3649,41 +3769,10 @@ class _PetScreenState extends State<PetScreen>
                       Center(
                         child: GestureDetector(
                           onTap: () async {
-                            final XFile? image = await _picker.pickImage(
-                              source: ImageSource.gallery,
-                              maxWidth: 2048,
-                            );
-                            if (image == null) return;
-
-                            final ImageAdjustResult? adjusted =
-                            await Navigator.push<ImageAdjustResult>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    ImageAdjustScreen(
-                                      imagePath: image.path,
-                                      title: _tabController.index == 0
-                                          ? '고양이 사진 조정'
-                                          : '강아지 사진 조정',
-                                      shape: ImageAdjustShape.circle,
-                                      viewportAspectRatio: 1.0,
-                                    ),
-                              ),
-                            );
-
-                            if (adjusted == null) return;
-
-                            final tempDir = await getTemporaryDirectory();
-                            final filePath =
-                                '${tempDir.path}/pet_${DateTime
-                                .now()
-                                .millisecondsSinceEpoch}.${adjusted.extension}';
-                            final file = File(filePath);
-                            await file.writeAsBytes(adjusted.bytes);
-
-                            setSheetState(() {
-                              tempImagePath = file.path;
-                            });
+                            final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                            if (image != null) {
+                              setSheetState(() => tempImagePath = image.path);
+                            }
                           },
                           child: Stack(
                             children: [
@@ -3692,26 +3781,17 @@ class _PetScreenState extends State<PetScreen>
                                 height: 100,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 3,
-                                  ),
+                                  border: Border.all(color: Colors.white, width: 3),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withOpacity(0.1),
                                       blurRadius: 10,
                                     ),
                                   ],
-                                  image: DecorationImage(
-                                    image: tempImagePath != null &&
-                                        File(tempImagePath!)
-                                            .existsSync()
-                                        ? FileImage(
-                                      File(tempImagePath!),
-                                    )
-                                        : const AssetImage(
-                                        'assets/images/pets.webp')
-                                    as ImageProvider,
+                                ),
+                                child: ClipOval(
+                                  child: _buildPetImage(
+                                    tempImagePath,
                                     fit: BoxFit.cover,
                                   ),
                                 ),
