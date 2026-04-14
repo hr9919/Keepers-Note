@@ -316,6 +316,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   Widget _buildAchievementImage({
     required String title,
     required String? imagePath,
+    bool isHidden = false,
     double padding = 6,
     double iconSize = 24,
     BoxFit fit = BoxFit.contain,
@@ -328,11 +329,27 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
         child: Image.asset(
           resolvedPath,
           fit: fit,
-          errorBuilder: (_, __, ___) => Icon(
+          errorBuilder: (_, __, ___) => isHidden
+              ? Center(
+            child: Text(
+              '🌟',
+              style: TextStyle(fontSize: iconSize),
+            ),
+          )
+              : Icon(
             Icons.emoji_events_outlined,
             size: iconSize,
             color: const Color(0xFFFF8E7C),
           ),
+        ),
+      );
+    }
+
+    if (isHidden) {
+      return Center(
+        child: Text(
+          '🌟',
+          style: TextStyle(fontSize: iconSize),
         ),
       );
     }
@@ -774,6 +791,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
         return _buildAchievementImage(
           title: title,
           imagePath: imagePath,
+          isHidden: item.isHidden,
           padding: padding,
           iconSize: iconSize,
           fit: fit,
@@ -2115,12 +2133,11 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
                               : const Color(0xFFFFE0D9),
                         ),
                       ),
-                      child: widget.imageBuilder(
+                      child: _buildAchievementImageArea(
                         title: item.title,
                         imagePath: item.image,
-                        padding: 8,
-                        iconSize: 28,
-                        fit: BoxFit.contain,
+                        isHidden: isHidden,
+                        accent: accent,
                       ),
                     ),
                   ),
@@ -2228,6 +2245,42 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAchievementImageArea({
+    required String title,
+    required String? imagePath,
+    required bool isHidden,
+    required Color accent,
+  }) {
+    final hasImage = imagePath != null && imagePath.trim().isNotEmpty;
+
+    if (hasImage) {
+      return widget.imageBuilder(
+        title: title,
+        imagePath: imagePath,
+        padding: 8,
+        iconSize: 28,
+        fit: BoxFit.contain,
+      );
+    }
+
+    if (isHidden) {
+      return Center(
+        child: Text(
+          '🌟',
+          style: TextStyle(fontSize: 28),
+        ),
+      );
+    }
+
+    return widget.imageBuilder(
+      title: title,
+      imagePath: imagePath,
+      padding: 8,
+      iconSize: 28,
+      fit: BoxFit.contain,
     );
   }
 }

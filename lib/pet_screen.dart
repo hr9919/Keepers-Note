@@ -1720,7 +1720,7 @@ class _PetScreenState extends State<PetScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSampleHeroCard(
-          title: '지금은 펫 관리만 이용 가능해요!!',
+          title: '지금은 펫 관리만 이용 가능해요!',
           subtitle: '지금 보이는 항목은 정식 테스트를 위한 샘플 데이터예요.',
           icon: Icons.pets_rounded,
         ),

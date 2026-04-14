@@ -431,9 +431,19 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   List<String> _getCurrentFilterList() {
     final index = _tabController.index;
-    if (index == 0) return ['전체', '강 물고기', '호수 물고기', '바다 물고기'];
-    if (index == 1) return ['전체', '숲', '호수', '바다', '도시근교'];
-    if (index == 2) return ['전체', '숲', '들판', '호수', '바다'];
+
+    if (index == 0) {
+      return ['전체', '강 물고기', '호수 물고기', '바다 물고기'];
+    }
+
+    if (index == 1) {
+      return ['전체', '숲', '호수', '강', '바다/해변', '어촌', '도시', '꽃밭', '주거지', '온천산', '특수'];
+    }
+
+    if (index == 2) {
+      return ['전체', '숲', '집 앞', '호수', '바다', '도시', '어촌'];
+    }
+
     return ['전체'];
   }
 
@@ -523,6 +533,240 @@ class _GatheringScreenState extends State<GatheringScreen>
     return fullPath;
   }
 
+  List<String> _normalizeWeatherLabel(String raw) {
+    final value = raw.trim().replaceAll(' ', '').toLowerCase();
+
+    if (value.isEmpty) return [];
+    if (value == 'any' || value == 'all' || value == 'unknown') return [];
+    if (value == '전체' || value == '모든날씨') return [];
+
+    final List<String> result = [];
+
+    if (value.contains('sunny') || value.contains('맑')) {
+      result.add('맑음');
+    }
+    if (value.contains('rainy') || value.contains('비')) {
+      result.add('비');
+    }
+    if (value.contains('snowy') || value.contains('눈')) {
+      result.add('눈');
+    }
+    if (value.contains('rainbow') || value.contains('무지개')) {
+      result.add('무지개');
+    }
+    if (value.contains('cloud') || value.contains('흐')) {
+      result.add('흐림');
+    }
+
+    return result.toSet().toList();
+  }
+
+  String _normalizeInsectTimeLabel(String raw) {
+    final value = raw.trim().replaceAll(' ', '');
+
+    if (value.isEmpty) return '';
+    if (value == '0~24' || value == '0-24') return '';
+
+    if (value == '6-18' || value == '6~18') return '낮 6시~18시';
+    if (value == '0-18' || value == '0~18') return '0시~18시';
+    if (value == '0-6,18-24' || value == '0~6,18~24') return '밤 0시~6시, 18시~24시';
+    if (value == '0-6,6-18' || value == '0~6,6~18') return '0시~18시';
+    if (value == '6-18,18-24' || value == '6~18,18~24') return '6시~24시';
+    if (value == '0-6,6-18,18-24' || value == '0~6,6~18,18~24') return '';
+
+    return raw
+        .replaceAll('~', '시~')
+        .replaceAll('-', '시~')
+        .replaceAll(',', ' / ')
+        .replaceAllMapped(RegExp(r'(\d{1,2})(?=시~| /|$)'), (m) => '${m[1]}');
+  }
+
+  String _normalizeLocationLabel(String raw) {
+    final value = raw.trim();
+    final compact = value.replaceAll(' ', '').toLowerCase();
+
+    if (compact.isEmpty) return '';
+
+    if (compact.contains('이상한대나무숲') || compact.contains('대나무숲')) {
+      return '대나무 숲';
+    }
+    if (compact.contains('영혼의참나무숲') || compact.contains('참나무숲')) {
+      return '참나무 숲';
+    }
+    if (compact.contains('숲')) return '숲';
+
+    if (compact.contains('집앞')) return '집 앞';
+
+    if (compact.contains('도시근교') || compact.contains('도심') || compact.contains('도시')) {
+      return compact.contains('도심') ? '도심' : '도시';
+    }
+
+    if (compact.contains('어촌')) return '어촌';
+    if (compact.contains('해변')) return '해변';
+    if (compact.contains('바다') || compact.contains('해안') || compact.contains('sea') || compact.contains('ocean')) {
+      return '바다';
+    }
+
+    if (compact.contains('호수') || compact.contains('연못') || compact.contains('lake')) {
+      return '호수';
+    }
+
+    if (compact.contains('강') || compact.contains('하천') || compact.contains('river')) {
+      return '강';
+    }
+
+    if (compact.contains('들판') || compact.contains('초원') || compact.contains('평원') || compact.contains('field')) {
+      return '들판';
+    }
+
+    return value;
+  }
+
+  String _normalizeInsectLocationLabel(String raw) {
+    final value = raw.trim();
+    final compact = value.replaceAll(' ', '').toLowerCase();
+
+    if (compact.isEmpty) return '';
+
+    if (compact.contains('이상한대나무숲') || compact.contains('대나무숲')) {
+      return '대나무 숲';
+    }
+
+    if (compact.contains('영혼의참나무숲') || compact.contains('참나무숲')) {
+      return '참나무 숲';
+    }
+
+    if (compact.contains('숲속호수')) return '호숫가';
+    if (compact.contains('숲속섬')) return '숲';
+    if (compact.contains('숲점프스테이지') || compact.contains('점핑플랫폼') || compact.contains('점프')) {
+      return '숲';
+    }
+    if (compact.contains('숲')) return '숲';
+
+    if (compact.contains('집근처')) return '집 앞';
+
+    if (compact.contains('어촌')) {
+      if (compact.contains('등대')) return '어촌 등대';
+      if (compact.contains('부두')) return '어촌 부두';
+      if (compact.contains('광장')) return '어촌 광장';
+      return '어촌';
+    }
+
+    if (compact.contains('도시근교') && compact.contains('호수')) return '호수';
+    if (compact.contains('도시근교')) return '도시 근교';
+    if (compact == '도시') return '도시';
+
+    if (compact.contains('꽃밭') && compact.contains('보라')) return '보라 해변';
+    if (compact.contains('꽃밭') && compact.contains('고래산')) return '꽃밭';
+    if (compact.contains('풍차꽃밭')) return '꽃밭';
+    if (compact.contains('꽃밭')) return '꽃밭';
+
+    if (compact.contains('고래산')) return '들판';
+    if (compact.contains('강가')) return '강';
+    if (compact.contains('물가')) return '호숫가';
+    if (compact.contains('화산호')) return '호수';
+    if (compact.contains('호수')) return '호수';
+
+    if (compact.contains('해변')) {
+      if (compact.contains('보라')) return '보라 해변';
+      return '해변';
+    }
+
+    if (compact.contains('온천산') || compact.contains('온천산') || compact.contains('온천')) {
+      return '온천산';
+    }
+
+    if (compact.contains('곤충유인') || compact.contains('유인장치') || compact.contains('에어벌유인장치')) {
+      return '유인';
+    }
+
+    return value;
+  }
+
+  bool _matchesNormalizedLocation(String rawLocation, String filter) {
+    final normalized = _normalizeLocationLabel(rawLocation);
+
+    switch (filter) {
+      case '숲':
+        return normalized == '숲' ||
+            normalized == '대나무 숲' ||
+            normalized == '참나무 숲';
+      case '집 앞':
+        return normalized == '집 앞';
+      case '호수':
+        return normalized == '호수';
+      case '바다':
+        return normalized == '바다' || normalized == '해변';
+      case '도시':
+        return normalized == '도시' || normalized == '도심';
+      case '어촌':
+        return normalized == '어촌';
+      default:
+        return true;
+    }
+  }
+
+  int? _extractRepresentativeHour(String raw) {
+    final text = raw.trim().replaceAll(' ', '');
+    if (text.isEmpty) return null;
+
+    if (text == '하루종일' || text == '0시~24시') return 12;
+
+    final matches = RegExp(r'(\d{1,2})시').allMatches(text).toList();
+    if (matches.isEmpty) return null;
+
+    final hours = matches
+        .map((m) => int.tryParse(m.group(1) ?? ''))
+        .whereType<int>()
+        .toList();
+
+    if (hours.isEmpty) return null;
+
+    return hours.first;
+  }
+
+  Map<String, Color> _timeChipColors(String raw) {
+    final hour = _extractRepresentativeHour(raw);
+
+    if (hour == null) {
+      return {
+        'bg': const Color(0xFFF4F6F8),
+        'border': const Color(0xFFE5E7EB),
+        'text': const Color(0xFF6B7280),
+      };
+    }
+
+    if (hour >= 5 && hour < 8) {
+      return {
+        'bg': const Color(0xFFFFF3E8),
+        'border': const Color(0xFFFFDDB8),
+        'text': const Color(0xFFD97706),
+      };
+    }
+
+    if (hour >= 8 && hour < 17) {
+      return {
+        'bg': const Color(0xFFFFF7D6),
+        'border': const Color(0xFFFFE6A3),
+        'text': const Color(0xFFB7791F),
+      };
+    }
+
+    if (hour >= 17 && hour < 20) {
+      return {
+        'bg': const Color(0xFFFFEAE5),
+        'border': const Color(0xFFFFCFC2),
+        'text': const Color(0xFFDD6B55),
+      };
+    }
+
+    return {
+      'bg': const Color(0xFFEAEFFF),
+      'border': const Color(0xFFC9D6FF),
+      'text': const Color(0xFF4C5DAA),
+    };
+  }
+
   String _formatAvailableTimeChip(String? time) {
     if (time == null || time.trim().isEmpty) return '';
 
@@ -530,13 +774,12 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     switch (compact) {
       case 'all':
-        return '하루종일';
+      case 'dawn_day_night':
+        return '';
       case 'day_night':
         return '6시~24시';
       case 'dawn_night':
         return '0시~6시, 18시~24시';
-      case 'dawn_day_night':
-        return '0시~24시';
     }
 
     final match = RegExp(r'^(\d{1,2})[~-](\d{1,2})$').firstMatch(compact);
@@ -1007,54 +1250,180 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   bool _matchesBirdFilter(BirdItem bird, String filter) {
-    final location = bird.location.toLowerCase();
+    final location = bird.location.toLowerCase().replaceAll(' ', '');
 
-    switch (filter) {
-      case '숲':
-        return _containsAny(location, ['숲', 'forest']);
-      case '호수':
-        return _containsAny(location, ['호수', 'lake', '연못']);
-      case '바다':
-        return _containsAny(location, ['바다', 'sea', 'ocean', '해변', '해안']);
-      case '도시근교':
-        return _containsAny(location, ['도시근교', '도시', '마을', '광장', '근교', 'town', 'city']);
-      default:
-        return true;
+    bool hasAny(List<String> keywords) {
+      return keywords.any((k) => location.contains(k.toLowerCase().replaceAll(' ', '')));
     }
-  }
-
-  bool _matchesInsectFilter(InsectItem insect, String filter) {
-    final location = insect.location.toLowerCase();
 
     switch (filter) {
       case '숲':
-        return _containsAny(location, ['숲', 'forest']);
-      case '들판':
-        return _containsAny(location, ['들판', '초원', '평원', 'field', 'grass']);
+        return hasAny([
+          '숲',
+          '대나무숲',
+          '참나무숲',
+          '숲속',
+        ]);
+
       case '호수':
-        return _containsAny(location, ['호수', 'lake', '연못']);
-      case '바다':
-        return _containsAny(location, ['바다', 'sea', 'ocean', '해변', '해안']);
+        return hasAny([
+          '호수',
+          '호숫가',
+          '연못',
+          '시외호',
+          '화산호',
+        ]);
+
+      case '강':
+        return hasAny([
+          '강',
+        ]);
+
+      case '바다/해변':
+        return hasAny([
+          '바다',
+          '해변',
+          '해안',
+          '동해',
+          '고래바다',
+          '잔잔한바다',
+          '완풍해',
+          '구해',
+        ]);
+
+      case '어촌':
+        return hasAny([
+          '어촌',
+          '등대',
+          '부두',
+        ]);
+
+      case '도시':
+        return hasAny([
+          '도심',
+          '도시근교',
+          '도시',
+          '교외',
+          '근교',
+        ]);
+
+      case '꽃밭':
+        return hasAny([
+          '꽃밭',
+        ]);
+
+      case '주거지':
+        return hasAny([
+          '홈',
+          '가정',
+        ]);
+
+      case '온천산':
+        return hasAny([
+          '온천산',
+          '온천',
+        ]);
+
+      case '특수':
+        return hasAny([
+          '사건',
+          '블랑코머리위',
+        ]);
+
       default:
         return true;
     }
   }
 
   bool _matchesPlantFilter(PlantItem plant, String filter) {
-    final location = plant.location.toLowerCase();
+    return true;
+  }
+
+  bool _matchesInsectFilter(InsectItem insect, String filter) {
+    final normalized = _normalizeInsectLocationLabel(insect.location);
 
     switch (filter) {
-      case '꽃밭':
-        return _containsAny(location, ['꽃밭', 'flower', 'garden']);
       case '숲':
-        return _containsAny(location, ['숲', 'forest']);
-      case '농장':
-        return _containsAny(location, ['농장', 'farm', '밭']);
-      case '온실':
-        return _containsAny(location, ['온실', 'greenhouse']);
+        return normalized == '숲' ||
+            normalized == '대나무 숲' ||
+            normalized == '참나무 숲';
+      case '집 앞':
+        return normalized == '집 앞';
+      case '호수':
+        return normalized == '호수' || normalized == '호숫가';
+      case '바다':
+        return normalized == '해변';
+      case '도시':
+        return normalized == '도시' || normalized == '도시 근교';
+      case '어촌':
+        return normalized == '어촌' ||
+            normalized == '어촌 등대' ||
+            normalized == '어촌 부두' ||
+            normalized == '어촌 광장';
       default:
         return true;
     }
+  }
+
+  String _normalizeBirdLocationLabel(String raw) {
+    final value = raw.trim();
+    final compact = value.replaceAll(' ', '').toLowerCase();
+
+    if (compact.isEmpty) return '';
+
+    if (compact.contains('이상한대나무숲') || compact.contains('대나무숲')) {
+      return '대나무 숲';
+    }
+
+    if (compact.contains('영혼의참나무숲') || compact.contains('참나무숲')) {
+      return '참나무 숲';
+    }
+
+    if (compact.contains('숲속호수') || compact.contains('호숫가')) {
+      return '호숫가';
+    }
+
+    if (compact.contains('숲속')) return '숲';
+    if (compact.contains('숲')) return '숲';
+
+    if (compact.contains('꽃밭')) return '꽃밭';
+
+    if (compact.contains('어촌')) {
+      if (compact.contains('등대')) return '어촌 등대';
+      if (compact.contains('부두')) return '어촌 부두';
+      if (compact.contains('광장')) return '어촌 광장';
+      return '어촌';
+    }
+
+    if (compact.contains('도심')) return '도심';
+    if (compact.contains('도시근교') || compact.contains('교외') || compact.contains('근교')) {
+      return '도시 근교';
+    }
+
+    if (compact.contains('홈') || compact.contains('가정')) return '주거지';
+
+    if (compact.contains('해변')) {
+      if (compact.contains('보라')) return '보라 해변';
+      if (compact.contains('고래')) return '고래 해변';
+      return '해변';
+    }
+
+    if (compact.contains('바다') || compact.contains('해안') || compact.contains('완풍해') || compact.contains('동해') || compact.contains('구해')) {
+      return '바다';
+    }
+
+    if (compact.contains('호수') || compact.contains('시외호') || compact.contains('화산호')) {
+      return '호수';
+    }
+
+    if (compact.contains('강')) return '강';
+
+    if (compact.contains('온천산')) return '온천산';
+
+    if (compact.contains('사건')) return '이벤트';
+    if (compact.contains('블랑코머리위')) return '특수';
+
+    return value;
   }
 
   String _displayBirdName(BirdItem bird) {
@@ -1867,11 +2236,10 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-  Widget _buildBirdCard(BirdItem bird) {
-    final bool isHighlighted = _highlightedId == bird.id;
-    final timeChip = _formatAvailableTimeChip(
-      bird.timeKey.isNotEmpty ? bird.timeKey : bird.availableTime,
-    );
+  Widget _buildInsectCard(InsectItem insect) {
+    final bool isHighlighted = _highlightedId == insect.id;
+    final timeChip = _normalizeInsectTimeLabel(insect.availableTime);
+    final locationChip = _normalizeInsectLocationLabel(insect.location);
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -1881,28 +2249,29 @@ class _GatheringScreenState extends State<GatheringScreen>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildCardImage(bird.image, Icons.flutter_dash_rounded),
+              _buildCardImage(insect.image, Icons.bug_report),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildCardTitle(_displayBirdName(bird), bird.id),
+                    _buildCardTitle(_displayInsectName(insect), insect.id),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 4,
                       runSpacing: 4,
                       children: [
-                        _buildSmallTag('관찰 ${bird.level}레벨'),
-                        if (timeChip.isNotEmpty) _buildSmallTag(timeChip),
-                        if (bird.location.isNotEmpty)
-                          _buildSmallTag(bird.location, isLocation: true),
+                        _buildSmallTag('채집 ${insect.level}레벨'),
+                        if (timeChip.isNotEmpty)
+                          _buildSmallTag(timeChip, isTime: true),
+                        if (locationChip.isNotEmpty)
+                          _buildSmallTag(locationChip, isLocation: true),
                       ],
                     ),
                     const Spacer(),
                     Align(
                       alignment: Alignment.centerRight,
-                      child: _buildPriceButton(bird.prices),
+                      child: _buildPriceButton(insect.prices),
                     ),
                   ],
                 ),
@@ -2160,6 +2529,8 @@ class _GatheringScreenState extends State<GatheringScreen>
     ];
 
     final timeChip = _formatAvailableTimeChip(fish.availableTime);
+    final weatherLabels = _normalizeWeatherLabel(fish.weather);
+    final locationChip = _normalizeLocationLabel(fish.location);
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -2184,11 +2555,12 @@ class _GatheringScreenState extends State<GatheringScreen>
                         if (fish.level != null)
                           _buildSmallTag('낚시 ${fish.level}레벨'),
                         if (timeChip.isNotEmpty)
-                          _buildSmallTag(timeChip),
-                        if (fish.location.isNotEmpty)
-                          _buildSmallTag(fish.location, isLocation: true),
-                        if (fish.weather != 'Unknown' && fish.weather.isNotEmpty)
-                          _buildSmallTag(fish.weather),
+                          _buildSmallTag(timeChip, isTime: true),
+                        if (locationChip.isNotEmpty)
+                          _buildSmallTag(locationChip, isLocation: true),
+                        ...weatherLabels.map(
+                              (label) => _buildSmallTag(label, isWeather: true),
+                        ),
                       ],
                     ),
                     const Spacer(),
@@ -2206,9 +2578,13 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-  Widget _buildInsectCard(InsectItem insect) {
-    final bool isHighlighted = _highlightedId == insect.id;
-    final timeChip = _formatAvailableTimeChip(insect.availableTime);
+  Widget _buildBirdCard(BirdItem bird) {
+    final bool isHighlighted = _highlightedId == bird.id;
+    final timeChip = _formatAvailableTimeChip(
+      bird.timeKey.isNotEmpty ? bird.timeKey : bird.availableTime,
+    );
+    final locationChip = _normalizeBirdLocationLabel(bird.location);
+    final weatherLabels = _normalizeWeatherLabel(bird.weather);
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -2218,29 +2594,32 @@ class _GatheringScreenState extends State<GatheringScreen>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildCardImage(insect.image, Icons.bug_report),
+              _buildCardImage(bird.image, Icons.flutter_dash_rounded),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildCardTitle(_displayInsectName(insect), insect.id),
+                    _buildCardTitle(_displayBirdName(bird), bird.id),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 4,
                       runSpacing: 4,
                       children: [
-                        _buildSmallTag('채집 ${insect.level}레벨'),
+                        _buildSmallTag('관찰 ${bird.level}레벨'),
                         if (timeChip.isNotEmpty)
-                          _buildSmallTag(timeChip),
-                        if (insect.location.isNotEmpty)
-                          _buildSmallTag(insect.location, isLocation: true),
+                          _buildSmallTag(timeChip, isTime: true),
+                        if (locationChip.isNotEmpty)
+                          _buildSmallTag(locationChip, isLocation: true),
+                        ...weatherLabels.map(
+                              (label) => _buildSmallTag(label, isWeather: true),
+                        ),
                       ],
                     ),
                     const Spacer(),
                     Align(
                       alignment: Alignment.centerRight,
-                      child: _buildPriceButton(insect.prices),
+                      child: _buildPriceButton(bird.prices),
                     ),
                   ],
                 ),
@@ -2251,6 +2630,7 @@ class _GatheringScreenState extends State<GatheringScreen>
       ),
     );
   }
+
 
   // 카드 공통 컨테이너
   Widget _buildBaseContainer({
@@ -2347,21 +2727,21 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   // 2. 칩 위젯 생성 함수 (장소 색상 추가 및 쏠림 해결)
-  Widget _buildSmallTag(String text,
-      {bool isLocation = false, bool isWeather = false}) {
-    final rawText = text.trim();
-    final lowerText = rawText.toLowerCase();
+  Widget _buildSmallTag(
+      String text, {
+        bool isLocation = false,
+        bool isWeather = false,
+        bool isTime = false,
+      }) {
+    final String rawText = text.trim();
+    if (rawText.isEmpty) return const SizedBox.shrink();
 
-    // 기본값 (예외 상황 대비)
     Color bg = const Color(0xFFF5F5F5);
     Color border = const Color(0xFFE0E0E0);
     Color textColor = const Color(0xFF757575);
 
-    int level = 0;
-
-    // A. 낚시 레벨 (1레벨: 회색 / 2~9레벨: 무지개 단색 / 10레벨~: 소프트 그라데이션)
     if (rawText.contains('레벨')) {
-      level = int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
+      final level = int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
 
       if (level == 1) {
         bg = const Color(0xFFEEEEEE);
@@ -2371,124 +2751,216 @@ class _GatheringScreenState extends State<GatheringScreen>
         bg = const Color(0xFFFFEBEE);
         border = const Color(0xFFFFCDD2);
         textColor = const Color(0xFFC62828);
-      }
-      else if (level == 3) {
+      } else if (level == 3) {
         bg = const Color(0xFFFFF3E0);
         border = const Color(0xFFFFE0B2);
         textColor = const Color(0xFFE65100);
-      }
-      else if (level == 4) {
+      } else if (level == 4) {
         bg = const Color(0xFFFFFDE7);
         border = const Color(0xFFFFF9C4);
         textColor = const Color(0xFFF57F17);
-      }
-      else if (level == 5) {
+      } else if (level == 5) {
         bg = const Color(0xFFE8F5E9);
         border = const Color(0xFFC8E6C9);
         textColor = const Color(0xFF2E7D32);
-      }
-      else if (level == 6) {
+      } else if (level == 6) {
         bg = const Color(0xFFE1F5FE);
         border = const Color(0xFFB3E5FC);
         textColor = const Color(0xFF0277BD);
-      }
-      else if (level == 7) {
+      } else if (level == 7) {
         bg = const Color(0xFFE8EAF6);
         border = const Color(0xFFC5CAE9);
-        textColor = const Color(0xFF1A237E);
-      }
-      else if (level == 8) {
+        textColor = const Color(0xFF3949AB);
+      } else if (level == 8) {
         bg = const Color(0xFFF3E5F5);
         border = const Color(0xFFE1BEE7);
-        textColor = const Color(0xFF7B1FA2);
-      }
-      else if (level == 9) {
+        textColor = const Color(0xFF8E24AA);
+      } else if (level == 9) {
         bg = const Color(0xFFFCE4EC);
         border = const Color(0xFFF8BBD0);
         textColor = const Color(0xFFC2185B);
-      }
-      else { // 10레벨 이상 마스터
-        textColor = const Color(0xFF424242);
-        border = const Color(0xFFBDBDBD).withOpacity(0.5);
-      }
-    }
-    // B. 시간대 (연분홍/주황 계열 - 따뜻한 느낌)
-    else if (rawText == '하루종일' || rawText.contains('~') ||
-        lowerText.contains('day') || lowerText.contains('time')) {
-      bg = const Color(0xFFFFEDE1);
-      border = const Color(0xFFFFCCBC);
-      textColor = const Color(0xFFD84315);
-    }
-    // C. 날씨 (맑음: 노랑 / 비: 파랑 / 흐림: 민트)
-    else if (isWeather) {
-      if (lowerText.contains('sun') || rawText.contains('맑음')) {
-        bg = const Color(0xFFFFF9C4);
-        border = const Color(0xFFFFF176);
-        textColor = const Color(0xFFF57F17);
-      } else if (lowerText.contains('rain') || rawText.contains('비')) {
-        bg = const Color(0xFFE1F5FE);
-        border = const Color(0xFF81D4FA);
-        textColor = const Color(0xFF01579B);
       } else {
-        bg = const Color(0xFFE0F2F1);
-        border = const Color(0xFF80CBC4);
-        textColor = const Color(0xFF00695C);
+        bg = const Color(0xFFF3F4F6);
+        border = const Color(0xFFD1D5DB);
+        textColor = const Color(0xFF4B5563);
       }
-    }
-    // D. 장소 (강: 청록 / 호수·산수: 남색 / 바다·구해: 진파랑)
-    else if (isLocation) {
-      if (rawText.contains('강') || lowerText.contains('river')) {
-        bg = const Color(0xFFE0F7FA);
-        border = const Color(0xFF80DEEA);
-        textColor = const Color(0xFF006064);
-      } else if (rawText.contains('호수') || rawText.contains('산수') ||
-          lowerText.contains('lake')) {
-        bg = const Color(0xFFE8EAF6);
-        border = const Color(0xFF9FA8DA);
-        textColor = const Color(0xFF1A237E);
-      } else if (rawText.contains('바다') || rawText.contains('구해') ||
-          lowerText.contains('sea')) {
-        bg = const Color(0xFFE3F2FD);
-        border = const Color(0xFF64B5F6);
-        textColor = const Color(0xFF0D47A1);
+    } else if (isWeather) {
+      switch (rawText) {
+        case '맑음':
+          bg = const Color(0xFFFFF7D6);
+          border = const Color(0xFFFFE6A3);
+          textColor = const Color(0xFFB7791F);
+          break;
+        case '흐림':
+          bg = const Color(0xFFF1F5F9);
+          border = const Color(0xFFDCE5EE);
+          textColor = const Color(0xFF64748B);
+          break;
+        case '비':
+          bg = const Color(0xFFEAF4FF);
+          border = const Color(0xFFCFE4FF);
+          textColor = const Color(0xFF4A7FD1);
+          break;
+        case '눈':
+          bg = const Color(0xFFEFF8FF);
+          border = const Color(0xFFD6EEFF);
+          textColor = const Color(0xFF3B82C4);
+          break;
+        case '무지개':
+          bg = const Color(0xFFF4ECFF);
+          border = const Color(0xFFE2D3FF);
+          textColor = const Color(0xFF8B5CF6);
+          break;
       }
+    } else if (isLocation) {
+      final label = rawText;
+
+      switch (label) {
+        case '대나무 숲':
+          bg = const Color(0xFFF1FBEA);
+          border = const Color(0xFFD9F0C8);
+          textColor = const Color(0xFF7CB342);
+          break;
+        case '참나무 숲':
+          bg = const Color(0xFFE6F6EA);
+          border = const Color(0xFFC7E7CF);
+          textColor = const Color(0xFF2F855A);
+          break;
+        case '숲':
+          bg = const Color(0xFFEAF7EE);
+          border = const Color(0xFFCFE8D7);
+          textColor = const Color(0xFF3D8B5C);
+          break;
+        case '호숫가':
+          bg = const Color(0xFFEEF9FF);
+          border = const Color(0xFFD7EEFF);
+          textColor = const Color(0xFF2B7FB8);
+          break;
+        case '호수':
+          bg = const Color(0xFFEAF7FF);
+          border = const Color(0xFFCFEAFF);
+          textColor = const Color(0xFF2F89C5);
+          break;
+        case '강':
+          bg = const Color(0xFFE8F7FF);
+          border = const Color(0xFFCAE9F7);
+          textColor = const Color(0xFF1F7A8C);
+          break;
+        case '바다':
+          bg = const Color(0xFFEAF1FF);
+          border = const Color(0xFFCDDBFF);
+          textColor = const Color(0xFF3366CC);
+          break;
+        case '해변':
+          bg = const Color(0xFFEAF2FF);
+          border = const Color(0xFFD5E2FF);
+          textColor = const Color(0xFF3B6FD8);
+          break;
+        case '보라 해변':
+          bg = const Color(0xFFF3ECFF);
+          border = const Color(0xFFE2D4FF);
+          textColor = const Color(0xFF8B5CF6);
+          break;
+        case '고래 해변':
+          bg = const Color(0xFFEAF6FF);
+          border = const Color(0xFFCEE8FF);
+          textColor = const Color(0xFF3B82C4);
+          break;
+        case '어촌':
+          bg = const Color(0xFFEAF8FF);
+          border = const Color(0xFFD3ECFF);
+          textColor = const Color(0xFF3C8DBB);
+          break;
+        case '어촌 등대':
+          bg = const Color(0xFFEFF8FF);
+          border = const Color(0xFFD8EEFF);
+          textColor = const Color(0xFF4A90B8);
+          break;
+        case '어촌 부두':
+          bg = const Color(0xFFE8F4FF);
+          border = const Color(0xFFCCE1FF);
+          textColor = const Color(0xFF357ABD);
+          break;
+        case '어촌 광장':
+          bg = const Color(0xFFF0F8FF);
+          border = const Color(0xFFDCEEFF);
+          textColor = const Color(0xFF5A8FB3);
+          break;
+        case '도심':
+          bg = const Color(0xFFF3ECFF);
+          border = const Color(0xFFE3D3FF);
+          textColor = const Color(0xFF8B5CF6);
+          break;
+        case '도시 근교':
+          bg = const Color(0xFFF1EEFF);
+          border = const Color(0xFFDDD6FF);
+          textColor = const Color(0xFF7C6AE6);
+          break;
+        case '도시':
+          bg = const Color(0xFFF4F0FF);
+          border = const Color(0xFFE4DCFF);
+          textColor = const Color(0xFF8A63D2);
+          break;
+        case '주거지':
+        case '집 앞':
+          bg = const Color(0xFFFFF1E5);
+          border = const Color(0xFFFFD9BC);
+          textColor = const Color(0xFFE67E22);
+          break;
+        case '꽃밭':
+          bg = const Color(0xFFFFEFF7);
+          border = const Color(0xFFF9D3E7);
+          textColor = const Color(0xFFD45A9B);
+          break;
+        case '온천산':
+          bg = const Color(0xFFFFF4E8);
+          border = const Color(0xFFFFDFC2);
+          textColor = const Color(0xFFCC7A00);
+          break;
+        case '이벤트':
+          bg = const Color(0xFFFFF4F4);
+          border = const Color(0xFFFFD7D7);
+          textColor = const Color(0xFFD65A5A);
+          break;
+        case '특수':
+        case '유인':
+          bg = const Color(0xFFF5F5F7);
+          border = const Color(0xFFE1E4E8);
+          textColor = const Color(0xFF6B7280);
+          break;
+        case '들판':
+          bg = const Color(0xFFFFF8E8);
+          border = const Color(0xFFFFE8BF);
+          textColor = const Color(0xFFB7791F);
+          break;
+      }
+    } else if (isTime) {
+      final colors = _timeChipColors(rawText);
+      bg = colors['bg']!;
+      border = colors['border']!;
+      textColor = colors['text']!;
     }
 
-    final bool isMasterLevel = rawText.contains('레벨') && level >= 10;
+    final String displayText = isLocation
+        ? rawText
+        : rawText;
+
+    if (displayText.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        gradient: isMasterLevel
-            ? const LinearGradient(
-          colors: [
-            Color(0xFFFFD1D1),
-            Color(0xFFFFF4D1),
-            Color(0xFFD1FFDA),
-            Color(0xFFD1E3FF),
-            Color(0xFFE5D1FF)
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        )
-            : null,
-        color: isMasterLevel ? null : bg,
+        color: bg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border.withOpacity(0.5), width: 0.8),
+        border: Border.all(color: border, width: 0.8),
       ),
-      child: Transform.translate(
-        offset: const Offset(0, -0.5), // 미세한 수직 중앙 조정
-        child: Text(
-          rawText,
-          style: TextStyle(
-            fontSize: 9.5,
-            color: textColor,
-            fontWeight: (isMasterLevel || isLocation)
-                ? FontWeight.w700
-                : FontWeight.w600,
-            height: 1.0,
-            fontFamily: 'SF Pro',
-          ),
+      child: Text(
+        displayText,
+        style: TextStyle(
+          fontSize: 10,
+          height: 1.0,
+          fontWeight: FontWeight.w700,
+          color: textColor,
         ),
       ),
     );
