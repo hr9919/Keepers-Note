@@ -2957,24 +2957,27 @@ class _PetScreenState extends State<PetScreen>
   }
 
   Widget _buildPetAvatar(Pet pet, {double size = 58}) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 3),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+    return GestureDetector(
+      onTap: () => _showPetImagePreview(pet),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ClipOval(
+          child: _buildPetImage(
+            pet.imagePath,
+            fit: BoxFit.cover,
           ),
-        ],
-      ),
-      child: ClipOval(
-        child: _buildPetImage(
-          pet.imagePath,
-          fit: BoxFit.cover,
         ),
       ),
     );
@@ -3345,7 +3348,7 @@ class _PetScreenState extends State<PetScreen>
                           children: [
                             _buildPrettyMenuItem(
                               icon: Icons.pets_rounded,
-                              title: '새 애완동물 추가',
+                              title: '새 반려동물 추가',
                               onTap: () {
                                 setState(() => _isMenuOpen = false);
                                 _showPetEditSheet();
@@ -3353,32 +3356,36 @@ class _PetScreenState extends State<PetScreen>
                             ),
                             Container(
                               height: 1,
-                              margin: const EdgeInsets.symmetric(
-                                  horizontal: 14),
+                              margin: const EdgeInsets.symmetric(horizontal: 14),
                               color: const Color(0xFFF4F4F5),
                             ),
                             _buildPrettyMenuItem(
                               icon: Icons.edit_note_rounded,
                               title: '펫 통합 관리',
-                              onTap: () {
+                              onTap: () async {
                                 setState(() => _isMenuOpen = false);
-                                Navigator.push(
+
+                                await Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) =>
-                                        ManagePetsScreen(
-                                          pets: _allPets,
-                                          onUpdate: (updatedList) {
-                                            setState(() =>
-                                            _allPets = updatedList);
-                                            _updatePetOrderOnServer();
-                                          },
-                                          deletePet: _deletePetFromServer,
-                                          onEdit: (Pet pet) =>
-                                              _showPetEditSheet(pet: pet),
-                                        ),
+                                    builder: (context) => ManagePetsScreen(
+                                      pets: _allPets,
+                                      onUpdate: (updatedList) {
+                                        setState(() => _allPets = updatedList);
+                                        _updatePetOrderOnServer();
+                                      },
+                                      deletePet: _deletePetFromServer,
+                                      onEdit: (Pet pet) async {
+                                        await _showPetEditSheet(pet: pet);
+                                        if (!mounted) return;
+                                        await _fetchPetData();
+                                      },
+                                    ),
                                   ),
                                 );
+
+                                if (!mounted) return;
+                                await _fetchPetData();
                               },
                             ),
                           ],
@@ -3446,6 +3453,132 @@ class _PetScreenState extends State<PetScreen>
         );
       },
     );
+  }
+
+  Future<void> _showDeleteConfirm(Pet pet) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 아이콘
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF1EE),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.delete_rounded,
+                  color: Color(0xFFFF8E7C),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // 제목
+              const Text(
+                "정말 삭제할까요?",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF2D3436),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // 설명
+              Text(
+                "${pet.name} 정보를 삭제하면 되돌릴 수 없어요",
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF7C8796),
+                ),
+              ),
+
+              const SizedBox(height: 22),
+
+              // 버튼
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        "취소",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF636E72),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF8E7C),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        "삭제",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirm == true) {
+      await _deletePetFromServer(pet.id!);
+
+      if (!mounted) return;
+
+      await _fetchPetData();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("삭제되었습니다 🗑️")),
+      );
+    }
   }
 
   Widget _buildPrettyMenuItem({
@@ -3623,316 +3756,634 @@ class _PetScreenState extends State<PetScreen>
   }
 
   void _showPetControlSheet(Pet pet) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) =>
-          Container(
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 20,
-              bottom: MediaQuery
-                  .of(context)
-                  .padding
-                  .bottom + 24,
-            ),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(28),
+      barrierDismissible: true,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
               ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              /// 🔥 상단 헤더
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF8E7C).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.pets_rounded,
+                      color: Color(0xFFFF8E7C),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '${pet.name} 관리',
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF2D3436),
+                      ),
+                    ),
+                  ),
+                  Material(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => Navigator.pop(dialogContext),
+                      child: const SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              /// 🔹 메뉴 카드
+              _buildPrettyControlTile(
+                icon: Icons.edit_rounded,
+                title: '프로필 정보 변경',
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _showPetEditSheet(pet: pet);
+                },
+              ),
+
+              const SizedBox(height: 10),
+
+              _buildPrettyControlTile(
+                icon: Icons.science_rounded,
+                title: '최애 간식 실험실',
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _showSnackLabSheet(pet);
+                },
+              ),
+
+              const SizedBox(height: 16),
+
+              Container(
+                height: 1,
+                color: const Color(0xFFF1F2F6),
+              ),
+
+              const SizedBox(height: 16),
+
+              /// 🔥 삭제 버튼 (강조)
+              _buildPrettyControlTile(
+                icon: Icons.delete_outline_rounded,
+                title: '반려동물 삭제',
+                isDestructive: true,
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  if (pet.id != null) {
+                    _showDeleteConfirm(pet);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrettyControlTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    final color = isDestructive
+        ? const Color(0xFFFF6B6B)
+        : const Color(0xFF2D3436);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+          decoration: BoxDecoration(
+            color: isDestructive
+                ? const Color(0xFFFFF1EE)
+                : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: color.withOpacity(0.4),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPetEditSheet({Pet? pet}) async {
+    final bool isEdit = pet != null;
+    final nameController = TextEditingController(text: isEdit ? pet.name : '');
+    final breedController = TextEditingController(text: isEdit ? pet.breed : '');
+    String? tempImagePath = isEdit ? pet.imagePath : null;
+    bool isSubmittingLocal = false;
+
+    ImageProvider _dialogImageProvider(String? path) {
+      if (path == null || path.trim().isEmpty) {
+        return const AssetImage('assets/images/pets.webp');
+      }
+
+      final value = path.trim();
+
+      if (value.startsWith('/uploads/')) {
+        return NetworkImage('$_baseUrl$value');
+      }
+
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        return NetworkImage(value);
+      }
+
+      if (File(value).existsSync()) {
+        return FileImage(File(value));
+      }
+
+      return const AssetImage('assets/images/pets.webp');
+    }
+
+    Widget buildDialogField({
+      required String label,
+      required TextEditingController controller,
+      required String hint,
+      required IconData icon,
+      String? helperText,
+      TextInputAction textInputAction = TextInputAction.next,
+    }) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 2, bottom: 8),
+            child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                Icon(
+                  icon,
+                  size: 16,
+                  color: const Color(0xFFFF8E7C),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(width: 6),
                 Text(
-                  '${pet.name} 관리',
+                  label,
                   style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF636E72),
                   ),
-                ),
-                const SizedBox(height: 24),
-                _buildMenuTile(
-                  Icons.edit_rounded,
-                  '프로필 정보 변경',
-                      () {
-                    Navigator.pop(context);
-                    _showPetEditSheet(pet: pet);
-                  },
-                ),
-                _buildMenuTile(
-                  Icons.science_rounded,
-                  '최애 간식 실험실',
-                      () {
-                    Navigator.pop(context);
-                    _showSnackLabSheet(pet);
-                  },
-                ),
-                const Divider(
-                  height: 32,
-                  thickness: 0.5,
-                  color: Color(0xFFEEEEEE),
-                ),
-                _buildMenuTile(
-                  Icons.delete_outline_rounded,
-                  '반려동물 삭제',
-                      () {
-                    Navigator.pop(context);
-                    if (pet.id != null) {
-                      _showDeleteConfirm(pet);
-                    }
-                  },
-                  isDestructive: true,
                 ),
               ],
             ),
           ),
-    );
-  }
-
-  Future<void> _showPetEditSheet({Pet? pet}) {
-    final bool isEdit = pet != null;
-    final nameController =
-    TextEditingController(text: isEdit ? pet.name : '');
-    final breedController =
-    TextEditingController(text: isEdit ? pet.breed : '');
-    String? tempImagePath = isEdit ? pet.imagePath : null;
-
-    return showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        final double bottomPadding =
-            MediaQuery
-                .of(context)
-                .viewInsets
-                .bottom +
-                MediaQuery
-                    .of(context)
-                    .padding
-                    .bottom +
-                24;
-
-        return StatefulBuilder(
-          builder: (context, setSheetState) =>
-              Container(
-                padding: EdgeInsets.only(
-                  bottom: bottomPadding,
-                  left: 24,
-                  right: 24,
-                  top: 24,
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF9F8),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFFF0E6E3),
+              ),
+            ),
+            child: TextField(
+              controller: controller,
+              textInputAction: textInputAction,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF2D3436),
+              ),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(
+                  color: Color(0xFFB5BDC8),
+                  fontWeight: FontWeight.w500,
                 ),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(28),
+                filled: true,
+                fillColor: Colors.transparent,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: const Color(0xFFFF8E7C).withOpacity(0.35),
+                    width: 1.4,
                   ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 15,
+                ),
+              ),
+            ),
+          ),
+          if (helperText != null) ...[
+            const SizedBox(height: 7),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                helperText,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF9AA4B2),
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> handlePickImage() async {
+              final XFile? image = await _picker.pickImage(
+                source: ImageSource.gallery,
+                maxWidth: 2048,
+              );
+              if (image == null) return;
+
+              final ImageAdjustResult? adjusted =
+              await Navigator.push<ImageAdjustResult>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ImageAdjustScreen(
+                    imagePath: image.path,
+                    title: _tabController.index == 0 ? '고양이 사진 조정' : '강아지 사진 조정',
+                    shape: ImageAdjustShape.circle,
+                    viewportAspectRatio: 1.0,
+                    accentColor: const Color(0xFFFF8E7C),
+                  ),
+                ),
+              );
+
+              if (adjusted == null) return;
+
+              final tempDir = await getTemporaryDirectory();
+              final filePath =
+                  '${tempDir.path}/pet_${DateTime.now().millisecondsSinceEpoch}.${adjusted.extension}';
+              final file = File(filePath);
+              await file.writeAsBytes(adjusted.bytes);
+
+              setDialogState(() {
+                tempImagePath = file.path;
+              });
+            }
+
+            Future<void> handleSave() async {
+              final name = nameController.text.trim();
+              final breed = breedController.text.trim();
+
+              if (name.isEmpty || breed.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('이름과 품종을 입력해 주세요.'),
+                  ),
+                );
+                return;
+              }
+
+              setDialogState(() {
+                isSubmittingLocal = true;
+              });
+
+              try {
+                await _savePetToServer(
+                  name,
+                  breed,
+                  tempImagePath,
+                  existingId: pet?.id,
+                );
+
+                if (!mounted) return;
+                Navigator.pop(dialogContext);
+              } finally {
+                if (dialogContext.mounted) {
+                  setDialogState(() {
+                    isSubmittingLocal = false;
+                  });
+                }
+              }
+            }
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.10),
+                      blurRadius: 28,
+                      offset: const Offset(0, 10),
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFFFF8E7C).withOpacity(0.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          margin: const EdgeInsets.only(bottom: 20),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(2),
+                      Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF8E7C).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.pets_rounded,
+                              color: Color(0xFFFF8E7C),
+                              size: 24,
+                            ),
                           ),
-                        ),
-                      ),
-                      Text(
-                        isEdit ? '정보 수정' : '새 친구 등록',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Center(
-                        child: GestureDetector(
-                          onTap: () async {
-                            final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-                            if (image != null) {
-                              setSheetState(() => tempImagePath = image.path);
-                            }
-                          },
-                          child: Stack(
-                            children: [
-                              Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 3),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 10,
-                                    ),
-                                  ],
-                                ),
-                                child: ClipOval(
-                                  child: _buildPetImage(
-                                    tempImagePath,
-                                    fit: BoxFit.cover,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isEdit ? '반려동물 정보 수정' : '새 반려동물 등록',
+                                  style: const TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF2D3436),
+                                    letterSpacing: -0.2,
                                   ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  isEdit
+                                      ? '반려동물 정보를 수정할 수 있어요'
+                                      : '반려동물 정보를 등록해보세요',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF9AA4B2),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Material(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => Navigator.pop(dialogContext),
+                              child: const SizedBox(
+                                width: 36,
+                                height: 36,
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 18,
+                                  color: Color(0xFF64748B),
                                 ),
                               ),
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFFF8E7C),
-                                    shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+
+                      Center(
+                        child: GestureDetector(
+                          onTap: handlePickImage,
+                          child: Column(
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    width: 96,
+                                    height: 96,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 5,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.08),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
+                                      image: DecorationImage(
+                                        image: _dialogImageProvider(tempImagePath),
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
                                   ),
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    color: Colors.white,
-                                    size: 16,
+                                  Positioned(
+                                    right: -2,
+                                    bottom: -2,
+                                    child: Container(
+                                      width: 30,
+                                      height: 30,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF8E7C),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.edit_rounded,
+                                        size: 15,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                '사진 선택 후 원형 크롭으로 조정돼요',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF9AA4B2),
                                 ),
                               ),
                             ],
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      TextField(
+
+                      const SizedBox(height: 22),
+
+                      buildDialogField(
+                        label: '이름',
                         controller: nameController,
-                        decoration: _dialogInputDecoration(
-                          hintText: '이름',
-                        ),
+                        hint: '반려동물 이름 입력',
+                        icon: Icons.badge_rounded,
+                        textInputAction: TextInputAction.next,
                       ),
-                      const SizedBox(height: 12),
-                      TextField(
+                      const SizedBox(height: 14),
+                      buildDialogField(
+                        label: '품종 / 설명',
                         controller: breedController,
-                        decoration: _dialogInputDecoration(
-                          hintText: '종류',
-                        ),
+                        hint: '예: 코리안숏헤어, 말티즈',
+                        icon: Icons.info_outline_rounded,
+                        helperText: '짧은 특징이나 종류를 함께 적어두면 보기 편해요',
+                        textInputAction: TextInputAction.done,
                       ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: _isSubmitting
-                            ? null
-                            : () async {
-                          setSheetState(
-                                () => _isSubmitting = true,
-                          );
-                          setState(
-                                () => _isSubmitting = true,
-                          );
-                          try {
-                            await _savePetToServer(
-                              nameController.text.trim(),
-                              breedController.text.trim(),
-                              tempImagePath,
-                              existingId: pet?.id,
-                            );
-                            if (mounted) {
-                              Navigator.pop(context);
-                            }
-                          } finally {
-                            if (mounted) {
-                              setSheetState(
-                                    () => _isSubmitting = false,
-                              );
-                              setState(
-                                    () => _isSubmitting = false,
-                              );
-                            }
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF8E7C),
-                          foregroundColor: Colors.white,
-                          minimumSize:
-                          const Size(double.infinity, 56),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+
+                      const SizedBox(height: 22),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: isSubmittingLocal
+                                  ? null
+                                  : () => Navigator.pop(dialogContext),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                side: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                  width: 1.2,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                foregroundColor: const Color(0xFF636E72),
+                                backgroundColor: const Color(0xFFF8FAFC),
+                              ),
+                              child: const Text(
+                                '취소',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
                           ),
-                          elevation: 0,
-                        ),
-                        child: _isSubmitting
-                            ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: isSubmittingLocal ? null : handleSave,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF8E7C),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                elevation: 0,
+                                disabledBackgroundColor:
+                                const Color(0xFFFFC4BA),
+                              ),
+                              child: isSubmittingLocal
+                                  ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                                  : Text(
+                                isEdit ? '수정 저장' : '등록하기',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
                           ),
-                        )
-                            : Text(
-                          isEdit ? '저장하기' : '등록하기',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
+            );
+          },
         );
       },
-    );
-  }
-
-  void _showDeleteConfirm(Pet pet) {
-    showDialog(
-      context: context,
-      builder: (context) =>
-          AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: const Text('반려동물 삭제'),
-            content: Text(
-              '${pet.name} 정보를 삭제할까요?\n삭제 후에는 되돌릴 수 없어요.',
-              style: const TextStyle(height: 1.4),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  '취소',
-                  style: TextStyle(color: Color(0xFF8E8E93)),
-                ),
-              ),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  if (pet.id != null) {
-                    await _deletePetFromServer(pet.id!);
-                  }
-                },
-                child: const Text(
-                  '삭제',
-                  style: TextStyle(color: Colors.redAccent),
-                ),
-              ),
-            ],
-          ),
     );
   }
 
