@@ -74,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen>
   Timer? _eventResumeTimer;
   Timer? _weatherRefreshTimer;
   bool _isUserInteracting = false;
+  bool _isWeatherCardPressed = false;
   int _currentEventIndex = 0;
 
   static const Set<String> _previewDefaultResourceKeys = {
@@ -785,6 +786,27 @@ class _HomeScreenState extends State<HomeScreen>
       default:
         return value.isEmpty ? '맑음' : value;
     }
+  }
+
+  String _formatHourlyWeatherLabel(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+
+    final lower = value.toLowerCase();
+
+    final timeMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(value);
+    if (timeMatch == null) {
+      return value;
+    }
+
+    final hour = timeMatch.group(1)!.padLeft(2, '0');
+    final formattedHour = '$hour시';
+
+    if (lower.contains('내일')) {
+      return '내일 $formattedHour';
+    }
+
+    return formattedHour;
   }
 
   String _weekdayLabelFromDate(String rawDate) {
@@ -2375,15 +2397,15 @@ class _HomeScreenState extends State<HomeScreen>
 
     switch (weather) {
       case '맑음':
-        return '햇살이 반짝이는 날이에요';
+        return '햇살이 내리고 있어요';
       case '흐림':
-        return '구름이 천천히 지나가고 있어요';
+        return '구름이 지나고 있어요';
       case '비':
-        return '촉촉하게 비가 내리고 있어요';
+        return '비가 내리고 있어요';
       case '무지개':
-        return '무지개 빛이 반짝이고 있어요';
+        return '채집하러 가볼까요?';
       case '눈':
-        return '포근하게 눈이 내리고 있어요';
+        return '눈이 내리고 있어요';
       default:
         return '오늘의 날씨예요';
     }
@@ -2644,102 +2666,134 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildWeatherCard(String weather) {
     final subColor = _getWeatherSubTextColor(weather);
+    final textColor = _getWeatherTextColor(weather);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: _showWeeklyWeatherPopup,
+        onTap: _handleWeatherCardTap,
         borderRadius: BorderRadius.circular(22),
-        splashColor: Colors.white.withOpacity(0.10),
-        highlightColor: Colors.white.withOpacity(0.04),
-        child: SizedBox.expand(
-          child: Container(
-            decoration: _buildWeatherBackground(weather),
-            child: ClipRRect(
+        splashColor: Colors.white.withOpacity(0.12),
+        highlightColor: Colors.white.withOpacity(0.05),
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 110),
+          curve: Curves.easeOutCubic,
+          scale: _isWeatherCardPressed ? 0.985 : 1.0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 110),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: _buildAnimatedWeatherBackground(weather),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(
+                    _isWeatherCardPressed ? 0.025 : 0.05,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center, // ⭐ 핵심
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-
-                        // ⭐ 아이콘 + 날씨
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
+                  blurRadius: _isWeatherCardPressed ? 8 : 12,
+                  offset: Offset(0, _isWeatherCardPressed ? 2 : 4),
+                ),
+              ],
+            ),
+            child: SizedBox.expand(
+              child: Container(
+                decoration: _buildWeatherBackground(weather),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: _buildAnimatedWeatherBackground(weather),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.only(left: 6),
-                              child: SizedBox(
-                                width: 64,
-                                height: 64,
-                                child: Center(
-                                  child: Transform.translate(
-                                    offset: const Offset(0, -2),
-                                    child: _buildWeatherAnimatedIcon(weather),
+                            Center(
+                              child: Text(
+                                '현재 날씨',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: subColor.withOpacity(0.9),
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: SizedBox(
+                                    width: 64,
+                                    height: 64,
+                                    child: Center(
+                                      child: Transform.translate(
+                                        offset: const Offset(0, -2),
+                                        child: _buildWeatherAnimatedIcon(weather),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Text(
+                                    weather,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.0,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Center(
+                              child: Padding(
+                                padding:
+                                const EdgeInsets.symmetric(horizontal: 6),
+                                child: Text(
+                                  _getWeatherDescription(weather),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    height: 1.32,
+                                    fontWeight: FontWeight.w500,
+                                    color: subColor,
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Text(
-                                weather,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.0,
-                                  color: _getWeatherTextColor(weather),
+                            const SizedBox(height: 14),
+                            _buildHourlyWeatherStrip(weather),
+                            const Spacer(),
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  '탭해서 주간 날씨 보기',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: subColor.withOpacity(0.52),
+                                  ),
                                 ),
                               ),
                             ),
                           ],
                         ),
-
-                        const SizedBox(height: 10),
-
-                        // ⭐ 설명
-                        Text(
-                          _getWeatherDescription(weather),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.28,
-                            fontWeight: FontWeight.w500,
-                            color: subColor,
-                          ),
-                        ),
-
-                        const SizedBox(height: 14),
-
-                        // ⭐ 스트립
-                        _buildHourlyWeatherStrip(weather),
-
-                        const SizedBox(height: 16),
-
-                        // ⭐ 안내문
-                        Center(
-                          child: Text(
-                            '탭해서 주간 날씨 보기',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w500,
-                              color: subColor.withOpacity(0.5),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -2750,6 +2804,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildHourlyWeatherStrip(String currentWeather) {
     final bool isLightBg = ['맑음', '눈', '무지개'].contains(currentWeather);
+    final textColor = _getWeatherTextColor(currentWeather);
 
     final hourly = _hourlyWeather.isEmpty
         ? [
@@ -2762,45 +2817,62 @@ class _HomeScreenState extends State<HomeScreen>
         : _hourlyWeather;
 
     return SizedBox(
-      height: 50,
+      height: 58,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         padding: EdgeInsets.zero,
         itemCount: hourly.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final item = hourly[index];
           final weather = item['weather']!;
+          final bool isNow = index == 0;
+          final String displayTime =
+          _formatHourlyWeatherLabel(item['time'] ?? '');
 
           return Container(
-            width: 58,
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            width: 60,
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
             decoration: BoxDecoration(
               color: isLightBg
-                  ? Colors.white.withOpacity(0.42)
-                  : Colors.white.withOpacity(0.13),
-              borderRadius: BorderRadius.circular(12),
+                  ? Colors.white.withOpacity(isNow ? 0.54 : 0.34)
+                  : Colors.white.withOpacity(isNow ? 0.20 : 0.11),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: Colors.white.withOpacity(0.20),
+                color: Colors.white.withOpacity(isNow ? 0.34 : 0.18),
+                width: isNow ? 1.1 : 1,
               ),
+              boxShadow: isNow
+                  ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(
+                    isLightBg ? 0.05 : 0.08,
+                  ),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+                  : null,
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  item['time']!,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 9.2,
-                    fontWeight: FontWeight.w700,
-                    height: 1.0,
-                    color: _getWeatherTextColor(currentWeather),
+                Flexible(
+                  child: Text(
+                    displayTime,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: displayTime.length >= 6 ? 8.4 : 9.4,
+                      fontWeight: isNow ? FontWeight.w800 : FontWeight.w700,
+                      height: 1.05,
+                      color: textColor,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 SizedBox(
                   width: 18,
                   height: 18,
@@ -2814,6 +2886,22 @@ class _HomeScreenState extends State<HomeScreen>
         },
       ),
     );
+  }
+
+  Future<void> _handleWeatherCardTap() async {
+    setState(() {
+      _isWeatherCardPressed = true;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 90));
+
+    if (!mounted) return;
+
+    setState(() {
+      _isWeatherCardPressed = false;
+    });
+
+    _showWeeklyWeatherPopup();
   }
 
   void _showWeeklyWeatherPopup() {
@@ -2840,7 +2928,7 @@ class _HomeScreenState extends State<HomeScreen>
         case '눈':
           return const Color(0xFF9FD4F2);
         case '무지개':
-          return const Color(0xFFD8A7FF);
+          return const Color(0xFFFF8EBF);
         default:
           return const Color(0xFFFF8E7C);
       }
@@ -2875,7 +2963,7 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (context) {
         final media = MediaQuery.of(context);
         final bottomInset = media.padding.bottom;
-        final maxHeight = media.size.height * 0.74;
+        final maxHeight = media.size.height * 0.68;
 
         return SafeArea(
           top: false,
@@ -2945,7 +3033,7 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                           SizedBox(height: 4),
                           Text(
-                            '이번 주 날씨 흐름을 가볍게 확인해보세요.',
+                            '이번 주 날씨를 확인해보세요.',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
@@ -2976,12 +3064,12 @@ class _HomeScreenState extends State<HomeScreen>
 
                         return Padding(
                           padding: EdgeInsets.only(
-                            bottom: index == weekly.length - 1 ? 0 : 10,
+                            bottom: index == weekly.length - 1 ? 0 : 8,
                           ),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
-                              vertical: 13,
+                              vertical: 10,
                             ),
                             decoration: BoxDecoration(
                               color: today
@@ -2995,23 +3083,23 @@ class _HomeScreenState extends State<HomeScreen>
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.028),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
+                                  color: Colors.black.withOpacity(0.022),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 48,
-                                  height: 48,
+                                  width: 42,
+                                  height: 42,
                                   decoration: BoxDecoration(
                                     color: weatherSoftBg(weather),
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
                                   alignment: Alignment.center,
-                                  child: _buildWeatherIcon(weather, size: 24),
+                                  child: _buildWeatherIcon(weather, size: 21),
                                 ),
                                 const SizedBox(width: 12),
 
@@ -3047,43 +3135,34 @@ class _HomeScreenState extends State<HomeScreen>
                                           Text(
                                             day,
                                             style: const TextStyle(
-                                              fontSize: 15.5,
+                                              fontSize: 15,
                                               fontWeight: FontWeight.w800,
                                               color: Color(0xFF2F2A27),
                                             ),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 5),
+                                      const SizedBox(height: 4),
                                       Text(
                                         date.isEmpty ? weather : '$date · $weather',
                                         style: const TextStyle(
-                                          fontSize: 13,
+                                          fontSize: 12.5,
                                           fontWeight: FontWeight.w600,
                                           color: Color(0xFF7E746E),
-                                          height: 1.25,
+                                          height: 1.2,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-
                                 const SizedBox(width: 10),
 
                                 Container(
-                                  width: 10,
-                                  height: 10,
+                                  width: 8,
+                                  height: 8,
                                   decoration: BoxDecoration(
                                     color: weatherAccent(weather),
                                     shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: weatherAccent(weather)
-                                            .withOpacity(0.28),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
                                   ),
                                 ),
                               ],

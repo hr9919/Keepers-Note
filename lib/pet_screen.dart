@@ -42,7 +42,7 @@ class _PetScreenState extends State<PetScreen>
 
   final TextEditingController _searchController = TextEditingController();
   bool _isFilterVisible = true;
-  bool _showMyPetProfiles = false;
+  bool _showMyPetProfiles = true;
   final Set<String> _likedPetCardIds = {};
 
   final ScrollController _catScrollController = ScrollController();
