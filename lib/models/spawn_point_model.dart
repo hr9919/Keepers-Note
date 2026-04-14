@@ -7,6 +7,7 @@ class SpawnPointModel {
   final double x;
   final double y;
   final String pointType;
+  final String? placeLabel;
   final List<SpawnResourceModel> resources;
 
   const SpawnPointModel({
@@ -17,6 +18,7 @@ class SpawnPointModel {
     required this.y,
     required this.pointType,
     required this.resources,
+    this.placeLabel,
   });
 
   factory SpawnPointModel.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,7 @@ class SpawnPointModel {
       x: lngVal / mapSize,
       y: 1.0 - ((mapSize + latVal) / mapSize),
       pointType: (json['pointType'] ?? json['point_type'] ?? 'shared').toString(),
+      placeLabel: (json['placeLabel'] ?? json['place_label'])?.toString(),
       resources: rawResources
           .map((e) => SpawnResourceModel.fromJson(e as Map<String, dynamic>))
           .toList(),

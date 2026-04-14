@@ -9,7 +9,6 @@ import 'models/resource_model.dart';
 import 'models/map_data_response.dart';
 import 'models/spawn_point_model.dart';
 import 'models/spawn_resource_model.dart';
-import 'utils/spawn_point_label_helper.dart';
 import 'services/api_service.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
@@ -97,6 +96,125 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     _transformationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadResources() async {
+    try {
+      final MapDataResponse data =
+      await ApiService.getResources(voterId: _voterId);
+
+      if (!mounted) return;
+
+      final fixedFilterKeys = data.fixedResources
+          .where(
+            (res) =>
+        res.category != 'npc' &&
+            res.category != 'animal' &&
+            res.category != 'location' &&
+            _normalizeFilterKey(res) != 'gold_bubble',
+      )
+          .map((res) => _normalizeFilterKey(res));
+
+      final spawnFilterKeys = data.spawnPoints
+          .expand((point) => point.resources)
+          .map((res) => _normalizeSpawnResourceKey(res));
+
+      final Set<String> availableKeys = {
+        ...fixedFilterKeys,
+        ...spawnFilterKeys,
+      };
+
+      final Set<String>? requestedKeys = widget.initialEnabledResourceKeys;
+      final bool useCustomInitialKeys =
+          requestedKeys != null && requestedKeys.isNotEmpty;
+
+      final Set<String> safeInitialKeys = useCustomInitialKeys
+          ? requestedKeys.where((key) => availableKeys.contains(key)).toSet()
+          : <String>{};
+
+      final Set<String> defaultInitialKeys = {
+        if (availableKeys.contains('roaming_oak')) 'roaming_oak',
+        if (availableKeys.contains('fluorite')) 'fluorite',
+      };
+
+      for (final point in data.spawnPoints) {
+        debugPrint('--- spawn point id=${point.id} oakOnly=${point.isOakOnly}');
+        for (final res in point.resources) {
+          debugPrint(
+            'resource=${res.resourceName}, verified=${res.isVerified}, vote=${res.voteCount}',
+          );
+        }
+      }
+
+      SpawnPointModel? verifiedOakPoint;
+      SpawnPointModel? verifiedFluoritePoint;
+
+      for (final point in data.spawnPoints) {
+        for (final res in point.resources) {
+          if (res.resourceName == 'roaming_oak' && res.isVerified) {
+            verifiedOakPoint = point;
+          }
+          if (res.resourceName == 'fluorite' && res.isVerified) {
+            verifiedFluoritePoint = point;
+          }
+        }
+      }
+
+      final bool hasVerifiedOak = verifiedOakPoint != null;
+      final bool hasVerifiedFluorite = verifiedFluoritePoint != null;
+
+      final bool isTodayLocationVerified =
+          hasVerifiedOak && hasVerifiedFluorite;
+
+      final String todayOakLocationLabel =
+      verifiedOakPoint?.placeLabel?.trim().isNotEmpty == true
+          ? verifiedOakPoint!.placeLabel!.trim()
+          : '';
+
+      final String todayFluoriteLocationLabel =
+      verifiedFluoritePoint?.placeLabel?.trim().isNotEmpty == true
+          ? verifiedFluoritePoint!.placeLabel!.trim()
+          : '';
+
+      final bool shouldShowVoteNotice =
+          !_hasShownVoteNoticeOnce && data.spawnPoints.isNotEmpty;
+
+      setState(() {
+        _fixedResources = data.fixedResources;
+        _spawnPoints = data.spawnPoints;
+
+        _enabledResources = useCustomInitialKeys
+            ? {...safeInitialKeys}
+            : {...defaultInitialKeys};
+
+        _showAllNpcs = widget.initialShowAllNpcs ?? !useCustomInitialKeys;
+        _showAllAnimals = widget.initialShowAllAnimals ?? false;
+        _isLoading = false;
+
+        _isTodayLocationVerified = isTodayLocationVerified;
+        _todayOakLocationLabel = todayOakLocationLabel;
+        _todayFluoriteLocationLabel = todayFluoriteLocationLabel;
+
+        if (shouldShowVoteNotice) {
+          _hasShownVoteNoticeOnce = true;
+        }
+      });
+
+      if (shouldShowVoteNotice) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future.delayed(const Duration(milliseconds: 150), () {
+            if (!mounted) return;
+            _showVoteNoticeTemporarily();
+          });
+        });
+      }
+
+      _openDrawerIfNeeded();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _openDrawerIfNeeded();
+    }
   }
 
   Future<void> _loadVoterId() async {
@@ -208,10 +326,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     final bool pointVerified = oakVerified || fluoriteVerified;
 
-    final String pointLabel = mapPointToWidgetLabelByLatLng(
-      point.lat,
-      point.lng,
-    );
+    final String pointLabel =
+    point.placeLabel?.trim().isNotEmpty == true
+        ? point.placeLabel!.trim()
+        : '위치 확인 중';
 
     String descriptionText;
     if (oakVerified && fluoriteVerified) {
@@ -301,129 +419,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ),
       ),
     );
-  }
-
-  Future<void> _loadResources() async {
-    try {
-      final MapDataResponse data =
-      await ApiService.getResources(voterId: _voterId);
-
-      if (!mounted) return;
-
-      final fixedFilterKeys = data.fixedResources
-          .where(
-            (res) =>
-        res.category != 'npc' &&
-            res.category != 'animal' &&
-            res.category != 'location' &&
-            _normalizeFilterKey(res) != 'gold_bubble',
-      )
-          .map((res) => _normalizeFilterKey(res));
-
-      final spawnFilterKeys = data.spawnPoints
-          .expand((point) => point.resources)
-          .map((res) => _normalizeSpawnResourceKey(res));
-
-      final Set<String> availableKeys = {
-        ...fixedFilterKeys,
-        ...spawnFilterKeys,
-      };
-
-      final Set<String>? requestedKeys = widget.initialEnabledResourceKeys;
-      final bool useCustomInitialKeys =
-          requestedKeys != null && requestedKeys.isNotEmpty;
-
-      final Set<String> safeInitialKeys = useCustomInitialKeys
-          ? requestedKeys.where((key) => availableKeys.contains(key)).toSet()
-          : <String>{};
-
-      final Set<String> defaultInitialKeys = {
-        if (availableKeys.contains('roaming_oak')) 'roaming_oak',
-        if (availableKeys.contains('fluorite')) 'fluorite',
-      };
-
-      for (final point in data.spawnPoints) {
-        debugPrint('--- spawn point id=${point.id} oakOnly=${point.isOakOnly}');
-        for (final res in point.resources) {
-          debugPrint(
-            'resource=${res.resourceName}, verified=${res.isVerified}, vote=${res.voteCount}',
-          );
-        }
-      }
-
-      SpawnPointModel? verifiedOakPoint;
-      SpawnPointModel? verifiedFluoritePoint;
-
-      for (final point in data.spawnPoints) {
-        for (final res in point.resources) {
-          if (res.resourceName == 'roaming_oak' && res.isVerified) {
-            verifiedOakPoint = point;
-          }
-          if (res.resourceName == 'fluorite' && res.isVerified) {
-            verifiedFluoritePoint = point;
-          }
-        }
-      }
-
-      final bool hasVerifiedOak = verifiedOakPoint != null;
-      final bool hasVerifiedFluorite = verifiedFluoritePoint != null;
-
-      final bool isTodayLocationVerified =
-          hasVerifiedOak && hasVerifiedFluorite;
-
-      final String todayOakLocationLabel = verifiedOakPoint != null
-          ? mapPointToWidgetLabelByLatLng(
-        verifiedOakPoint.lat,
-        verifiedOakPoint.lng,
-      )
-          : '';
-
-      final String todayFluoriteLocationLabel = verifiedFluoritePoint != null
-          ? mapPointToWidgetLabelByLatLng(
-        verifiedFluoritePoint.lat,
-        verifiedFluoritePoint.lng,
-      )
-          : '';
-
-      final bool shouldShowVoteNotice =
-          !_hasShownVoteNoticeOnce && data.spawnPoints.isNotEmpty;
-
-      setState(() {
-        _fixedResources = data.fixedResources;
-        _spawnPoints = data.spawnPoints;
-
-        _enabledResources = useCustomInitialKeys
-            ? {...safeInitialKeys}
-            : {...defaultInitialKeys};
-
-        _showAllNpcs = widget.initialShowAllNpcs ?? !useCustomInitialKeys;
-        _showAllAnimals = widget.initialShowAllAnimals ?? false;
-        _isLoading = false;
-
-        _isTodayLocationVerified = isTodayLocationVerified;
-        _todayOakLocationLabel = todayOakLocationLabel;
-        _todayFluoriteLocationLabel = todayFluoriteLocationLabel;
-
-        if (shouldShowVoteNotice) {
-          _hasShownVoteNoticeOnce = true;
-        }
-      });
-
-      if (shouldShowVoteNotice) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Future.delayed(const Duration(milliseconds: 150), () {
-            if (!mounted) return;
-            _showVoteNoticeTemporarily();
-          });
-        });
-      }
-
-      _openDrawerIfNeeded();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      _openDrawerIfNeeded();
-    }
   }
 
   String _normalizeSpawnResourceKey(SpawnResourceModel res) {

@@ -12,7 +12,6 @@ import 'models/spawn_point_model.dart';
 import 'models/spawn_resource_model.dart';
 import 'services/api_service.dart';
 import 'services/home_widget_service.dart';
-import 'utils/spawn_point_label_helper.dart';
 import 'setting_screen.dart';
 import 'map_screen.dart';
 import 'models/global_search_item.dart';
@@ -536,17 +535,15 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     if (oakPoint != null) {
-      oakText = mapPointToWidgetLabelByLatLng(
-        oakPoint.lat,
-        oakPoint.lng,
-      );
+      oakText = oakPoint.placeLabel?.trim().isNotEmpty == true
+          ? oakPoint.placeLabel!.trim()
+          : '위치 확인 중';
     }
 
     if (fluoritePoint != null) {
-      fluoriteText = mapPointToWidgetLabelByLatLng(
-        fluoritePoint.lat,
-        fluoritePoint.lng,
-      );
+      fluoriteText = fluoritePoint.placeLabel?.trim().isNotEmpty == true
+          ? fluoritePoint.placeLabel!.trim()
+          : '위치 확인 중';
     }
 
     final now = DateTime.now();
