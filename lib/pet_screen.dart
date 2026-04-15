@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import 'image_adjust_screen.dart';
 
 import 'manage_pet_screen.dart';
@@ -630,24 +631,23 @@ class _PetScreenState extends State<PetScreen>
       final normalizedBreed = breed.replaceAll(' ', '');
       final normalizedColor = color.replaceAll(' ', '');
 
-      // breed 안에 이미 색 개념이 포함된 경우 중복 제거
-      if (normalizedColor.isNotEmpty && normalizedBreed.contains(normalizedColor)) {
+      if (normalizedColor.isNotEmpty &&
+          normalizedBreed.contains(normalizedColor)) {
         return breed;
       }
 
-      // 고양이 단색 계열은 breed 이름만 보여주기
       const fixedBreedOnlyKeywords = [
         '올블랙',
         '올화이트',
         '올그레이',
         '올브라운',
-        '올크림',
+        '러시안블루',
       ];
+
       if (fixedBreedOnlyKeywords.any((e) => breed.contains(e))) {
         return breed;
       }
 
-      // 강아지 리트리버 계열 자연화
       if (breed.contains('리트리버')) {
         if (breed.contains('골든')) return '골든 리트리버';
         if (breed.contains('래브라도')) return '래브라도 리트리버';
@@ -3443,13 +3443,15 @@ class _PetScreenState extends State<PetScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
+                    AutoSizeText(
                       pet.name,
                       maxLines: 1,
+                      minFontSize: 10,
+                      stepGranularity: 0.5,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 14.2,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
                         color: dragging
                             ? const Color(0xFF9CA3AF)
                             : const Color(0xFF2D3436),
@@ -3470,15 +3472,16 @@ class _PetScreenState extends State<PetScreen>
                           width: 1,
                         ),
                       ),
-                      child: Text(
+                      child: AutoSizeText(
                         _petProfileTypeLabel(pet),
                         maxLines: 1,
+                        minFontSize: 8,
+                        stepGranularity: 0.5,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 10.8,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFFB96E60),
-                          height: 1.0,
+                          color: Color(0xFF7A6E69),
                         ),
                       ),
                     ),
@@ -4405,9 +4408,11 @@ class _PetScreenState extends State<PetScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        AutoSizeText(
                           pet.name,
                           maxLines: 1,
+                          minFontSize: 12,
+                          stepGranularity: 0.5,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 17,
@@ -4428,9 +4433,11 @@ class _PetScreenState extends State<PetScreen>
                               color: const Color(0xFFFFE2DA),
                             ),
                           ),
-                          child: Text(
+                          child: AutoSizeText(
                             _petProfileTypeLabel(pet),
                             maxLines: 1,
+                            minFontSize: 9,
+                            stepGranularity: 0.5,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 11.5,
@@ -5994,7 +6001,7 @@ class _PetBreedDetailScreenState extends State<PetBreedDetailScreen> {
                 children: [
                   Positioned.fill(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 11),
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
@@ -6140,19 +6147,26 @@ class _PetBreedDetailScreenState extends State<PetBreedDetailScreen> {
                           color: colorEntry.key,
                           eye: eyeEntry.key,
                         ),
-                        GridView.builder(
-                          itemCount: items.length,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 14,
-                            crossAxisSpacing: 14,
-                            childAspectRatio: 0.78,
-                          ),
-                          itemBuilder: (context, index) {
-                            return _buildVariantCard(items[index]);
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final double cardWidth = constraints.maxWidth * 0.42;
+
+                            return SizedBox(
+                              height: 228,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                padding: const EdgeInsets.only(right: 18),
+                                itemCount: items.length,
+                                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                itemBuilder: (context, index) {
+                                  return SizedBox(
+                                    width: cardWidth,
+                                    child: _buildVariantCard(items[index]),
+                                  );
+                                },
+                              ),
+                            );
                           },
                         ),
                       ],
