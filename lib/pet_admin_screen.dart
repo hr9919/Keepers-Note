@@ -29,6 +29,7 @@ class _PetAdminScreenState extends State<PetAdminScreen>
   bool _isLoading = true;
   bool _isUploading = false;
   bool _isDeleting = false;
+  bool _isUploadedLoaded = false;
 
   List<Map<String, dynamic>> _catPending = [];
   List<Map<String, dynamic>> _dogPending = [];
@@ -37,12 +38,14 @@ class _PetAdminScreenState extends State<PetAdminScreen>
 
   String? _selectedCatTypeId;
   String? _selectedCatColorId;
-  String? _selectedCatEyeId;
+  String? _selectedCatEyeTypeId;
+  String? _selectedCatEyeColorId;
   int? _selectedCatVariantNo;
 
   String? _selectedDogTypeId;
   String? _selectedDogColorId;
-  String? _selectedDogEyeId;
+  String? _selectedDogEyeTypeId;
+  String? _selectedDogEyeColorId;
   int? _selectedDogVariantNo;
 
   File? _selectedImageFile;
@@ -52,7 +55,32 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     super.initState();
     _animalTabController = TabController(length: 2, vsync: this);
     _statusTabController = TabController(length: 2, vsync: this);
-    _loadAll();
+
+    _animalTabController?.addListener(() {
+      if (!mounted) return;
+      if (!(_animalTabController?.indexIsChanging ?? false)) {
+        setState(() {
+          _selectedImageFile = null;
+          _syncSelections();
+        });
+      }
+    });
+
+    _statusTabController?.addListener(() async {
+      if (!mounted) return;
+      if ((_statusTabController?.indexIsChanging ?? false)) return;
+
+      if (_isPendingTab) {
+        setState(() {
+          _selectedImageFile = null;
+          _syncSelections();
+        });
+      } else {
+        await _ensureUploadedLoaded();
+      }
+    });
+
+    _loadInitial();
   }
 
   @override
@@ -65,36 +93,29 @@ class _PetAdminScreenState extends State<PetAdminScreen>
   bool get _isCatTab => (_animalTabController?.index ?? 0) == 0;
   bool get _isPendingTab => (_statusTabController?.index ?? 0) == 0;
 
-  Future<void> _loadAll() async {
+  Future<void> _loadInitial() async {
     setState(() => _isLoading = true);
 
     try {
       final results = await Future.wait([
         http.get(Uri.parse('$_baseUrl/api/cat-variants/pending')),
         http.get(Uri.parse('$_baseUrl/api/dog-variants/pending')),
-        http.get(Uri.parse('$_baseUrl/api/cat-variants?uploadedOnly=true')),
-        http.get(Uri.parse('$_baseUrl/api/dog-variants?uploadedOnly=true')),
       ]);
 
       if (results[0].statusCode == 200) {
         _catPending = List<Map<String, dynamic>>.from(
           jsonDecode(utf8.decode(results[0].bodyBytes)),
         );
+      } else {
+        _catPending = [];
       }
+
       if (results[1].statusCode == 200) {
         _dogPending = List<Map<String, dynamic>>.from(
           jsonDecode(utf8.decode(results[1].bodyBytes)),
         );
-      }
-      if (results[2].statusCode == 200) {
-        _catUploaded = List<Map<String, dynamic>>.from(
-          jsonDecode(utf8.decode(results[2].bodyBytes)),
-        );
-      }
-      if (results[3].statusCode == 200) {
-        _dogUploaded = List<Map<String, dynamic>>.from(
-          jsonDecode(utf8.decode(results[3].bodyBytes)),
-        );
+      } else {
+        _dogPending = [];
       }
 
       _syncSelections();
@@ -107,58 +128,58 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     }
   }
 
-  void _syncSelections() {
-    _syncCatSelection();
-    _syncDogSelection();
-  }
-
-  void _syncCatSelection() {
-    final source = _isPendingTab ? _catPending : _catUploaded;
-    if (source.isEmpty) {
-      _selectedCatTypeId = null;
-      _selectedCatColorId = null;
-      _selectedCatEyeId = null;
-      _selectedCatVariantNo = null;
+  Future<void> _ensureUploadedLoaded() async {
+    if (_isUploadedLoaded) {
+      if (mounted) {
+        setState(() {
+          _selectedImageFile = null;
+          _syncSelections();
+        });
+      }
       return;
     }
 
-    final hasCurrent = source.any((item) =>
-    item['catTypeId'] == _selectedCatTypeId &&
-        item['colorId'] == _selectedCatColorId &&
-        item['eyeId'] == _selectedCatEyeId &&
-        _toInt(item['variantNo']) == _selectedCatVariantNo);
+    setState(() => _isLoading = true);
 
-    if (!hasCurrent) {
-      final first = source.first;
-      _selectedCatTypeId = first['catTypeId']?.toString();
-      _selectedCatColorId = first['colorId']?.toString();
-      _selectedCatEyeId = first['eyeId']?.toString();
-      _selectedCatVariantNo = _toInt(first['variantNo']);
+    try {
+      final results = await Future.wait([
+        http.get(Uri.parse('$_baseUrl/api/cat-variants?uploadedOnly=true')),
+        http.get(Uri.parse('$_baseUrl/api/dog-variants?uploadedOnly=true')),
+      ]);
+
+      if (results[0].statusCode == 200) {
+        _catUploaded = List<Map<String, dynamic>>.from(
+          jsonDecode(utf8.decode(results[0].bodyBytes)),
+        );
+      } else {
+        _catUploaded = [];
+      }
+
+      if (results[1].statusCode == 200) {
+        _dogUploaded = List<Map<String, dynamic>>.from(
+          jsonDecode(utf8.decode(results[1].bodyBytes)),
+        );
+      } else {
+        _dogUploaded = [];
+      }
+
+      _isUploadedLoaded = true;
+      _syncSelections();
+    } catch (e) {
+      _showSnack('등록완료 목록 불러오기 실패: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  void _syncDogSelection() {
-    final source = _isPendingTab ? _dogPending : _dogUploaded;
-    if (source.isEmpty) {
-      _selectedDogTypeId = null;
-      _selectedDogColorId = null;
-      _selectedDogEyeId = null;
-      _selectedDogVariantNo = null;
-      return;
-    }
-
-    final hasCurrent = source.any((item) =>
-    item['dogTypeId'] == _selectedDogTypeId &&
-        item['colorId'] == _selectedDogColorId &&
-        item['eyeId'] == _selectedDogEyeId &&
-        _toInt(item['variantNo']) == _selectedDogVariantNo);
-
-    if (!hasCurrent) {
-      final first = source.first;
-      _selectedDogTypeId = first['dogTypeId']?.toString();
-      _selectedDogColorId = first['colorId']?.toString();
-      _selectedDogEyeId = first['eyeId']?.toString();
-      _selectedDogVariantNo = _toInt(first['variantNo']);
+  Future<void> _refreshCurrentTab() async {
+    if (_isPendingTab) {
+      await _loadInitial();
+    } else {
+      _isUploadedLoaded = false;
+      await _ensureUploadedLoaded();
     }
   }
 
@@ -168,6 +189,8 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     return int.tryParse(value.toString());
   }
 
+  String _toStr(dynamic value) => value?.toString() ?? '';
+
   List<Map<String, dynamic>> _currentSource(bool isCat) {
     if (isCat) {
       return _isPendingTab ? _catPending : _catUploaded;
@@ -175,141 +198,338 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     return _isPendingTab ? _dogPending : _dogUploaded;
   }
 
-  List<Map<String, dynamic>> _filteredCatItems() {
-    final source = _currentSource(true);
-    return source.where((item) {
-      return item['catTypeId'] == _selectedCatTypeId &&
-          item['colorId'] == _selectedCatColorId &&
-          item['eyeId'] == _selectedCatEyeId;
-    }).toList()
-      ..sort((a, b) => _toInt(a['variantNo'])!.compareTo(_toInt(b['variantNo'])!));
+  String _itemTypeId(Map<String, dynamic> item, bool isCat) {
+    return isCat ? _toStr(item['catTypeId']) : _toStr(item['dogTypeId']);
   }
 
-  List<Map<String, dynamic>> _filteredDogItems() {
+  String _itemTypeName(Map<String, dynamic> item, bool isCat) {
+    return isCat
+        ? (_toStr(item['catTypeNameKo']).isNotEmpty
+        ? _toStr(item['catTypeNameKo'])
+        : _toStr(item['catTypeId']))
+        : (_toStr(item['dogTypeNameKo']).isNotEmpty
+        ? _toStr(item['dogTypeNameKo'])
+        : _toStr(item['dogTypeId']));
+  }
+
+  String _itemColorId(Map<String, dynamic> item) => _toStr(item['colorId']);
+
+  String _itemColorName(Map<String, dynamic> item) {
+    return _toStr(item['colorNameKo']).isNotEmpty
+        ? _toStr(item['colorNameKo'])
+        : _toStr(item['colorId']);
+  }
+
+  String _itemEyeTypeId(Map<String, dynamic> item) => _toStr(item['eyeStyle']);
+
+  String _itemEyeTypeName(Map<String, dynamic> item) {
+    final styleKo = _toStr(item['eyeStyleKo']);
+    if (styleKo.isNotEmpty) return styleKo;
+
+    final style = _toStr(item['eyeStyle']);
+    if (style == 'cat_eye') return '고양이눈';
+    if (style == 'round_eye') return '땡눈';
+    if (style == 'sleepy_eye') return '졸린눈';
+    if (style == 'droopy_eye') return '처진눈';
+    if (style == 'dot_eye') return '콩눈';
+    return style;
+  }
+
+  String _itemEyeColorId(Map<String, dynamic> item) => _toStr(item['eyeColorId']);
+
+  String _itemEyeColorName(Map<String, dynamic> item) {
+    final name = _toStr(item['eyeColorNameKo']);
+    if (name.isNotEmpty) return name;
+
+    final id = _toStr(item['eyeColorId']);
+    if (id.isNotEmpty) return id;
+
+    return '자동';
+  }
+
+  int _itemVariantNo(Map<String, dynamic> item) => _toInt(item['variantNo']) ?? 1;
+
+  void _syncSelections() {
+    _syncCatSelection();
+    _syncDogSelection();
+  }
+
+  void _syncCatSelection() {
+    final source = _currentSource(true);
+    if (source.isEmpty) {
+      _selectedCatTypeId = null;
+      _selectedCatColorId = null;
+      _selectedCatEyeTypeId = null;
+      _selectedCatEyeColorId = null;
+      _selectedCatVariantNo = null;
+      return;
+    }
+
+    final hasCurrent = source.any((item) {
+      final baseMatch = _itemTypeId(item, true) == _selectedCatTypeId &&
+          _itemColorId(item) == _selectedCatColorId &&
+          _itemEyeTypeId(item) == _selectedCatEyeTypeId &&
+          _itemEyeColorId(item) == (_selectedCatEyeColorId ?? '');
+
+      if (_isPendingTab) return baseMatch;
+      return baseMatch && _itemVariantNo(item) == _selectedCatVariantNo;
+    });
+
+    if (!hasCurrent) {
+      final first = source.first;
+      _selectedCatTypeId = _itemTypeId(first, true);
+      _selectedCatColorId = _itemColorId(first);
+      _selectedCatEyeTypeId = _itemEyeTypeId(first);
+      _selectedCatEyeColorId = _itemEyeColorId(first);
+      _selectedCatVariantNo = _itemVariantNo(first);
+      _normalizeCatSelection();
+    }
+  }
+
+  void _syncDogSelection() {
     final source = _currentSource(false);
-    return source.where((item) {
-      return item['dogTypeId'] == _selectedDogTypeId &&
-          item['colorId'] == _selectedDogColorId &&
-          item['eyeId'] == _selectedDogEyeId;
+    if (source.isEmpty) {
+      _selectedDogTypeId = null;
+      _selectedDogColorId = null;
+      _selectedDogEyeTypeId = null;
+      _selectedDogEyeColorId = null;
+      _selectedDogVariantNo = null;
+      return;
+    }
+
+    final hasCurrent = source.any((item) {
+      final baseMatch = _itemTypeId(item, false) == _selectedDogTypeId &&
+          _itemColorId(item) == _selectedDogColorId &&
+          _itemEyeTypeId(item) == _selectedDogEyeTypeId &&
+          _itemEyeColorId(item) == (_selectedDogEyeColorId ?? '');
+
+      if (_isPendingTab) return baseMatch;
+      return baseMatch && _itemVariantNo(item) == _selectedDogVariantNo;
+    });
+
+    if (!hasCurrent) {
+      final first = source.first;
+      _selectedDogTypeId = _itemTypeId(first, false);
+      _selectedDogColorId = _itemColorId(first);
+      _selectedDogEyeTypeId = _itemEyeTypeId(first);
+      _selectedDogEyeColorId = _itemEyeColorId(first);
+      _selectedDogVariantNo = _itemVariantNo(first);
+      _normalizeDogSelection();
+    }
+  }
+
+  List<Map<String, dynamic>> _filteredItems(bool isCat) {
+    final source = _currentSource(isCat);
+    final selectedTypeId = isCat ? _selectedCatTypeId : _selectedDogTypeId;
+    final selectedColorId = isCat ? _selectedCatColorId : _selectedDogColorId;
+    final selectedEyeTypeId = isCat ? _selectedCatEyeTypeId : _selectedDogEyeTypeId;
+    final selectedEyeColorId = isCat ? _selectedCatEyeColorId : _selectedDogEyeColorId;
+
+    final filtered = source.where((item) {
+      return _itemTypeId(item, isCat) == selectedTypeId &&
+          _itemColorId(item) == selectedColorId &&
+          _itemEyeTypeId(item) == selectedEyeTypeId &&
+          _itemEyeColorId(item) == (selectedEyeColorId ?? '');
     }).toList()
-      ..sort((a, b) => _toInt(a['variantNo'])!.compareTo(_toInt(b['variantNo'])!));
+      ..sort((a, b) => _itemVariantNo(a).compareTo(_itemVariantNo(b)));
+
+    return filtered;
   }
 
-  List<Map<String, String>> _uniqueCatTypes() {
-    final source = _currentSource(true);
+  List<Map<String, String>> _uniqueTypes(bool isCat) {
+    final source = _currentSource(isCat);
     final map = <String, String>{};
+
     for (final item in source) {
-      map[item['catTypeId'].toString()] =
-          (item['catTypeNameKo'] ?? item['catTypeId']).toString();
+      map[_itemTypeId(item, isCat)] = _itemTypeName(item, isCat);
     }
+
     return map.entries
         .map((e) => {'id': e.key, 'name': e.value})
         .toList()
       ..sort((a, b) => a['name']!.compareTo(b['name']!));
   }
 
-  List<Map<String, String>> _uniqueCatColors() {
-    final source = _currentSource(true);
+  List<Map<String, String>> _uniqueColors(bool isCat) {
+    final source = _currentSource(isCat);
+    final selectedTypeId = isCat ? _selectedCatTypeId : _selectedDogTypeId;
     final map = <String, String>{};
-    for (final item in source.where((e) => e['catTypeId'] == _selectedCatTypeId)) {
-      map[item['colorId'].toString()] =
-          (item['colorNameKo'] ?? item['colorId']).toString();
+
+    for (final item in source.where((e) => _itemTypeId(e, isCat) == selectedTypeId)) {
+      map[_itemColorId(item)] = _itemColorName(item);
     }
+
     return map.entries
         .map((e) => {'id': e.key, 'name': e.value})
         .toList()
       ..sort((a, b) => a['name']!.compareTo(b['name']!));
   }
 
-  List<Map<String, String>> _uniqueCatEyes() {
-    final source = _currentSource(true);
+  List<Map<String, String>> _uniqueEyeTypes(bool isCat) {
+    final source = _currentSource(isCat);
+    final selectedTypeId = isCat ? _selectedCatTypeId : _selectedDogTypeId;
+    final selectedColorId = isCat ? _selectedCatColorId : _selectedDogColorId;
     final map = <String, String>{};
+
     for (final item in source.where((e) =>
-    e['catTypeId'] == _selectedCatTypeId &&
-        e['colorId'] == _selectedCatColorId)) {
-      map[item['eyeId'].toString()] =
-          (item['eyeNameKo'] ?? item['eyeId']).toString();
+    _itemTypeId(e, isCat) == selectedTypeId &&
+        _itemColorId(e) == selectedColorId)) {
+      map[_itemEyeTypeId(item)] = _itemEyeTypeName(item);
     }
+
     return map.entries
         .map((e) => {'id': e.key, 'name': e.value})
         .toList()
       ..sort((a, b) => a['name']!.compareTo(b['name']!));
   }
 
-  List<int> _uniqueCatVariantNos() {
-    return _filteredCatItems()
-        .map((e) => _toInt(e['variantNo'])!)
+  List<Map<String, String>> _uniqueEyeColors(bool isCat) {
+    final source = _currentSource(isCat);
+    final selectedTypeId = isCat ? _selectedCatTypeId : _selectedDogTypeId;
+    final selectedColorId = isCat ? _selectedCatColorId : _selectedDogColorId;
+    final selectedEyeTypeId = isCat ? _selectedCatEyeTypeId : _selectedDogEyeTypeId;
+    final map = <String, String>{};
+
+    for (final item in source.where((e) =>
+    _itemTypeId(e, isCat) == selectedTypeId &&
+        _itemColorId(e) == selectedColorId &&
+        _itemEyeTypeId(e) == selectedEyeTypeId)) {
+      map[_itemEyeColorId(item)] = _itemEyeColorName(item);
+    }
+
+    return map.entries
+        .map((e) => {'id': e.key, 'name': e.value})
+        .toList()
+      ..sort((a, b) => a['name']!.compareTo(b['name']!));
+  }
+
+  List<int> _uniqueVariantNos(bool isCat) {
+    return _filteredItems(isCat)
+        .map(_itemVariantNo)
         .toSet()
         .toList()
       ..sort();
   }
 
-  List<Map<String, String>> _uniqueDogTypes() {
-    final source = _currentSource(false);
-    final map = <String, String>{};
-    for (final item in source) {
-      map[item['dogTypeId'].toString()] =
-          (item['dogTypeNameKo'] ?? item['dogTypeId']).toString();
-    }
-    return map.entries
-        .map((e) => {'id': e.key, 'name': e.value})
-        .toList()
-      ..sort((a, b) => a['name']!.compareTo(b['name']!));
+  bool _isSingleColorType(bool isCat) => _uniqueColors(isCat).length <= 1;
+
+  bool _isSingleEyeColorType(bool isCat) => _uniqueEyeColors(isCat).length <= 1;
+
+  String? _fixedColorName(bool isCat) {
+    final items = _uniqueColors(isCat);
+    if (items.length == 1) return items.first['name'];
+    return null;
   }
 
-  List<Map<String, String>> _uniqueDogColors() {
-    final source = _currentSource(false);
-    final map = <String, String>{};
-    for (final item in source.where((e) => e['dogTypeId'] == _selectedDogTypeId)) {
-      map[item['colorId'].toString()] =
-          (item['colorNameKo'] ?? item['colorId']).toString();
-    }
-    return map.entries
-        .map((e) => {'id': e.key, 'name': e.value})
-        .toList()
-      ..sort((a, b) => a['name']!.compareTo(b['name']!));
+  String? _fixedEyeColorName(bool isCat) {
+    final items = _uniqueEyeColors(isCat);
+    if (items.length == 1) return items.first['name'];
+    return null;
   }
 
-  List<Map<String, String>> _uniqueDogEyes() {
-    final source = _currentSource(false);
-    final map = <String, String>{};
-    for (final item in source.where((e) =>
-    e['dogTypeId'] == _selectedDogTypeId &&
-        e['colorId'] == _selectedDogColorId)) {
-      map[item['eyeId'].toString()] =
-          (item['eyeNameKo'] ?? item['eyeId']).toString();
+  void _normalizeCatSelection() {
+    final typeItems = _uniqueTypes(true);
+    if (typeItems.isEmpty) {
+      _selectedCatTypeId = null;
+      _selectedCatColorId = null;
+      _selectedCatEyeTypeId = null;
+      _selectedCatEyeColorId = null;
+      _selectedCatVariantNo = null;
+      return;
     }
-    return map.entries
-        .map((e) => {'id': e.key, 'name': e.value})
-        .toList()
-      ..sort((a, b) => a['name']!.compareTo(b['name']!));
+
+    final validTypeIds = typeItems.map((e) => e['id']!).toSet();
+    if (!validTypeIds.contains(_selectedCatTypeId)) {
+      _selectedCatTypeId = typeItems.first['id'];
+    }
+
+    final colorItems = _uniqueColors(true);
+    final validColorIds = colorItems.map((e) => e['id']!).toSet();
+    if (!validColorIds.contains(_selectedCatColorId)) {
+      _selectedCatColorId = colorItems.isNotEmpty ? colorItems.first['id'] : null;
+    }
+
+    final eyeTypeItems = _uniqueEyeTypes(true);
+    final validEyeTypeIds = eyeTypeItems.map((e) => e['id']!).toSet();
+    if (!validEyeTypeIds.contains(_selectedCatEyeTypeId)) {
+      _selectedCatEyeTypeId = eyeTypeItems.isNotEmpty ? eyeTypeItems.first['id'] : null;
+    }
+
+    final eyeColorItems = _uniqueEyeColors(true);
+    final validEyeColorIds = eyeColorItems.map((e) => e['id']!).toSet();
+    if (!validEyeColorIds.contains(_selectedCatEyeColorId)) {
+      _selectedCatEyeColorId =
+      eyeColorItems.isNotEmpty ? eyeColorItems.first['id'] : null;
+    }
+
+    if (_isPendingTab) {
+      _selectedCatVariantNo = null;
+    } else {
+      final variantNos = _uniqueVariantNos(true);
+      if (!variantNos.contains(_selectedCatVariantNo)) {
+        _selectedCatVariantNo = variantNos.isNotEmpty ? variantNos.first : null;
+      }
+    }
   }
 
-  List<int> _uniqueDogVariantNos() {
-    return _filteredDogItems()
-        .map((e) => _toInt(e['variantNo'])!)
-        .toSet()
-        .toList()
-      ..sort();
+  void _normalizeDogSelection() {
+    final typeItems = _uniqueTypes(false);
+    if (typeItems.isEmpty) {
+      _selectedDogTypeId = null;
+      _selectedDogColorId = null;
+      _selectedDogEyeTypeId = null;
+      _selectedDogEyeColorId = null;
+      _selectedDogVariantNo = null;
+      return;
+    }
+
+    final validTypeIds = typeItems.map((e) => e['id']!).toSet();
+    if (!validTypeIds.contains(_selectedDogTypeId)) {
+      _selectedDogTypeId = typeItems.first['id'];
+    }
+
+    final colorItems = _uniqueColors(false);
+    final validColorIds = colorItems.map((e) => e['id']!).toSet();
+    if (!validColorIds.contains(_selectedDogColorId)) {
+      _selectedDogColorId = colorItems.isNotEmpty ? colorItems.first['id'] : null;
+    }
+
+    final eyeTypeItems = _uniqueEyeTypes(false);
+    final validEyeTypeIds = eyeTypeItems.map((e) => e['id']!).toSet();
+    if (!validEyeTypeIds.contains(_selectedDogEyeTypeId)) {
+      _selectedDogEyeTypeId = eyeTypeItems.isNotEmpty ? eyeTypeItems.first['id'] : null;
+    }
+
+    final eyeColorItems = _uniqueEyeColors(false);
+    final validEyeColorIds = eyeColorItems.map((e) => e['id']!).toSet();
+    if (!validEyeColorIds.contains(_selectedDogEyeColorId)) {
+      _selectedDogEyeColorId =
+      eyeColorItems.isNotEmpty ? eyeColorItems.first['id'] : null;
+    }
+
+    if (_isPendingTab) {
+      _selectedDogVariantNo = null;
+    } else {
+      final variantNos = _uniqueVariantNos(false);
+      if (!variantNos.contains(_selectedDogVariantNo)) {
+        _selectedDogVariantNo = variantNos.isNotEmpty ? variantNos.first : null;
+      }
+    }
   }
 
   Map<String, dynamic>? _currentSelectedItem(bool isCat) {
-    final source = _currentSource(isCat);
-    final typeId = isCat ? _selectedCatTypeId : _selectedDogTypeId;
-    final colorId = isCat ? _selectedCatColorId : _selectedDogColorId;
-    final eyeId = isCat ? _selectedCatEyeId : _selectedDogEyeId;
-    final variantNo = isCat ? _selectedCatVariantNo : _selectedDogVariantNo;
+    final filtered = _filteredItems(isCat);
+    if (filtered.isEmpty) return null;
 
+    if (_isPendingTab) {
+      return filtered.first;
+    }
+
+    final variantNo = isCat ? _selectedCatVariantNo : _selectedDogVariantNo;
     try {
-      return source.firstWhere(
-            (item) =>
-        (isCat ? item['catTypeId'] : item['dogTypeId']) == typeId &&
-            item['colorId'] == colorId &&
-            item['eyeId'] == eyeId &&
-            _toInt(item['variantNo']) == variantNo,
-      );
+      return filtered.firstWhere((item) => _itemVariantNo(item) == variantNo);
     } catch (_) {
-      return null;
+      return filtered.first;
     }
   }
 
@@ -334,13 +554,16 @@ class _PetAdminScreenState extends State<PetAdminScreen>
 
     final String? typeId = isCatTab ? _selectedCatTypeId : _selectedDogTypeId;
     final String? colorId = isCatTab ? _selectedCatColorId : _selectedDogColorId;
-    final String? eyeId = isCatTab ? _selectedCatEyeId : _selectedDogEyeId;
-    final int? variantNo = isCatTab ? _selectedCatVariantNo : _selectedDogVariantNo;
+    final String? eyeTypeId =
+    isCatTab ? _selectedCatEyeTypeId : _selectedDogEyeTypeId;
+    final String? eyeColorId =
+    isCatTab ? _selectedCatEyeColorId : _selectedDogEyeColorId;
 
-    if (typeId == null || colorId == null || eyeId == null || variantNo == null) {
+    if (typeId == null || colorId == null || eyeTypeId == null) {
       _showSnack('등록할 펫 조합을 먼저 선택해주세요.');
       return;
     }
+
     if (_selectedImageFile == null) {
       _showSnack('업로드할 이미지를 선택해주세요.');
       return;
@@ -359,25 +582,32 @@ class _PetAdminScreenState extends State<PetAdminScreen>
         ..fields['kakaoId'] = widget.kakaoId
         ..fields[isCatTab ? 'catTypeId' : 'dogTypeId'] = typeId
         ..fields['colorId'] = colorId
-        ..fields['eyeId'] = eyeId
-        ..fields['variantNo'] = variantNo.toString()
-        ..files.add(
-          await http.MultipartFile.fromPath(
-            'image',
-            _selectedImageFile!.path,
-          ),
-        );
+        ..fields['eyeTypeId'] = eyeTypeId;
+
+      if (eyeColorId != null && eyeColorId.isNotEmpty) {
+        req.fields['eyeColorId'] = eyeColorId;
+      }
+
+      req.files.add(
+        await http.MultipartFile.fromPath(
+          'image',
+          _selectedImageFile!.path,
+        ),
+      );
 
       final streamed = await req.send();
       final response = await http.Response.fromStream(streamed);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         _showSnack('등록이 완료됐어요.');
+        _isUploadedLoaded = false;
+
         setState(() {
           _selectedImageFile = null;
           _statusTabController?.index = 1;
         });
-        await _loadAll();
+
+        await _ensureUploadedLoaded();
       } else {
         _showSnack('등록 실패: ${response.statusCode}\n${response.body}');
       }
@@ -395,10 +625,14 @@ class _PetAdminScreenState extends State<PetAdminScreen>
 
     final String? typeId = isCatTab ? _selectedCatTypeId : _selectedDogTypeId;
     final String? colorId = isCatTab ? _selectedCatColorId : _selectedDogColorId;
-    final String? eyeId = isCatTab ? _selectedCatEyeId : _selectedDogEyeId;
-    final int? variantNo = isCatTab ? _selectedCatVariantNo : _selectedDogVariantNo;
+    final String? eyeTypeId =
+    isCatTab ? _selectedCatEyeTypeId : _selectedDogEyeTypeId;
+    final String? eyeColorId =
+    isCatTab ? _selectedCatEyeColorId : _selectedDogEyeColorId;
+    final int? variantNo =
+    isCatTab ? _selectedCatVariantNo : _selectedDogVariantNo;
 
-    if (typeId == null || colorId == null || eyeId == null || variantNo == null) {
+    if (typeId == null || colorId == null || eyeTypeId == null || variantNo == null) {
       _showSnack('삭제할 펫 조합을 먼저 선택해주세요.');
       return;
     }
@@ -436,29 +670,36 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     setState(() => _isDeleting = true);
 
     try {
+      final query = <String, String>{
+        'kakaoId': widget.kakaoId,
+        isCatTab ? 'catTypeId' : 'dogTypeId': typeId,
+        'colorId': colorId,
+        'eyeTypeId': eyeTypeId,
+        'variantNo': variantNo.toString(),
+      };
+
+      if (eyeColorId != null && eyeColorId.isNotEmpty) {
+        query['eyeColorId'] = eyeColorId;
+      }
+
       final uri = Uri.parse(
         isCatTab
             ? '$_baseUrl/api/admin/cat-variants/image'
             : '$_baseUrl/api/admin/dog-variants/image',
-      ).replace(
-        queryParameters: {
-          'kakaoId': widget.kakaoId,
-          isCatTab ? 'catTypeId' : 'dogTypeId': typeId,
-          'colorId': colorId,
-          'eyeId': eyeId,
-          'variantNo': variantNo.toString(),
-        },
-      );
+      ).replace(queryParameters: query);
 
       final response = await http.delete(uri);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         _showSnack('삭제가 완료됐어요.');
+        _isUploadedLoaded = false;
+
         setState(() {
           _selectedImageFile = null;
           _statusTabController?.index = 0;
         });
-        await _loadAll();
+
+        await _loadInitial();
       } else {
         _showSnack('삭제 실패: ${response.statusCode}\n${response.body}');
       }
@@ -613,12 +854,6 @@ class _PetAdminScreenState extends State<PetAdminScreen>
           ),
           child: TabBar(
             controller: animalController,
-            onTap: (_) {
-              setState(() {
-                _selectedImageFile = null;
-                _syncSelections();
-              });
-            },
             labelColor: const Color(0xFFFF8E7C),
             unselectedLabelColor: const Color(0xFF94A3B8),
             indicatorColor: const Color(0xFFFF8E7C),
@@ -640,12 +875,6 @@ class _PetAdminScreenState extends State<PetAdminScreen>
           ),
           child: TabBar(
             controller: statusController,
-            onTap: (_) {
-              setState(() {
-                _selectedImageFile = null;
-                _syncSelections();
-              });
-            },
             labelColor: const Color(0xFFFF8E7C),
             unselectedLabelColor: const Color(0xFF94A3B8),
             indicatorColor: const Color(0xFFFF8E7C),
@@ -693,7 +922,8 @@ class _PetAdminScreenState extends State<PetAdminScreen>
             fit: BoxFit.cover,
             width: double.infinity,
             height: double.infinity,
-            errorBuilder: (_, __, ___) => _buildImagePlaceholder('이미지를 불러오지 못했어요'),
+            errorBuilder: (_, __, ___) =>
+                _buildImagePlaceholder('이미지를 불러오지 못했어요'),
           ),
         )
             : _buildImagePlaceholder(
@@ -727,22 +957,31 @@ class _PetAdminScreenState extends State<PetAdminScreen>
 
   Widget _buildAnimalBody({required bool isCat}) {
     final source = _currentSource(isCat);
-    final pendingCount = source.length;
+    final count = source.length;
 
-    final typeItems = isCat ? _uniqueCatTypes() : _uniqueDogTypes();
-    final colorItems = isCat ? _uniqueCatColors() : _uniqueDogColors();
-    final eyeItems = isCat ? _uniqueCatEyes() : _uniqueDogEyes();
-    final variantNos = isCat ? _uniqueCatVariantNos() : _uniqueDogVariantNos();
+    final typeItems = _uniqueTypes(isCat);
+    final colorItems = _uniqueColors(isCat);
+    final eyeTypeItems = _uniqueEyeTypes(isCat);
+    final eyeColorItems = _uniqueEyeColors(isCat);
+    final variantNos = _uniqueVariantNos(isCat);
 
     final selectedTypeId = isCat ? _selectedCatTypeId : _selectedDogTypeId;
     final selectedColorId = isCat ? _selectedCatColorId : _selectedDogColorId;
-    final selectedEyeId = isCat ? _selectedCatEyeId : _selectedDogEyeId;
-    final selectedVariantNo = isCat ? _selectedCatVariantNo : _selectedDogVariantNo;
+    final selectedEyeTypeId = isCat ? _selectedCatEyeTypeId : _selectedDogEyeTypeId;
+    final selectedEyeColorId =
+    isCat ? _selectedCatEyeColorId : _selectedDogEyeColorId;
+    final selectedVariantNo =
+    isCat ? _selectedCatVariantNo : _selectedDogVariantNo;
 
     final currentItem = _currentSelectedItem(isCat);
 
+    final bool isSingleColor = _isSingleColorType(isCat);
+    final bool isSingleEyeColor = _isSingleEyeColorType(isCat);
+    final String? fixedColorName = _fixedColorName(isCat);
+    final String? fixedEyeColorName = _fixedEyeColorName(isCat);
+
     return RefreshIndicator(
-      onRefresh: _loadAll,
+      onRefresh: _refreshCurrentTab,
       color: const Color(0xFFFF8E7C),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -760,14 +999,16 @@ class _PetAdminScreenState extends State<PetAdminScreen>
             child: Row(
               children: [
                 Icon(
-                  _isPendingTab ? Icons.inventory_2_rounded : Icons.check_circle_rounded,
+                  _isPendingTab
+                      ? Icons.inventory_2_rounded
+                      : Icons.check_circle_rounded,
                   color: const Color(0xFFFF8E7C),
                   size: 18,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${isCat ? '고양이' : '강아지'} ${_isPendingTab ? '미등록' : '등록완료'} 조합 $pendingCount개',
+                    '${isCat ? '고양이' : '강아지'} ${_isPendingTab ? '미등록' : '등록완료'} 조합 $count개',
                     style: const TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w800,
@@ -789,9 +1030,7 @@ class _PetAdminScreenState extends State<PetAdminScreen>
               ),
               child: Center(
                 child: Text(
-                  _isPendingTab
-                      ? '미등록 조합이 없어요.'
-                      : '등록된 조합이 없어요.',
+                  _isPendingTab ? '미등록 조합이 없어요.' : '등록된 조합이 없어요.',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -823,26 +1062,10 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                     _selectedImageFile = null;
                     if (isCat) {
                       _selectedCatTypeId = value;
-                      final nextColors = _uniqueCatColors();
-                      _selectedCatColorId =
-                      nextColors.isNotEmpty ? nextColors.first['id'] : null;
-                      final nextEyes = _uniqueCatEyes();
-                      _selectedCatEyeId =
-                      nextEyes.isNotEmpty ? nextEyes.first['id'] : null;
-                      final nextVariantNos = _uniqueCatVariantNos();
-                      _selectedCatVariantNo =
-                      nextVariantNos.isNotEmpty ? nextVariantNos.first : null;
+                      _normalizeCatSelection();
                     } else {
                       _selectedDogTypeId = value;
-                      final nextColors = _uniqueDogColors();
-                      _selectedDogColorId =
-                      nextColors.isNotEmpty ? nextColors.first['id'] : null;
-                      final nextEyes = _uniqueDogEyes();
-                      _selectedDogEyeId =
-                      nextEyes.isNotEmpty ? nextEyes.first['id'] : null;
-                      final nextVariantNos = _uniqueDogVariantNos();
-                      _selectedDogVariantNo =
-                      nextVariantNos.isNotEmpty ? nextVariantNos.first : null;
+                      _normalizeDogSelection();
                     }
                   });
                 },
@@ -850,14 +1073,63 @@ class _PetAdminScreenState extends State<PetAdminScreen>
             ),
             _buildDropdownCard(
               title: '털색 선택',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedColorId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    items: colorItems
+                        .map(
+                          (e) => DropdownMenuItem<String>(
+                        value: e['id'],
+                        child: Text(e['name']!),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: isSingleColor
+                        ? null
+                        : (value) {
+                      setState(() {
+                        _selectedImageFile = null;
+                        if (isCat) {
+                          _selectedCatColorId = value;
+                          _normalizeCatSelection();
+                        } else {
+                          _selectedDogColorId = value;
+                          _normalizeDogSelection();
+                        }
+                      });
+                    },
+                  ),
+                  if (isSingleColor) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '이 종은 털색이 ${fixedColorName ?? '자동'}으로 고정돼요.',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFAA8E86),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            _buildDropdownCard(
+              title: '눈 종류 선택',
               child: DropdownButtonFormField<String>(
-                value: selectedColorId,
+                value: selectedEyeTypeId,
                 isExpanded: true,
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.zero,
                 ),
-                items: colorItems
+                items: eyeTypeItems
                     .map(
                       (e) => DropdownMenuItem<String>(
                     value: e['id'],
@@ -869,90 +1141,95 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                   setState(() {
                     _selectedImageFile = null;
                     if (isCat) {
-                      _selectedCatColorId = value;
-                      final nextEyes = _uniqueCatEyes();
-                      _selectedCatEyeId =
-                      nextEyes.isNotEmpty ? nextEyes.first['id'] : null;
-                      final nextVariantNos = _uniqueCatVariantNos();
-                      _selectedCatVariantNo =
-                      nextVariantNos.isNotEmpty ? nextVariantNos.first : null;
+                      _selectedCatEyeTypeId = value;
+                      _normalizeCatSelection();
                     } else {
-                      _selectedDogColorId = value;
-                      final nextEyes = _uniqueDogEyes();
-                      _selectedDogEyeId =
-                      nextEyes.isNotEmpty ? nextEyes.first['id'] : null;
-                      final nextVariantNos = _uniqueDogVariantNos();
-                      _selectedDogVariantNo =
-                      nextVariantNos.isNotEmpty ? nextVariantNos.first : null;
+                      _selectedDogEyeTypeId = value;
+                      _normalizeDogSelection();
                     }
                   });
                 },
               ),
             ),
             _buildDropdownCard(
-              title: '눈 선택',
-              child: DropdownButtonFormField<String>(
-                value: selectedEyeId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                items: eyeItems
-                    .map(
-                      (e) => DropdownMenuItem<String>(
-                    value: e['id'],
-                    child: Text(e['name']!),
+              title: '눈 색 선택',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedEyeColorId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    items: eyeColorItems
+                        .map(
+                          (e) => DropdownMenuItem<String>(
+                        value: e['id'],
+                        child: Text(e['name']!),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: isSingleEyeColor
+                        ? null
+                        : (value) {
+                      setState(() {
+                        _selectedImageFile = null;
+                        if (isCat) {
+                          _selectedCatEyeColorId = value;
+                          _normalizeCatSelection();
+                        } else {
+                          _selectedDogEyeColorId = value;
+                          _normalizeDogSelection();
+                        }
+                      });
+                    },
                   ),
-                )
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedImageFile = null;
-                    if (isCat) {
-                      _selectedCatEyeId = value;
-                      final nextVariantNos = _uniqueCatVariantNos();
-                      _selectedCatVariantNo =
-                      nextVariantNos.isNotEmpty ? nextVariantNos.first : null;
-                    } else {
-                      _selectedDogEyeId = value;
-                      final nextVariantNos = _uniqueDogVariantNos();
-                      _selectedDogVariantNo =
-                      nextVariantNos.isNotEmpty ? nextVariantNos.first : null;
-                    }
-                  });
-                },
+                  if (isSingleEyeColor) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '이 눈 종류는 눈 색이 ${fixedEyeColorName ?? '자동'}으로 고정돼요.',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFAA8E86),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            _buildDropdownCard(
-              title: '번호 선택',
-              child: DropdownButtonFormField<int>(
-                value: selectedVariantNo,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                items: variantNos
-                    .map(
-                      (e) => DropdownMenuItem<int>(
-                    value: e,
-                    child: Text('${isCat ? 'cat' : 'dog'} $e'),
+            if (!_isPendingTab)
+              _buildDropdownCard(
+                title: '번호 선택',
+                child: DropdownButtonFormField<int>(
+                  value: selectedVariantNo,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
                   ),
-                )
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedImageFile = null;
-                    if (isCat) {
-                      _selectedCatVariantNo = value;
-                    } else {
-                      _selectedDogVariantNo = value;
-                    }
-                  });
-                },
+                  items: variantNos
+                      .map(
+                        (e) => DropdownMenuItem<int>(
+                      value: e,
+                      child: Text('${isCat ? 'cat' : 'dog'} $e'),
+                    ),
+                  )
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedImageFile = null;
+                      if (isCat) {
+                        _selectedCatVariantNo = value;
+                      } else {
+                        _selectedDogVariantNo = value;
+                      }
+                    });
+                  },
+                ),
               ),
-            ),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.all(16),
@@ -976,13 +1253,13 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                         Expanded(
                           child: Text(
                             [
-                              isCat
-                                  ? (currentItem['catTypeNameKo'] ?? currentItem['catTypeId'])
-                                  : (currentItem['dogTypeNameKo'] ?? currentItem['dogTypeId']),
-                              currentItem['colorNameKo'] ?? currentItem['colorId'],
-                              currentItem['eyeNameKo'] ?? currentItem['eyeId'],
-                              '${isCat ? 'cat' : 'dog'} ${currentItem['variantNo']}',
-                            ].join(' · '),
+                              _itemTypeName(currentItem, isCat),
+                              _itemColorName(currentItem),
+                              _itemEyeTypeName(currentItem),
+                              _itemEyeColorName(currentItem),
+                              if (!_isPendingTab)
+                                '${isCat ? 'cat' : 'dog'} ${_itemVariantNo(currentItem)}',
+                            ].where((e) => e.trim().isNotEmpty).join(' · '),
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -1047,7 +1324,9 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: (_isDeleting || _isUploading) ? null : _pickImage,
+                            onPressed: (_isDeleting || _isUploading)
+                                ? null
+                                : _pickImage,
                             icon: const Icon(Icons.photo_library_rounded),
                             label: const Text('새 이미지 선택'),
                             style: OutlinedButton.styleFrom(
@@ -1063,7 +1342,9 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                         const SizedBox(width: 10),
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: (_isDeleting || _isUploading) ? null : _deleteCurrent,
+                            onPressed: (_isDeleting || _isUploading)
+                                ? null
+                                : _deleteCurrent,
                             icon: _isDeleting
                                 ? const SizedBox(
                               width: 16,
@@ -1103,8 +1384,8 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                             color: Colors.white,
                           ),
                         )
-                            : const Icon(Icons.restart_alt_rounded),
-                        label: Text(_isUploading ? '재등록중...' : '선택한 이미지로 다시 등록'),
+                            : const Icon(Icons.add_photo_alternate_rounded),
+                        label: Text(_isUploading ? '등록중...' : '같은 카테고리로 새 이미지 추가'),
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
                           backgroundColor: const Color(0xFFFF8E7C),
@@ -1150,7 +1431,7 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                   _buildAnimalBody(isCat: true),
                   _buildAnimalBody(isCat: false),
                 ],
-              )
+              ),
             ),
           ],
         ),

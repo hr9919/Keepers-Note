@@ -146,7 +146,9 @@ class _ManagePetsScreenState extends State<ManagePetsScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      pet.breed,
+                      ((pet.color ?? '').trim().isEmpty)
+                          ? '선택 안됨'
+                          : (pet.color ?? '').trim(),
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -692,10 +694,13 @@ class _ManagePetsScreenState extends State<ManagePetsScreen> {
           ),
         ),
         subtitle: Text(
-          pet.breed,
+          ((pet.color ?? '').trim().isEmpty)
+              ? '선택 안됨'
+              : (pet.color ?? '').trim(),
           style: const TextStyle(
             fontSize: 13,
-            color: Colors.grey,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF94A3B8),
           ),
         ),
         trailing: Row(
