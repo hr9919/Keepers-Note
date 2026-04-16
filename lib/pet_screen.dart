@@ -225,6 +225,14 @@ class _PetScreenState extends State<PetScreen>
   final String _fishApiUrl = 'http://161.33.30.40:8080/api/fish';
   final String _petLikeApiUrl = 'http://161.33.30.40:8080/api/pet-likes';
 
+  final String _catSnackOptionsApiUrl =
+      'http://161.33.30.40:8080/api/pets/cat-snack-options';
+  final String _dogSnackOptionsApiUrl =
+      'http://161.33.30.40:8080/api/pets/dog-snack-options';
+
+  List<PetSnackOption> _catSnackOptions = [];
+  List<PetSnackOption> _dogSnackOptions = [];
+
   String _resolvePetImageUrl(String? path) {
     if (path == null || path
         .trim()
@@ -283,8 +291,11 @@ class _PetScreenState extends State<PetScreen>
 
   Future<void> _initData() async {
     await _loadUserInfo();
-    await _fetchFishData();
-    await _fetchCatalogData();
+    await Future.wait([
+      _fetchFishData(),
+      _fetchCatalogData(),
+      _fetchPetSnackOptions(),
+    ]);
 
     if (_kakaoId != null) {
       await Future.wait([
@@ -296,6 +307,79 @@ class _PetScreenState extends State<PetScreen>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _fetchPetSnackOptions() async {
+    try {
+      final responses = await Future.wait([
+        http.get(Uri.parse(_catSnackOptionsApiUrl)),
+        http.get(Uri.parse(_dogSnackOptionsApiUrl)),
+      ]);
+
+      final catResponse = responses[0];
+      final dogResponse = responses[1];
+
+      debugPrint('cat snack status: ${catResponse.statusCode}');
+      debugPrint('cat snack body: ${utf8.decode(catResponse.bodyBytes)}');
+
+      debugPrint('dog snack status: ${dogResponse.statusCode}');
+      debugPrint('dog snack body: ${utf8.decode(dogResponse.bodyBytes)}');
+
+      if (catResponse.statusCode == 200) {
+        final List<dynamic> data =
+        jsonDecode(utf8.decode(catResponse.bodyBytes)) as List<dynamic>;
+        _catSnackOptions = data
+            .map((e) => PetSnackOption.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      } else {
+        _catSnackOptions = [];
+      }
+
+      if (dogResponse.statusCode == 200) {
+        final List<dynamic> data =
+        jsonDecode(utf8.decode(dogResponse.bodyBytes)) as List<dynamic>;
+        _dogSnackOptions = data
+            .map((e) => PetSnackOption.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      } else {
+        _dogSnackOptions = [];
+      }
+
+      debugPrint('cat snack parsed count: ${_catSnackOptions.length}');
+      debugPrint('dog snack parsed count: ${_dogSnackOptions.length}');
+      if (_catSnackOptions.isNotEmpty) {
+        debugPrint(
+          'first cat snack: ${_catSnackOptions.first.sourceType} / ${_catSnackOptions.first.itemId} / ${_catSnackOptions.first.nameKo}',
+        );
+      }
+      if (_dogSnackOptions.isNotEmpty) {
+        debugPrint(
+          'first dog snack: ${_dogSnackOptions.first.sourceType} / ${_dogSnackOptions.first.itemId} / ${_dogSnackOptions.first.nameKo}',
+        );
+      }
+    } catch (e) {
+      debugPrint('간식 옵션 로드 실패: $e');
+      _catSnackOptions = [];
+      _dogSnackOptions = [];
+    }
+  }
+
+  Map<String, dynamic> _buildPetUpsertBody(Pet pet, {
+    String? overrideImagePath,
+  }) {
+    return {
+      "kakaoId": int.parse(_kakaoId!),
+      "name": pet.name,
+      "memo": pet.memo,
+      "color": pet.color,
+      "catVariantId": pet.catVariantId,
+      "dogVariantId": pet.dogVariantId,
+      "favoriteSnacks": pet.favoriteSnacks.map((e) => e.toJson()).toList(),
+      "dislikedSnacks": pet.dislikedSnacks.map((e) => e.toJson()).toList(),
+      "triedSnacks": pet.triedSnacks.map((e) => e.toJson()).toList(),
+      "isCat": pet.isCat,
+      "imagePath": overrideImagePath ?? pet.imagePath,
+    };
   }
 
   Future<void> _loadUserInfo() async {
@@ -384,6 +468,8 @@ class _PetScreenState extends State<PetScreen>
     }
   }
 
+
+
   Future<void> _fetchFishData() async {
     try {
       final response = await http.get(Uri.parse(_fishApiUrl));
@@ -420,7 +506,8 @@ class _PetScreenState extends State<PetScreen>
         final Map<String, dynamic> data =
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
-        final List<dynamic> rawIds = (data['likedVariantIds'] ?? []) as List<dynamic>;
+        final List<dynamic> rawIds = (data['likedVariantIds'] ?? []) as List<
+            dynamic>;
 
         if (!mounted) return;
 
@@ -449,7 +536,9 @@ class _PetScreenState extends State<PetScreen>
   }
 
   int _breedLikeScore(String breedName, List<PetCatalogVariant> items) {
-    return items.where((item) => _likedVariantIds.contains(item.id)).length;
+    return items
+        .where((item) => _likedVariantIds.contains(item.id))
+        .length;
   }
 
   Future<void> _updatePetOrderOnServer() async {
@@ -483,6 +572,9 @@ class _PetScreenState extends State<PetScreen>
       PetCatalogVariant selectedVariant,
       String? imagePath, {
         int? existingId,
+        Set<PetSnackChoice>? favoriteSnacks,
+        Set<PetSnackChoice>? dislikedSnacks,
+        Set<PetSnackChoice>? triedSnacks,
       }) async {
     if (_kakaoId == null) return;
 
@@ -500,13 +592,14 @@ class _PetScreenState extends State<PetScreen>
         "name": name,
         "memo": memo,
         "color": color,
-
         "catVariantId": isCat ? selectedVariant.id : null,
         "dogVariantId": !isCat ? selectedVariant.id : null,
-
-        "favoriteSnack": null,
-        "triedSnacks": [],
-
+        "favoriteSnacks":
+        (favoriteSnacks ?? <PetSnackChoice>{}).map((e) => e.toJson()).toList(),
+        "dislikedSnacks":
+        (dislikedSnacks ?? <PetSnackChoice>{}).map((e) => e.toJson()).toList(),
+        "triedSnacks":
+        (triedSnacks ?? <PetSnackChoice>{}).map((e) => e.toJson()).toList(),
         "isCat": isCat,
         "imagePath": isLocalFile ? null : imagePath,
       };
@@ -528,7 +621,8 @@ class _PetScreenState extends State<PetScreen>
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final savedPet = jsonDecode(utf8.decode(response.bodyBytes));
+        final savedPet =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         final int? savedId = savedPet['id'];
 
         if (savedId != null && isLocalFile) {
@@ -540,7 +634,7 @@ class _PetScreenState extends State<PetScreen>
 
         await _fetchPetData();
       } else {
-        debugPrint('저장 실패: ${response.body}');
+        debugPrint('저장 실패: ${response.statusCode} ${response.body}');
       }
     } catch (e) {
       debugPrint('저장 에러: $e');
@@ -586,25 +680,73 @@ class _PetScreenState extends State<PetScreen>
       await http.put(
         Uri.parse('$_petApiUrl/${pet.id}'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "kakaoId": int.parse(_kakaoId!),
-          "name": pet.name,
-          "memo": pet.memo,
-          "color": pet.color,
-
-          "catVariantId": pet.catVariantId,
-          "dogVariantId": pet.dogVariantId,
-
-          "favoriteSnack": pet.favoriteSnack,
-          "triedSnacks": pet.triedSnacks.toList(),
-
-          "isCat": pet.isCat,
-          "imagePath": pet.imagePath,
-        }),
+        body: jsonEncode(_buildPetUpsertBody(pet)),
       );
     } catch (e) {
       debugPrint('간식 업데이트 실패: $e');
     }
+  }
+
+  List<PetSnackOption> _snackOptionsForPet(Pet pet) {
+    return pet.isCat ? _catSnackOptions : _dogSnackOptions;
+  }
+
+  bool _containsSnackChoice(Set<PetSnackChoice> set, PetSnackOption option) {
+    return set.any(
+          (e) => e.sourceType == option.sourceType && e.itemId == option.itemId,
+    );
+  }
+
+  Set<PetSnackChoice> _toggleSnackChoice(Set<PetSnackChoice> source,
+      PetSnackOption option,) {
+    final next = Set<PetSnackChoice>.from(source);
+    final target = PetSnackChoice(
+      sourceType: option.sourceType,
+      itemId: option.itemId,
+    );
+
+    if (next.contains(target)) {
+      next.remove(target);
+    } else {
+      next.add(target);
+    }
+    return next;
+  }
+
+  String _snackOptionDisplayName(PetSnackOption option) {
+    return option.nameKo
+        .trim()
+        .isNotEmpty ? option.nameKo.trim() : option.itemId;
+  }
+
+  String _displaySnackChoiceLabel(PetSnackChoice choice) {
+    final List<PetSnackOption> allOptions = [
+      ..._catSnackOptions,
+      ..._dogSnackOptions,
+    ];
+
+    for (final option in allOptions) {
+      if (option.sourceType == choice.sourceType &&
+          option.itemId == choice.itemId) {
+        return _snackOptionDisplayName(option);
+      }
+    }
+
+    return choice.itemId;
+  }
+
+  String _primaryFavoriteSnackLabel(Pet pet) {
+    if (pet.favoriteSnacks.isEmpty) return '아직 없음';
+    return _displaySnackChoiceLabel(pet.favoriteSnacks.first);
+  }
+
+  String _favoriteSnackSummaryLabel(Pet pet) {
+    if (pet.favoriteSnacks.isEmpty) return '아직 없음';
+    if (pet.favoriteSnacks.length == 1) {
+      return _displaySnackChoiceLabel(pet.favoriteSnacks.first);
+    }
+    return '${_displaySnackChoiceLabel(pet.favoriteSnacks.first)} 외 ${pet
+        .favoriteSnacks.length - 1}개';
   }
 
   String _petProfileTypeLabel(Pet pet) {
@@ -644,13 +786,18 @@ class _PetScreenState extends State<PetScreen>
         '러시안블루',
       ];
 
-      if (fixedBreedOnlyKeywords.any((e) => breed.contains(e))) {
+      if (fixedBreedOnlyKeywords.any((e) => normalizedBreed.contains(e))) {
+        if (normalizedBreed.contains('러시안블루')) {
+          return '러시안 블루';
+        }
         return breed;
       }
 
-      if (breed.contains('리트리버')) {
-        if (breed.contains('골든')) return '골든 리트리버';
-        if (breed.contains('래브라도')) return '래브라도 리트리버';
+      if (normalizedBreed.contains('골든리트리버')) {
+        return '골든 리트리버';
+      }
+      if (normalizedBreed.contains('래브라도리트리버')) {
+        return '래브라도 리트리버';
       }
 
       return color.isEmpty ? breed : '$color $breed';
@@ -733,9 +880,11 @@ class _PetScreenState extends State<PetScreen>
     final bool colorAll =
         _selectedColorFilters.isEmpty || _selectedColorFilters.contains('전체');
     final bool eyeStyleAll =
-        _selectedEyeStyleFilters.isEmpty || _selectedEyeStyleFilters.contains('전체');
+        _selectedEyeStyleFilters.isEmpty ||
+            _selectedEyeStyleFilters.contains('전체');
     final bool eyeColorAll =
-        _selectedEyeColorFilters.isEmpty || _selectedEyeColorFilters.contains('전체');
+        _selectedEyeColorFilters.isEmpty ||
+            _selectedEyeColorFilters.contains('전체');
 
     if (!breedAll && !_selectedBreedFilters.contains(item.breedName)) {
       return false;
@@ -1057,24 +1206,63 @@ class _PetScreenState extends State<PetScreen>
     return filtered;
   }
 
-  void _clearSnackHighlightLater(String fishId) {
+  List<PetSnackOption> _buildVisibleSnackOptions(Pet pet) {
+    final query = _snackSearchQuery.trim().toLowerCase();
+    final options = List<PetSnackOption>.from(_snackOptionsForPet(pet));
+
+    if (query.isEmpty) {
+      options.sort(
+            (a, b) => _snackOptionDisplayName(a)
+            .compareTo(_snackOptionDisplayName(b)),
+      );
+      return options;
+    }
+
+    int score(PetSnackOption option) {
+      final name = _snackOptionDisplayName(option).toLowerCase();
+      final itemId = option.itemId.toLowerCase().replaceAll('_', ' ');
+      int s = 0;
+
+      if (name == query) s += 120;
+      if (itemId == query) s += 100;
+      if (name.startsWith(query)) s += 60;
+      if (itemId.startsWith(query)) s += 45;
+      if (name.contains(query)) s += 24;
+      if (itemId.contains(query)) s += 18;
+
+      return s;
+    }
+
+    final filtered = options.where((option) {
+      final name = _snackOptionDisplayName(option).toLowerCase();
+      final itemId = option.itemId.toLowerCase().replaceAll('_', ' ');
+      return name.contains(query) || itemId.contains(query);
+    }).toList();
+
+    filtered.sort((a, b) {
+      final scoreCompare = score(b).compareTo(score(a));
+      if (scoreCompare != 0) return scoreCompare;
+      return _snackOptionDisplayName(a).compareTo(_snackOptionDisplayName(b));
+    });
+
+    return filtered;
+  }
+
+  void _clearSnackHighlightLater(String optionKey) {
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
-      if (_highlightedSnackFishId == fishId) {
+      if (_highlightedSnackFishId == optionKey) {
         setState(() => _highlightedSnackFishId = null);
       }
     });
   }
 
-  void _scrollSnackFishToTop(String fishId) {
+  void _scrollSnackOptionToTop(Pet pet, String optionKey) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_snackFishScrollController.hasClients) return;
 
-      final visibleFishList = _buildVisibleSnackFishList();
-      final index = visibleFishList.indexWhere(
-            (fish) => fish.id == fishId,
-      );
-
+      final visibleOptions = _buildVisibleSnackOptions(pet);
+      final index = visibleOptions.indexWhere((option) => option.key == optionKey);
       if (index < 0) return;
 
       _snackFishScrollController.animateTo(
@@ -1085,23 +1273,24 @@ class _PetScreenState extends State<PetScreen>
     });
   }
 
-  void _submitSnackSearch(StateSetter setSheetState) {
+  void _submitSnackSearch(Pet pet, StateSetter setSheetState) {
     final query = _snackSearchController.text.trim();
 
     setSheetState(() {
       _snackSearchQuery = query;
-      _submittedSnackQuery = query;
+      _submittedSnackQuery = query.isEmpty ? null : query;
     });
 
-    final visibleFishList = _buildVisibleSnackFishList();
-    if (visibleFishList.isEmpty) return;
+    final visibleOptions = _buildVisibleSnackOptions(pet);
+    if (visibleOptions.isEmpty) return;
 
-    final targetFish = visibleFishList.first;
+    final target = visibleOptions.first;
 
-    setSheetState(() => _highlightedSnackFishId = targetFish.id);
-    _scrollSnackFishToTop(targetFish.id);
-    _clearSnackHighlightLater(targetFish.id);
+    setSheetState(() => _highlightedSnackFishId = target.key);
+    _scrollSnackOptionToTop(pet, target.key);
+    _clearSnackHighlightLater(target.key);
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -1513,8 +1702,7 @@ class _PetScreenState extends State<PetScreen>
             )
                 : null;
 
-            Widget buildSection(
-                String title,
+            Widget buildSection(String title,
                 List<String> filters,
                 Set<String> selected, {
                   bool disabled = false,
@@ -1691,7 +1879,8 @@ class _PetScreenState extends State<PetScreen>
                         tempColor,
                         disabled: lockColor,
                         helperText: lockColor
-                            ? '선택한 종은 단색 외형이라 털색이 ${fixedColorLabel ?? '자동'}으로 고정돼요.'
+                            ? '선택한 종은 단색 외형이라 털색이 ${fixedColorLabel ??
+                            '자동'}으로 고정돼요.'
                             : null,
                       ),
 
@@ -1712,7 +1901,8 @@ class _PetScreenState extends State<PetScreen>
                         tempEyeColor,
                         disabled: lockEyeColor,
                         helperText: lockEyeColor
-                            ? '선택한 눈 모양은 눈 색이 ${fixedEyeColorLabel ?? '자동'}으로 고정돼요.'
+                            ? '선택한 눈 모양은 눈 색이 ${fixedEyeColorLabel ??
+                            '자동'}으로 고정돼요.'
                             : null,
                       ),
 
@@ -1766,22 +1956,28 @@ class _PetScreenState extends State<PetScreen>
 
                                   _selectedBreedFilters
                                     ..clear()
-                                    ..addAll(tempBreed.isEmpty ? {'전체'} : tempBreed);
+                                    ..addAll(
+                                        tempBreed.isEmpty ? {'전체'} : tempBreed);
 
                                   _selectedColorFilters
                                     ..clear()
-                                    ..addAll(tempColor.isEmpty ? {'전체'} : tempColor);
+                                    ..addAll(
+                                        tempColor.isEmpty ? {'전체'} : tempColor);
 
                                   _selectedEyeStyleFilters
                                     ..clear()
                                     ..addAll(
-                                      tempEyeStyle.isEmpty ? {'전체'} : tempEyeStyle,
+                                      tempEyeStyle.isEmpty
+                                          ? {'전체'}
+                                          : tempEyeStyle,
                                     );
 
                                   _selectedEyeColorFilters
                                     ..clear()
                                     ..addAll(
-                                      tempEyeColor.isEmpty ? {'전체'} : tempEyeColor,
+                                      tempEyeColor.isEmpty
+                                          ? {'전체'}
+                                          : tempEyeColor,
                                     );
                                 });
                                 Navigator.pop(context);
@@ -1962,6 +2158,22 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
+  void _openBreedDetail(String breed, List<PetCatalogVariant> items) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PetBreedDetailScreen(
+          breed: breed,
+          items: items,
+          onPreview: _showVariantImagePreview,
+          imageBuilder: _buildPetImage,
+          likedIds: _likedVariantIds,
+          onToggleLike: _toggleLikedVariant,
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildBreedCard({
     required String title,
@@ -2124,14 +2336,21 @@ class _PetScreenState extends State<PetScreen>
   void _showVariantImagePreview(PetCatalogVariant item) {
     final String? imagePath = item.imagePath;
     final bool hasLocalFile =
-        imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync();
+        imagePath != null && imagePath.isNotEmpty &&
+            File(imagePath).existsSync();
     final bool isRemote = _isRemotePetImage(imagePath);
     final String remoteUrl = _resolvePetImageUrl(imagePath);
 
     final detailText = [
-      if (item.colorName.trim().isNotEmpty) item.colorName,
-      if (item.eyeStyleKo.trim().isNotEmpty) item.eyeStyleKo,
-      if ((item.eyeColorNameKo ?? '').trim().isNotEmpty) item.eyeColorNameKo!,
+      if (item.colorName
+          .trim()
+          .isNotEmpty) item.colorName,
+      if (item.eyeStyleKo
+          .trim()
+          .isNotEmpty) item.eyeStyleKo,
+      if ((item.eyeColorNameKo ?? '')
+          .trim()
+          .isNotEmpty) item.eyeColorNameKo!,
     ].join(' · ');
 
     showGeneralDialog(
@@ -2153,7 +2372,8 @@ class _PetScreenState extends State<PetScreen>
               ),
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 20),
                   child: Stack(
                     alignment: Alignment.center,
                     clipBehavior: Clip.none,
@@ -2268,7 +2488,8 @@ class _PetScreenState extends State<PetScreen>
   void _showPetImagePreview(Pet pet) {
     final String? imagePath = pet.imagePath;
     final bool hasLocalFile =
-        imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync();
+        imagePath != null && imagePath.isNotEmpty &&
+            File(imagePath).existsSync();
     final bool isRemote = _isRemotePetImage(imagePath);
     final String remoteUrl = _resolvePetImageUrl(imagePath);
 
@@ -2291,7 +2512,8 @@ class _PetScreenState extends State<PetScreen>
               ),
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 20),
                   child: Stack(
                     alignment: Alignment.center,
                     clipBehavior: Clip.none,
@@ -2903,7 +3125,8 @@ class _PetScreenState extends State<PetScreen>
         ),
       );
 
-      debugPrint('좋아요 요청: kakaoId=$_kakaoId, petType=$petType, variantId=$variantId');
+      debugPrint(
+          '좋아요 요청: kakaoId=$_kakaoId, petType=$petType, variantId=$variantId');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data =
@@ -3082,10 +3305,7 @@ class _PetScreenState extends State<PetScreen>
       return _buildEmptyPetPlaceholder(isCatTab);
     }
 
-    final double screenWidth = MediaQuery
-        .of(context)
-        .size
-        .width;
+    final double screenWidth = MediaQuery.of(context).size.width;
     final double cardWidth = screenWidth < 390 ? 280 : 296;
 
     return SizedBox(
@@ -3127,8 +3347,9 @@ class _PetScreenState extends State<PetScreen>
             child: _buildPetSummaryCard(
               pet,
               width: cardWidth,
+              reorderIndex: index,
               isFirst: index == 0,
-              isDragging: false,
+              isDragging: _draggingPet?.id == pet.id,
               reorderHandle: ReorderableDelayedDragStartListener(
                 index: index,
                 child: _buildPetReorderHandle(),
@@ -3136,16 +3357,34 @@ class _PetScreenState extends State<PetScreen>
             ),
           );
         },
+        onReorderStart: (index) {
+          if (index < 0 || index >= filteredPets.length) return;
+          setState(() {
+            _draggingPet = filteredPets[index];
+            _showDeleteDropZone = false;
+          });
+        },
+        onReorderEnd: (index) {
+          if (!mounted) return;
+          setState(() {
+            _draggingPet = null;
+            _showDeleteDropZone = false;
+          });
+        },
         onReorder: (oldIndex, newIndex) async {
           if (newIndex > oldIndex) newIndex -= 1;
 
           setState(() {
-            final pet = filteredPets.removeAt(oldIndex);
-            filteredPets.insert(newIndex, pet);
+            final movedPet = filteredPets.removeAt(oldIndex);
+            filteredPets.insert(newIndex, movedPet);
 
-            final otherPets = _allPets.where((p) => p.isCat != isCatTab)
-                .toList();
-            _allPets = [...filteredPets, ...otherPets];
+            final otherTabPets = _allPets.where((p) => p.isCat != isCatTab).toList();
+
+            if (isCatTab) {
+              _allPets = [...filteredPets, ...otherTabPets];
+            } else {
+              _allPets = [...otherTabPets, ...filteredPets];
+            }
           });
 
           await _updatePetOrderOnServer();
@@ -3181,17 +3420,18 @@ class _PetScreenState extends State<PetScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(
             3,
-                (_) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  _PetHandleDot(),
-                  SizedBox(width: 3),
-                  _PetHandleDot(),
-                ],
-              ),
-            ),
+                (_) =>
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      _PetHandleDot(),
+                      SizedBox(width: 3),
+                      _PetHandleDot(),
+                    ],
+                  ),
+                ),
           ),
         ),
       ),
@@ -3288,6 +3528,7 @@ class _PetScreenState extends State<PetScreen>
   Widget _buildPetSummaryCard(
       Pet pet, {
         required double width,
+        required int reorderIndex,
         bool isFirst = false,
         bool isDragging = false,
         bool showSnackLab = true,
@@ -3305,28 +3546,60 @@ class _PetScreenState extends State<PetScreen>
           bottom: 6,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFFCFB),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: const Color(0xFFFFE1D9),
-            width: 1.1,
+            color: const Color(0xFFFFDDD4),
+            width: 1.2,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.035),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
           child: Row(
             children: [
               Expanded(
-                child: _buildPetSummaryMainArea(
-                  pet,
-                  dragging: false,
+                child: LongPressDraggable<Pet>(
+                  data: pet,
+                  delay: const Duration(milliseconds: 220),
+                  dragAnchorStrategy: pointerDragAnchorStrategy,
+                  rootOverlay: true,
+                  maxSimultaneousDrags: 1,
+                  feedback: _buildDraggingPetFeedback(pet),
+                  onDragStarted: () {
+                    setState(() {
+                      _draggingPet = pet;
+                      _showDeleteDropZone = true;
+                    });
+                  },
+                  onDragEnd: (_) {
+                    if (!mounted) return;
+                    setState(() {
+                      _draggingPet = null;
+                      _showDeleteDropZone = false;
+                    });
+                  },
+                  onDraggableCanceled: (_, __) {
+                    if (!mounted) return;
+                    setState(() {
+                      _draggingPet = null;
+                      _showDeleteDropZone = false;
+                    });
+                  },
+                  childWhenDragging: _buildPetSummaryMainArea(
+                    pet,
+                    dragging: true,
+                  ),
+                  child: _buildPetSummaryMainArea(
+                    pet,
+                    dragging: false,
+                  ),
                 ),
               ),
               if (showSnackLab || reorderHandle != null) ...[
@@ -3399,9 +3672,10 @@ class _PetScreenState extends State<PetScreen>
     return items;
   }
 
-  Widget _buildPetSummaryMainArea(Pet pet, {
-    bool dragging = false,
-  }) {
+  Widget _buildPetSummaryMainArea(
+      Pet pet, {
+        bool dragging = false,
+      }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -3458,30 +3732,40 @@ class _PetScreenState extends State<PetScreen>
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Container(
-                      constraints: const BoxConstraints(maxWidth: 156),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF1EC),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: const Color(0xFFFFD5CB),
-                          width: 1,
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3.5,
                         ),
-                      ),
-                      child: AutoSizeText(
-                        _petProfileTypeLabel(pet),
-                        maxLines: 1,
-                        minFontSize: 8,
-                        stepGranularity: 0.5,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF7A6E69),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF1EC),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: const Color(0xFFFFD5CB),
+                            width: 1,
+                          ),
+                        ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minHeight: 16,
+                            maxWidth: 190,
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _petProfileTypeLabel(pet),
+                              maxLines: 1,
+                              softWrap: false,
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF7A6E69),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -3495,37 +3779,32 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
-  void _openBreedDetail(String breed, List<PetCatalogVariant> items) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            PetBreedDetailScreen(
-              breed: breed,
-              items: items,
-              onPreview: _showVariantImagePreview,
-              imageBuilder: _buildPetImage,
-              likedIds: _likedVariantIds,
-              onToggleLike: _toggleLikedVariant,
-            ),
-      ),
-    );
-  }
-
   Widget _buildSnackIconArea(Pet pet) {
-    final String favorite = (pet.favoriteSnack ?? '').trim();
-    final bool hasFavorite = favorite.isNotEmpty;
+    final PetSnackChoice? firstFavorite =
+    pet.favoriteSnacks.isNotEmpty ? pet.favoriteSnacks.first : null;
+
+    PetSnackOption? favoriteOption;
+    if (firstFavorite != null) {
+      final allOptions = [
+        ..._catSnackOptions,
+        ..._dogSnackOptions,
+      ];
+
+      for (final option in allOptions) {
+        if (option.sourceType == firstFavorite.sourceType &&
+            option.itemId == firstFavorite.itemId) {
+          favoriteOption = option;
+          break;
+        }
+      }
+    }
+
+    final String favoriteLabel =
+    firstFavorite == null ? '아직 없음' : _displaySnackChoiceLabel(firstFavorite);
+
+    final bool hasFavorite = firstFavorite != null;
 
     if (hasFavorite) {
-      final favFish = _fishList.firstWhere(
-            (f) => (f.nameKo ?? f.name) == favorite,
-        orElse: () => const FishItem(
-          id: '',
-          name: '',
-          image: '',
-        ),
-      );
-
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -3545,20 +3824,22 @@ class _PetScreenState extends State<PetScreen>
                     ),
                   ),
                   alignment: Alignment.center,
-                  child: favFish.image.isNotEmpty
+                  child: favoriteOption != null &&
+                      favoriteOption.imagePath != null &&
+                      favoriteOption.imagePath!.trim().isNotEmpty
                       ? Image.asset(
-                    _imageAssetPath(favFish.image),
+                    _imageAssetPath(favoriteOption.imagePath),
                     width: 30,
                     height: 30,
                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => const Icon(
-                      Icons.phishing_rounded,
+                      Icons.favorite_rounded,
                       size: 22,
                       color: Color(0xFFFFB938),
                     ),
                   )
                       : const Icon(
-                    Icons.phishing_rounded,
+                    Icons.favorite_rounded,
                     size: 22,
                     color: Color(0xFFFFB938),
                   ),
@@ -3577,12 +3858,12 @@ class _PetScreenState extends State<PetScreen>
           ),
           const SizedBox(height: 3),
           Text(
-            favorite,
+            favoriteLabel,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 9.1,
+              fontSize: 9.0,
               fontWeight: FontWeight.w800,
               color: Color(0xFFFF8E7C),
               height: 1.0,
@@ -3597,48 +3878,23 @@ class _PetScreenState extends State<PetScreen>
       children: const [
         Expanded(
           child: Center(
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 42,
-                  height: 42,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Color(0xFFFFFFFF),
-                      borderRadius: BorderRadius.all(Radius.circular(14)),
-                    ),
-                    child: Icon(
-                      Icons.phishing_rounded,
-                      size: 22,
-                      color: Color(0xFFFFC83D),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: -1,
-                  top: -1,
-                  child: Icon(
-                    Icons.favorite_border_rounded,
-                    size: 14,
-                    color: Color(0xFFD8B6B0),
-                  ),
-                ),
-              ],
+            child: Icon(
+              Icons.favorite_border_rounded,
+              size: 24,
+              color: Color(0xFFD0D5DD),
             ),
           ),
         ),
         SizedBox(height: 3),
         Text(
-          '최애?',
+          '아직 없음',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 9.1,
+            fontSize: 9.0,
             fontWeight: FontWeight.w800,
-            color: Color(0xFFBFA19B),
+            color: Color(0xFFB0B8C1),
             height: 1.0,
           ),
         ),
@@ -3646,54 +3902,80 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
+  List<String> _favoriteSnackNames(Pet pet) {
+    return pet.favoriteSnacks
+        .map(_displaySnackChoiceLabel)
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+  }
+
+  List<String> _dislikedSnackNames(Pet pet) {
+    return pet.dislikedSnacks
+        .map(_displaySnackChoiceLabel)
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+  }
+
+  String _snackNamesMultiline(
+      List<String> names, {
+        int maxLines = 3,
+      }) {
+    if (names.isEmpty) return '아직 없음';
+
+    final visible = names.take(maxLines).toList();
+    return visible.join('\n');
+  }
+
   Widget _buildSnackActionButton({
     required IconData icon,
     required String label,
     required bool active,
     required VoidCallback onTap,
-    required Color activeColor,
-    required Color activeBgColor,
+    Color activeColor = const Color(0xFFFF8E7C),
+    Color activeBgColor = const Color(0xFFFFF1EE),
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 10,
-            vertical: 8,
-          ),
+          curve: Curves.easeOutCubic,
+          width: 56,
+          padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: active ? activeBgColor : Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: active
-                  ? activeColor.withOpacity(0.55)
-                  : const Color(0xFFEAEAEA),
-              width: 1.2,
+                  ? activeColor.withOpacity(0.28)
+                  : const Color(0xFFEAECEF),
+              width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          child: Row(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 icon,
                 size: 16,
-                color: active
-                    ? activeColor
-                    : const Color(0xFF9A9A9A),
+                color: active ? activeColor : const Color(0xFF98A2B3),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(height: 3),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: active
-                      ? activeColor
-                      : const Color(0xFF7A7A7A),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: active ? activeColor : const Color(0xFF98A2B3),
                 ),
               ),
             ],
@@ -3711,38 +3993,59 @@ class _PetScreenState extends State<PetScreen>
     required Color bgColor,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      constraints: const BoxConstraints(minHeight: 84),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withOpacity(0.10),
+          width: 1,
+        ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 18),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.72),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              size: 16,
+              color: color,
+            ),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: color.withOpacity(0.85),
+                  style: const TextStyle(
+                    fontSize: 10.3,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF8E8E93),
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   value,
-                  maxLines: 1,
+                  maxLines: 3,
+                  softWrap: true,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 11.1,
+                    fontWeight: FontWeight.w800,
                     color: Color(0xFF2D3436),
+                    height: 1.18,
                   ),
                 ),
               ],
@@ -3753,7 +4056,7 @@ class _PetScreenState extends State<PetScreen>
     );
   }
 
-  Widget _buildSnackSearchBar(StateSetter setSheetState) {
+  Widget _buildSnackSearchBar(Pet pet, StateSetter setSheetState) {
     return Container(
       height: 46,
       decoration: BoxDecoration(
@@ -3780,26 +4083,48 @@ class _PetScreenState extends State<PetScreen>
           color: Color(0xFF333333),
           height: 1.15,
         ),
-        decoration: const InputDecoration(
-          hintText: '물고기 이름 검색',
-          hintStyle: TextStyle(
+        decoration: InputDecoration(
+          hintText: '간식 이름 검색',
+          hintStyle: const TextStyle(
             fontSize: 14,
             color: Color(0xFFB0B0B0),
             height: 1.15,
           ),
-          prefixIcon: Padding(
-            padding: EdgeInsets.all(11),
-            child: Icon(
-              Icons.search_rounded,
-              size: 20,
-              color: Color(0xFFFF8E7C),
+          prefixIcon: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => _submitSnackSearch(pet, setSheetState),
+            child: const Padding(
+              padding: EdgeInsets.all(11),
+              child: Icon(
+                Icons.search_rounded,
+                size: 20,
+                color: Color(0xFFFF8E7C),
+              ),
             ),
           ),
           prefixIconConstraints:
-          BoxConstraints(minWidth: 40, minHeight: 40),
+          const BoxConstraints(minWidth: 40, minHeight: 40),
+          suffixIcon: _snackSearchQuery.trim().isEmpty
+              ? null
+              : IconButton(
+            splashRadius: 18,
+            onPressed: () {
+              _snackSearchController.clear();
+              setSheetState(() {
+                _snackSearchQuery = '';
+                _submittedSnackQuery = null;
+                _highlightedSnackFishId = null;
+              });
+            },
+            icon: const Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: Color(0xFFB0B0B0),
+            ),
+          ),
           border: InputBorder.none,
           isDense: true,
-          contentPadding: EdgeInsets.fromLTRB(0, 14, 16, 14),
+          contentPadding: const EdgeInsets.fromLTRB(0, 14, 16, 14),
         ),
         onChanged: (value) {
           setSheetState(() {
@@ -3807,7 +4132,7 @@ class _PetScreenState extends State<PetScreen>
             _highlightedSnackFishId = null;
           });
         },
-        onSubmitted: (_) => _submitSnackSearch(setSheetState),
+        onSubmitted: (_) => _submitSnackSearch(pet, setSheetState),
       ),
     );
   }
@@ -4334,171 +4659,176 @@ class _PetScreenState extends State<PetScreen>
       context: context,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 18,
-          bottom: MediaQuery.of(context).padding.bottom + 18,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.98),
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(30),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 24,
-              offset: const Offset(0, -4),
+      builder: (context) =>
+          Container(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 18,
+              bottom: MediaQuery
+                  .of(context)
+                  .padding
+                  .bottom + 18,
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 44,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE6E1DE),
-                borderRadius: BorderRadius.circular(999),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.98),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(30),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, -4),
+                ),
+              ],
             ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFFFFF6F2),
-                    Color(0xFFFFFCFB),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: const Color(0xFFFFE1D9),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF1EC),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: const Color(0xFFFFDDD4),
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(17),
-                      child: _buildPetImage(
-                        pet.imagePath,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 44,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE6E1DE),
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AutoSizeText(
-                          pet.name,
-                          maxLines: 1,
-                          minFontSize: 12,
-                          stepGranularity: 0.5,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF2D3436),
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: const Color(0xFFFFE2DA),
-                            ),
-                          ),
-                          child: AutoSizeText(
-                            _petProfileTypeLabel(pet),
-                            maxLines: 1,
-                            minFontSize: 9,
-                            stepGranularity: 0.5,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF7A6E69),
-                            ),
-                          ),
-                        ),
+                ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFFFFF6F2),
+                        Color(0xFFFFFCFB),
                       ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: const Color(0xFFFFE1D9),
+                      width: 1,
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            _buildPetMenuTile(
-              icon: Icons.edit_rounded,
-              title: '프로필 정보 변경',
-              subtitle: '이름, 외형, 설명을 수정해요',
-              onTap: () {
-                Navigator.pop(context);
-                _showPetEditSheet(pet: pet);
-              },
-            ),
-            const SizedBox(height: 10),
-            _buildPetMenuTile(
-              icon: Icons.manage_accounts_rounded,
-              title: '통합 관리에서 보기',
-              subtitle: '순서 변경, 편집, 삭제를 한 번에',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ManagePetsScreen(
-                      pets: _allPets,
-                      onUpdate: (updatedList) =>
-                          setState(() => _allPets = updatedList),
-                      deletePet: (id) => _deletePetFromServer(id),
-                      onEdit: (pet) async {
-                        await _showPetEditSheet(pet: pet);
-                      },
-                    ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF1EC),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: const Color(0xFFFFDDD4),
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(17),
+                          child: _buildPetImage(
+                            pet.imagePath,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AutoSizeText(
+                              pet.name,
+                              maxLines: 1,
+                              minFontSize: 12,
+                              stepGranularity: 0.5,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF2D3436),
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: const Color(0xFFFFE2DA),
+                                ),
+                              ),
+                              child: AutoSizeText(
+                                _petProfileTypeLabel(pet),
+                                maxLines: 1,
+                                minFontSize: 9,
+                                stepGranularity: 0.5,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF7A6E69),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                );
-              },
+                ),
+                const SizedBox(height: 14),
+                _buildPetMenuTile(
+                  icon: Icons.edit_rounded,
+                  title: '프로필 정보 변경',
+                  subtitle: '이름, 외형, 설명을 수정해요',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showPetEditSheet(pet: pet);
+                  },
+                ),
+                const SizedBox(height: 10),
+                _buildPetMenuTile(
+                  icon: Icons.manage_accounts_rounded,
+                  title: '통합 관리에서 보기',
+                  subtitle: '순서 변경, 편집, 삭제를 한 번에',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ManagePetsScreen(
+                              pets: _allPets,
+                              onUpdate: (updatedList) =>
+                                  setState(() => _allPets = updatedList),
+                              deletePet: (id) => _deletePetFromServer(id),
+                              onEdit: (pet) async {
+                                await _showPetEditSheet(pet: pet);
+                              },
+                            ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                _buildPetMenuTile(
+                  icon: Icons.delete_rounded,
+                  title: '프로필 삭제',
+                  subtitle: '이 펫 프로필을 목록에서 제거해요',
+                  isDestructive: true,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showDeleteConfirm(pet);
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            _buildPetMenuTile(
-              icon: Icons.delete_rounded,
-              title: '프로필 삭제',
-              subtitle: '이 펫 프로필을 목록에서 제거해요',
-              isDestructive: true,
-              onTap: () {
-                Navigator.pop(context);
-                _showDeleteConfirm(pet);
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -4619,7 +4949,8 @@ class _PetScreenState extends State<PetScreen>
 
       if (savedVariantId.isNotEmpty) {
         try {
-          selectedVariant = variantPool.firstWhere((v) => v.id == savedVariantId);
+          selectedVariant =
+              variantPool.firstWhere((v) => v.id == savedVariantId);
         } catch (_) {
           selectedVariant = null;
         }
@@ -4676,8 +5007,14 @@ class _PetScreenState extends State<PetScreen>
       backgroundColor: Colors.transparent,
       builder: (dialogContext) {
         final double bottomPadding =
-            MediaQuery.of(dialogContext).viewInsets.bottom +
-                MediaQuery.of(dialogContext).padding.bottom +
+            MediaQuery
+                .of(dialogContext)
+                .viewInsets
+                .bottom +
+                MediaQuery
+                    .of(dialogContext)
+                    .padding
+                    .bottom +
                 24;
 
         return StatefulBuilder(
@@ -4834,12 +5171,15 @@ class _PetScreenState extends State<PetScreen>
                               await Navigator.push<ImageAdjustResult>(
                                 dialogContext,
                                 MaterialPageRoute(
-                                  builder: (_) => ImageAdjustScreen(
-                                    imagePath: image.path,
-                                    title: isCatTab ? '고양이 사진 조정' : '강아지 사진 조정',
-                                    shape: ImageAdjustShape.circle,
-                                    viewportAspectRatio: 1.0,
-                                  ),
+                                  builder: (_) =>
+                                      ImageAdjustScreen(
+                                        imagePath: image.path,
+                                        title: isCatTab
+                                            ? '고양이 사진 조정'
+                                            : '강아지 사진 조정',
+                                        shape: ImageAdjustShape.circle,
+                                        viewportAspectRatio: 1.0,
+                                      ),
                                 ),
                               );
 
@@ -4847,7 +5187,10 @@ class _PetScreenState extends State<PetScreen>
 
                               final tempDir = await getTemporaryDirectory();
                               final filePath =
-                                  '${tempDir.path}/pet_${DateTime.now().millisecondsSinceEpoch}.${adjusted.extension}';
+                                  '${tempDir.path}/pet_${DateTime
+                                  .now()
+                                  .millisecondsSinceEpoch}.${adjusted
+                                  .extension}';
                               final file = File(filePath);
                               await file.writeAsBytes(adjusted.bytes);
 
@@ -5005,7 +5348,9 @@ class _PetScreenState extends State<PetScreen>
                                   child: IgnorePointer(
                                     ignoring: isSingleColorBreed,
                                     child: _buildMiniWheelPicker(
-                                      title: isSingleColorBreed ? '색상 고정' : '색상',
+                                      title: isSingleColorBreed
+                                          ? '색상 고정'
+                                          : '색상',
                                       items: colorOptions,
                                       selectedValue: selectedColor,
                                       onChanged: (value) async {
@@ -5154,7 +5499,9 @@ class _PetScreenState extends State<PetScreen>
                             minimumSize: const Size(0, 0),
                           ),
                           child: Text(
-                            isSaving ? '저장 중...' : (isEdit ? '변경 저장하기' : '등록하기'),
+                            isSaving ? '저장 중...' : (isEdit
+                                ? '변경 저장하기'
+                                : '등록하기'),
                             style: const TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w900,
@@ -5207,6 +5554,481 @@ class _PetScreenState extends State<PetScreen>
       return colors.first;
     }
     return null;
+  }
+
+  void _showSnackLabSheet(Pet pet) {
+    _snackSearchController.clear();
+    _snackSearchQuery = '';
+    _submittedSnackQuery = null;
+    _highlightedSnackFishId = null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final triedCount = pet.triedSnacks.length;
+          final totalSnackCount = _snackOptionsForPet(pet).length;
+
+          final favoriteLabel = _snackNamesMultiline(_favoriteSnackNames(pet));
+          final dislikedLabel = _snackNamesMultiline(_dislikedSnackNames(pet));
+
+          final visibleOptions = _buildVisibleSnackOptions(pet);
+
+          Future<void> applyUpdatedPet(Pet updatedPet) async {
+            final idx = _allPets.indexWhere((p) => p.id == updatedPet.id);
+            if (idx != -1) {
+              _allPets[idx] = updatedPet;
+            }
+            pet = updatedPet;
+
+            if ((context as Element).mounted) {
+              setSheetState(() {});
+            }
+            if (mounted) {
+              setState(() {});
+            }
+
+            await _updatePetSnacks(updatedPet);
+          }
+
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            height: MediaQuery.of(context).size.height * 0.82,
+            padding: EdgeInsets.fromLTRB(
+              20,
+              16,
+              20,
+              MediaQuery.of(context).padding.bottom + 10,
+            ),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFDFDFD),
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(30),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E2E2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF1EE),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: const Icon(
+                          Icons.phishing_rounded,
+                          color: Color(0xFFFF8E7C),
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${pet.name}의 간식 실험실',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              '먹여본 간식을 체크하고 선호/비선호 간식을 골라주세요',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF8E8E93),
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSnackInfoChip(
+                        icon: Icons.check_circle_rounded,
+                        label: '먹어본 간식',
+                        value: '$triedCount개 / $totalSnackCount개',
+                        color: const Color(0xFFFF8E7C),
+                        bgColor: const Color(0xFFFFF1EE),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildSnackInfoChip(
+                        icon: Icons.star_rounded,
+                        label: '선호 간식',
+                        value: favoriteLabel,
+                        color: const Color(0xFFFFC24B),
+                        bgColor: const Color(0xFFFFF8E8),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildSnackInfoChip(
+                        icon: Icons.heart_broken_rounded,
+                        label: '비선호 간식',
+                        value: dislikedLabel,
+                        color: const Color(0xFF98A2B3),
+                        bgColor: const Color(0xFFF2F4F7),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+
+                _buildSnackSearchBar(pet, setSheetState),
+
+                const SizedBox(height: 12),
+
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 6),
+                  child: Text(
+                    _snackSearchQuery.trim().isNotEmpty ? '관련순' : '이름순',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+
+                Expanded(
+                  child: visibleOptions.isEmpty
+                      ? const Center(
+                    child: Text(
+                      '검색 결과가 없어요',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                  )
+                      : ListView.separated(
+                    controller: _snackFishScrollController,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: visibleOptions.length,
+                    separatorBuilder: (_, __) =>
+                    const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final option = visibleOptions[index];
+                      final displayName = _snackOptionDisplayName(option);
+
+                      final target = PetSnackChoice(
+                        sourceType: option.sourceType,
+                        itemId: option.itemId,
+                      );
+
+                      final isTried =
+                      _containsSnackChoice(pet.triedSnacks, option);
+                      final isFav =
+                      _containsSnackChoice(pet.favoriteSnacks, option);
+                      final isDisliked =
+                      _containsSnackChoice(pet.dislikedSnacks, option);
+                      final isHighlighted =
+                          _highlightedSnackFishId == option.key;
+
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isHighlighted
+                              ? const Color(0xFFFFF4E8)
+                              : isFav
+                              ? const Color(0xFFFFFBF2)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isHighlighted
+                                ? const Color(0xFFFFC8A2)
+                                : isFav
+                                ? const Color(0xFFFFD67A)
+                                : isTried
+                                ? const Color(0xFFFFD8D1)
+                                : const Color(0xFFF0F0F0),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF4F1),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              alignment: Alignment.center,
+                              child: option.imagePath != null &&
+                                  option.imagePath!.trim().isNotEmpty
+                                  ? Image.asset(
+                                _imageAssetPath(option.imagePath),
+                                width: 28,
+                                height: 28,
+                                errorBuilder: (_, __, ___) =>
+                                const Icon(
+                                  Icons.phishing,
+                                  color: Color(0xFFFF8E7C),
+                                ),
+                              )
+                                  : const Icon(
+                                Icons.phishing,
+                                color: Color(0xFFFF8E7C),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          displayName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF2D3436),
+                                          ),
+                                        ),
+                                      ),
+                                      if (isFav)
+                                        Container(
+                                          padding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                            const Color(0xFFFFF1D6),
+                                            borderRadius:
+                                            BorderRadius.circular(999),
+                                          ),
+                                          child: const Text(
+                                            '선호',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFFE0A100),
+                                            ),
+                                          ),
+                                        ),
+                                      if (isDisliked) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                            const Color(0xFFF2F4F7),
+                                            borderRadius:
+                                            BorderRadius.circular(999),
+                                          ),
+                                          child: const Text(
+                                            '비선호',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF667085),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildSnackActionButton(
+                                  icon: isTried
+                                      ? Icons.check_rounded
+                                      : Icons.add_rounded,
+                                  label: isTried ? '기록됨' : '기록',
+                                  active: isTried,
+                                  onTap: () async {
+                                    final updatedTried =
+                                    Set<PetSnackChoice>.from(
+                                      pet.triedSnacks,
+                                    );
+                                    final updatedFavorites =
+                                    Set<PetSnackChoice>.from(
+                                      pet.favoriteSnacks,
+                                    );
+
+                                    if (isTried) {
+                                      updatedTried.remove(target);
+                                      updatedFavorites.remove(target);
+                                    } else {
+                                      updatedTried.add(target);
+                                    }
+
+                                    final updatedPet = pet.copyWith(
+                                      triedSnacks: updatedTried,
+                                      favoriteSnacks: updatedFavorites,
+                                    );
+
+                                    await applyUpdatedPet(updatedPet);
+                                  },
+                                  activeColor: const Color(0xFFFF8E7C),
+                                  activeBgColor: const Color(0xFFFFF1EE),
+                                ),
+                                const SizedBox(width: 6),
+                                _buildSnackActionButton(
+                                  icon: Icons.favorite_rounded,
+                                  label: '선호',
+                                  active: isFav,
+                                  onTap: () async {
+                                    final updatedTried =
+                                    Set<PetSnackChoice>.from(
+                                      pet.triedSnacks,
+                                    )
+                                      ..add(target);
+
+                                    final updatedFavorites =
+                                    Set<PetSnackChoice>.from(
+                                      pet.favoriteSnacks,
+                                    );
+
+                                    final updatedDisliked =
+                                    Set<PetSnackChoice>.from(
+                                      pet.dislikedSnacks,
+                                    )
+                                      ..remove(target);
+
+                                    if (isFav) {
+                                      updatedFavorites.remove(target);
+                                    } else {
+                                      if (updatedFavorites.length >= 3) {
+                                        return;
+                                      }
+                                      updatedFavorites.add(target);
+                                    }
+
+                                    final updatedPet = pet.copyWith(
+                                      triedSnacks: updatedTried,
+                                      favoriteSnacks: updatedFavorites,
+                                      dislikedSnacks: updatedDisliked,
+                                    );
+
+                                    await applyUpdatedPet(updatedPet);
+                                  },
+                                  activeColor: const Color(0xFFFFB938),
+                                  activeBgColor: const Color(0xFFFFF8E8),
+                                ),
+                                const SizedBox(width: 6),
+                                _buildSnackActionButton(
+                                  icon: Icons.heart_broken_rounded,
+                                  label: '비선호',
+                                  active: isDisliked,
+                                  onTap: () async {
+                                    final updatedDisliked =
+                                    Set<PetSnackChoice>.from(
+                                      pet.dislikedSnacks,
+                                    );
+                                    final updatedFavorites =
+                                    Set<PetSnackChoice>.from(
+                                      pet.favoriteSnacks,
+                                    );
+
+                                    if (isDisliked) {
+                                      updatedDisliked.remove(target);
+                                    } else {
+                                      if (updatedDisliked.length >= 3) {
+                                        return;
+                                      }
+                                      updatedDisliked.add(target);
+                                      updatedFavorites.remove(target);
+                                    }
+
+                                    final updatedPet = pet.copyWith(
+                                      favoriteSnacks: updatedFavorites,
+                                      dislikedSnacks: updatedDisliked,
+                                    );
+
+                                    await applyUpdatedPet(updatedPet);
+                                  },
+                                  activeColor: const Color(0xFF98A2B3),
+                                  activeBgColor: const Color(0xFFF2F4F7),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildMiniWheelPicker({
@@ -5329,365 +6151,69 @@ class _PetScreenState extends State<PetScreen>
       ),
     );
   }
+}
 
-  void _showSnackLabSheet(Pet pet) {
-    _snackSearchController.clear();
-    _snackSearchQuery = '';
-    _submittedSnackQuery = null;
-    _highlightedSnackFishId = null;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          final triedCount = pet.triedSnacks.length;
-          final favoriteSnack = (pet.favoriteSnack ?? '').trim();
-          final visibleFishList = _buildVisibleSnackFishList();
 
-          Future<void> applyUpdatedPet(Pet updatedPet) async {
-            final idx = _allPets.indexWhere((p) => p.id == updatedPet.id);
-            if (idx != -1) {
-              _allPets[idx] = updatedPet;
-            }
-            pet = updatedPet;
-
-            if ((context as Element).mounted) {
-              setSheetState(() {});
-            }
-            if (mounted) {
-              setState(() {});
-            }
-
-            await _updatePetSnacks(updatedPet);
-          }
-
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            height: MediaQuery.of(context).size.height * 0.82,
-            padding: EdgeInsets.fromLTRB(
-              20,
-              16,
-              20,
-              MediaQuery.of(context).padding.bottom + 10,
-            ),
-            decoration: const BoxDecoration(
-              color: Color(0xFFFDFDFD),
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(30),
+Widget _buildInfoMiniCard({
+  required IconData icon,
+  required String title,
+  required String value,
+}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF1ED),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: const Color(0xFFFF8E7C),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF8E8E93),
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 18),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE2E2E2),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF2D3436),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF1EE),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: const Icon(
-                          Icons.phishing_rounded,
-                          color: Color(0xFFFF8E7C),
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${pet.name}의 간식 실험실',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              '먹여본 물고기를 체크하고 최애 간식을 골라주세요',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF8E8E93),
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildSnackInfoChip(
-                        icon: Icons.check_circle_rounded,
-                        label: '먹어본 간식',
-                        value: '$triedCount개',
-                        color: const Color(0xFFFF8E7C),
-                        bgColor: const Color(0xFFFFF1EE),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _buildSnackInfoChip(
-                        icon: Icons.star_rounded,
-                        label: '최애 간식',
-                        value: favoriteSnack.isEmpty ? '아직 없음' : favoriteSnack,
-                        color: const Color(0xFFFFC24B),
-                        bgColor: const Color(0xFFFFF8E8),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                _buildSnackSearchBar(setSheetState),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 6),
-                  child: Text(
-                    _snackSearchQuery.trim().isNotEmpty ? '관련순' : '이름순',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: visibleFishList.isEmpty
-                      ? const Center(
-                    child: Text(
-                      '검색 결과가 없어요',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF8E8E93),
-                      ),
-                    ),
-                  )
-                      : ListView.separated(
-                    controller: _snackFishScrollController,
-                    physics: const BouncingScrollPhysics(),
-                    itemCount: visibleFishList.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final fish = visibleFishList[index];
-                      final displayName = _displayFishName(fish);
-                      final isTried = pet.triedSnacks.contains(displayName);
-                      final isFav = (pet.favoriteSnack ?? '') == displayName;
-                      final isHighlighted =
-                          _highlightedSnackFishId == fish.id;
-
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isHighlighted
-                              ? const Color(0xFFFFF4E8)
-                              : isFav
-                              ? const Color(0xFFFFFBF2)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isHighlighted
-                                ? const Color(0xFFFFC8A2)
-                                : isFav
-                                ? const Color(0xFFFFD67A)
-                                : isTried
-                                ? const Color(0xFFFFD8D1)
-                                : const Color(0xFFF0F0F0),
-                            width: 1.2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF4F1),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              alignment: Alignment.center,
-                              child: fish.image.isNotEmpty
-                                  ? Image.asset(
-                                _imageAssetPath(fish.image),
-                                width: 28,
-                                height: 28,
-                                errorBuilder: (_, __, ___) =>
-                                const Icon(
-                                  Icons.phishing,
-                                  color: Color(0xFFFF8E7C),
-                                ),
-                              )
-                                  : const Icon(
-                                Icons.phishing,
-                                color: Color(0xFFFF8E7C),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          displayName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontSize: 14.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF2D3436),
-                                          ),
-                                        ),
-                                      ),
-                                      if (isFav)
-                                        Container(
-                                          padding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFFF1D6),
-                                            borderRadius:
-                                            BorderRadius.circular(999),
-                                          ),
-                                          child: const Text(
-                                            '최애',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFFE0A100),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _buildSnackActionButton(
-                                  icon: isTried
-                                      ? Icons.check_rounded
-                                      : Icons.add_rounded,
-                                  label: isTried ? '먹음' : '기록',
-                                  active: isTried,
-                                  onTap: () async {
-                                    final updatedSnacks =
-                                    Set<String>.from(pet.triedSnacks);
-                                    String updatedFavorite =
-                                        pet.favoriteSnack ?? '';
-
-                                    if (isTried) {
-                                      updatedSnacks.remove(displayName);
-                                      if (updatedFavorite == displayName) {
-                                        updatedFavorite = '';
-                                      }
-                                    } else {
-                                      updatedSnacks.add(displayName);
-                                    }
-
-                                    final updatedPet = pet.copyWith(
-                                      triedSnacks: updatedSnacks,
-                                      favoriteSnack: updatedFavorite,
-                                    );
-
-                                    await applyUpdatedPet(updatedPet);
-                                  },
-                                  activeColor: const Color(0xFFFF8E7C),
-                                  activeBgColor: const Color(0xFFFFF1EE),
-                                ),
-                                const SizedBox(width: 8),
-                                _buildSnackActionButton(
-                                  icon: Icons.favorite_rounded,
-                                  label: '최애',
-                                  active: isFav,
-                                  onTap: () async {
-                                    final updatedPet = pet.copyWith(
-                                      triedSnacks: {
-                                        ...pet.triedSnacks,
-                                        displayName,
-                                      },
-                                      favoriteSnack:
-                                      isFav ? '' : displayName,
-                                    );
-
-                                    await applyUpdatedPet(updatedPet);
-                                  },
-                                  activeColor: const Color(0xFFFFB938),
-                                  activeBgColor: const Color(0xFFFFF8E8),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-  }
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
 class _SampleStatusPill extends StatelessWidget {
   final String label;

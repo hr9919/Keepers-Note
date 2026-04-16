@@ -1,3 +1,67 @@
+class PetSnackChoice {
+  final String sourceType;
+  final String itemId;
+
+  const PetSnackChoice({
+    required this.sourceType,
+    required this.itemId,
+  });
+
+  factory PetSnackChoice.fromJson(Map<String, dynamic> json) {
+    return PetSnackChoice(
+      sourceType: (json['sourceType'] ?? '').toString(),
+      itemId: (json['itemId'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'sourceType': sourceType,
+      'itemId': itemId,
+    };
+  }
+
+  String get key => '$sourceType::$itemId';
+
+  @override
+  bool operator ==(Object other) {
+    return other is PetSnackChoice &&
+        other.sourceType == sourceType &&
+        other.itemId == itemId;
+  }
+
+  @override
+  int get hashCode => Object.hash(sourceType, itemId);
+}
+
+class PetSnackOption {
+  final String sourceType;
+  final String itemId;
+  final String nameKo;
+  final String imagePath;
+  final String category;
+
+  const PetSnackOption({
+    required this.sourceType,
+    required this.itemId,
+    required this.nameKo,
+    required this.imagePath,
+    required this.category,
+  });
+
+  factory PetSnackOption.fromJson(Map<String, dynamic> json) {
+    return PetSnackOption(
+      sourceType: (json['sourceType'] ?? '').toString(),
+      itemId: (json['itemId'] ?? '').toString(),
+      nameKo: (json['nameKo'] ?? '').toString(),
+      imagePath: (json['imagePath'] ?? '').toString(),
+      category: (json['category'] ?? '').toString(),
+    );
+  }
+
+  String get key => '$sourceType::$itemId';
+}
+
 class Pet {
   final int? id;
   final String name;
@@ -10,9 +74,11 @@ class Pet {
   final String? dogVariantId;
 
   final String? imagePath;
-  final String? favoriteSnack;
 
-  final Set<String> triedSnacks;
+  final Set<PetSnackChoice> favoriteSnacks;
+  final Set<PetSnackChoice> dislikedSnacks;
+  final Set<PetSnackChoice> triedSnacks;
+
   final int? sortOrder;
 
   const Pet({
@@ -24,37 +90,35 @@ class Pet {
     this.catVariantId,
     this.dogVariantId,
     this.imagePath,
-    this.favoriteSnack,
+    required this.favoriteSnacks,
+    required this.dislikedSnacks,
     required this.triedSnacks,
     this.sortOrder,
   });
 
-  /// 🔥 JSON 파싱 안정화
   factory Pet.fromJson(Map<String, dynamic> json) {
     return Pet(
       id: json['id'] as int?,
       name: (json['name'] ?? '').toString(),
       isCat: json['isCat'] ?? true,
-
       memo: json['memo']?.toString(),
       color: json['color']?.toString(),
-
       catVariantId: json['catVariantId']?.toString(),
       dogVariantId: json['dogVariantId']?.toString(),
-
       imagePath: json['imagePath']?.toString(),
-      favoriteSnack: json['favoriteSnack']?.toString(),
-
-      triedSnacks: (json['triedSnacks'] as List<dynamic>?)
-          ?.map((e) => e.toString())
-          .toSet() ??
-          <String>{},
-
+      favoriteSnacks: ((json['favoriteSnacks'] as List<dynamic>?) ?? const [])
+          .map((e) => PetSnackChoice.fromJson(Map<String, dynamic>.from(e)))
+          .toSet(),
+      dislikedSnacks: ((json['dislikedSnacks'] as List<dynamic>?) ?? const [])
+          .map((e) => PetSnackChoice.fromJson(Map<String, dynamic>.from(e)))
+          .toSet(),
+      triedSnacks: ((json['triedSnacks'] as List<dynamic>?) ?? const [])
+          .map((e) => PetSnackChoice.fromJson(Map<String, dynamic>.from(e)))
+          .toSet(),
       sortOrder: json['sortOrder'] as int?,
     );
   }
 
-  /// 🔥 서버 전송용
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -65,13 +129,13 @@ class Pet {
       'catVariantId': catVariantId,
       'dogVariantId': dogVariantId,
       'imagePath': imagePath,
-      'favoriteSnack': favoriteSnack,
-      'triedSnacks': triedSnacks.toList(),
+      'favoriteSnacks': favoriteSnacks.map((e) => e.toJson()).toList(),
+      'dislikedSnacks': dislikedSnacks.map((e) => e.toJson()).toList(),
+      'triedSnacks': triedSnacks.map((e) => e.toJson()).toList(),
       'sortOrder': sortOrder,
     };
   }
 
-  /// 🔥 immutable 대응 핵심
   Pet copyWith({
     int? id,
     String? name,
@@ -81,8 +145,9 @@ class Pet {
     String? catVariantId,
     String? dogVariantId,
     String? imagePath,
-    String? favoriteSnack,
-    Set<String>? triedSnacks,
+    Set<PetSnackChoice>? favoriteSnacks,
+    Set<PetSnackChoice>? dislikedSnacks,
+    Set<PetSnackChoice>? triedSnacks,
     int? sortOrder,
   }) {
     return Pet(
@@ -94,7 +159,8 @@ class Pet {
       catVariantId: catVariantId ?? this.catVariantId,
       dogVariantId: dogVariantId ?? this.dogVariantId,
       imagePath: imagePath ?? this.imagePath,
-      favoriteSnack: favoriteSnack ?? this.favoriteSnack,
+      favoriteSnacks: favoriteSnacks ?? this.favoriteSnacks,
+      dislikedSnacks: dislikedSnacks ?? this.dislikedSnacks,
       triedSnacks: triedSnacks ?? this.triedSnacks,
       sortOrder: sortOrder ?? this.sortOrder,
     );
@@ -123,7 +189,6 @@ class FishItem {
     );
   }
 
-  /// 표시용 이름 (한글 우선)
   String get displayName {
     final ko = (nameKo ?? '').trim();
     if (ko.isNotEmpty) return ko;
