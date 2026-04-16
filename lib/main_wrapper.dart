@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/services.dart';
 
+import 'community_screen.dart';
 import 'home_screen.dart';
 import 'weather_admin_screen.dart';
 import 'encyclopedia_screen.dart';
@@ -39,6 +40,9 @@ class _MainWrapperState extends State<MainWrapper> {
   bool _isEndDrawerOpen = false;
   bool _isAdmin = false;
   int _homeRefreshKey = 0;
+
+  bool get _isCommunityTab => _selectedIndex == 2;
+  bool _isCommunityMenuOpen = false;
 
   String _userName = "로그인 중...";
   String _userUid = "";
@@ -536,6 +540,23 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
+  void _handleCenterCommunityButton() {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    if (_isDrawerOpen || _isEndDrawerOpen) return;
+
+    setState(() {
+      if (_isCommunityTab) {
+        _isCommunityMenuOpen = !_isCommunityMenuOpen;
+      } else {
+        _selectedIndex = 2;
+        _isCommunityMenuOpen = false; // 진입만 하고 메뉴는 닫힌 상태
+        _pendingSearchItem = null;
+        _searchResetSignal++;
+      }
+    });
+  }
+
   void _toggleTodo(int index) async {
     final taskId = _todoTasks[index]['id'];
     if (taskId == 0) return;
@@ -632,6 +653,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Future<void> _onMenuSelect(int index) async {
     FocusManager.instance.primaryFocus?.unfocus();
+
     if (_isDrawerOpen) {
       await _closeDrawerSmooth();
     }
@@ -644,6 +666,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
     setState(() {
       _selectedIndex = index;
+      _isCommunityMenuOpen = false;
       _pendingSearchItem = null;
       _searchResetSignal++;
     });
@@ -656,16 +679,16 @@ class _MainWrapperState extends State<MainWrapper> {
 
     switch (item.screen) {
       case SearchTargetScreen.encyclopedia:
-        _selectedIndex = 1;
+        _selectedIndex = 3; // 임시로 채집 대신 쓰지 말고, 아래 별도 처리 추천
         break;
       case SearchTargetScreen.cooking:
-        _selectedIndex = 2;
+        _selectedIndex = 4;
         break;
       case SearchTargetScreen.gathering:
         _selectedIndex = 3;
         break;
       case SearchTargetScreen.pet:
-        _selectedIndex = 4;
+        _selectedIndex = 1;
         break;
     }
 
@@ -900,16 +923,15 @@ class _MainWrapperState extends State<MainWrapper> {
         onSearchItemSelected: _handleGlobalSearchSelection,
         eventList: _eventList,
       ),
-      EncyclopediaScreen(
-        openDrawer: _openDrawerSmooth,
-        initialSearchItem: _pendingSearchItem,
-      ),
-      CookingScreen(
+      GatheringScreen(
         openDrawer: _openDrawerSmooth,
         initialSearchItem: _pendingSearchItem,
         resetSearchSignal: _searchResetSignal,
       ),
-      GatheringScreen(
+      CommunityScreen(
+        openDrawer: _openDrawerSmooth,
+      ),
+      CookingScreen(
         openDrawer: _openDrawerSmooth,
         initialSearchItem: _pendingSearchItem,
         resetSearchSignal: _searchResetSignal,
@@ -963,23 +985,93 @@ class _MainWrapperState extends State<MainWrapper> {
               children: pages,
             ),
 
-            AnimatedPositioned(
-              duration: _kPanelDuration,
-              curve: _kPanelCurve,
-              left: 0,
-              right: 0,
-              bottom: (_isDrawerOpen || _isEndDrawerOpen) ? -140 : 0,
-              child: IgnorePointer(
-                ignoring: _isDrawerOpen || _isEndDrawerOpen,
-                child: AnimatedOpacity(
-                  duration: _kPanelDuration,
-                  curve: _kPanelCurve,
-                  opacity: (_isDrawerOpen || _isEndDrawerOpen) ? 0.0 : 1.0,
-                  child: _buildBottomNavigationBar(bottomPadding),
+            IgnorePointer(
+              ignoring: !_isCommunityMenuOpen || !_isCommunityTab,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                opacity: (_isCommunityMenuOpen && _isCommunityTab) ? 1.0 : 0.0,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    setState(() {
+                      _isCommunityMenuOpen = false;
+                    });
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(
+                        sigmaX: _isCommunityMenuOpen && _isCommunityTab ? 3.5 : 0,
+                        sigmaY: _isCommunityMenuOpen && _isCommunityTab ? 3.5 : 0,
+                      ),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: _isCommunityMenuOpen && _isCommunityTab
+                                ? [
+                              Colors.black.withOpacity(0.08),
+                              Colors.black.withOpacity(0.14),
+                              Colors.black.withOpacity(0.18),
+                            ]
+                                : [
+                              Colors.transparent,
+                              Colors.transparent,
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
 
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AnimatedSlide(
+                duration: _kPanelDuration,
+                curve: _kPanelCurve,
+                offset: (_isDrawerOpen || _isEndDrawerOpen)
+                    ? const Offset(0, 1.2)
+                    : Offset.zero,
+                child: AnimatedOpacity(
+                  duration: _kPanelDuration,
+                  curve: _kPanelCurve,
+                  opacity: (_isDrawerOpen || _isEndDrawerOpen) ? 0.0 : 1.0,
+                  child: SizedBox(
+                    height: 230,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: IgnorePointer(
+                            ignoring: _isDrawerOpen || _isEndDrawerOpen,
+                            child: _buildBottomNavigationBar(bottomPadding),
+                          ),
+                        ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: _buildCommunityOverlay(bottomPadding),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
             // 바깥 배경
             IgnorePointer(
               ignoring: !(_isDrawerOpen || _isEndDrawerOpen),
@@ -1585,9 +1677,9 @@ class _MainWrapperState extends State<MainWrapper> {
                           },
                         ),
                         _buildDrawerItem(
-                          icon: Icons.forum_rounded,
-                          title: '미니 커뮤니티',
-                          subtitle: '준비중인 기능이에요',
+                          icon: Icons.collections_bookmark_rounded,
+                          title: '업적 및 아이템 도감',
+                          subtitle: '기존 도감 화면으로 이동',
                           isSelected: false,
                           accentColor: const Color(0xFFFF9F5A),
                           onTap: () async {
@@ -1595,9 +1687,20 @@ class _MainWrapperState extends State<MainWrapper> {
                             if (!mounted) return;
                             await _closeDrawerSmooth();
                             if (!mounted) return;
-                            await _showComingSoonDialog(
-                              title: '미니 커뮤니티',
-                              message: '곧 추가될 예정이에요!',
+
+                            setState(() {
+                              _selectedIndex = 0;
+                              _pendingSearchItem = null;
+                              _searchResetSignal++;
+                            });
+
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EncyclopediaScreen(
+                                  openDrawer: _openDrawerSmooth,
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -2205,23 +2308,24 @@ class _MainWrapperState extends State<MainWrapper> {
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
             height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.72),
+              color: Colors.white.withOpacity(0.74),
               borderRadius: BorderRadius.circular(32),
               border: Border.all(
-                color: Colors.white.withOpacity(0.55),
+                color: Colors.white.withOpacity(0.58),
                 width: 1.1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.07),
+                  color: Colors.black.withOpacity(0.06),
                   blurRadius: 22,
-                  offset: const Offset(0, -4),
+                  offset: const Offset(0, -3),
                 ),
               ],
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _buildNavItem(
                   index: 0,
@@ -2231,25 +2335,20 @@ class _MainWrapperState extends State<MainWrapper> {
                 ),
                 _buildNavItem(
                   index: 1,
-                  label: '도감',
-                  outlinedIcon: Icons.collections_bookmark_outlined,
-                  filledIcon: Icons.collections_bookmark_rounded,
+                  label: '채집',
+                  outlinedIcon: Icons.phishing_outlined,
+                  filledIcon: Icons.phishing_rounded,
                 ),
+                const SizedBox(width: 90),
                 _buildNavItem(
-                  index: 2,
+                  index: 3,
                   label: '요리',
                   outlinedIcon: Icons.soup_kitchen_outlined,
                   filledIcon: Icons.soup_kitchen,
                 ),
                 _buildNavItem(
-                  index: 3,
-                  label: '채집',
-                  outlinedIcon: Icons.travel_explore_outlined,
-                  filledIcon: Icons.travel_explore,
-                ),
-                _buildNavItem(
                   index: 4,
-                  label: '동물',
+                  label: '펫',
                   outlinedIcon: Icons.pets_outlined,
                   filledIcon: Icons.pets,
                 ),
@@ -2260,6 +2359,281 @@ class _MainWrapperState extends State<MainWrapper> {
       ),
     );
   }
+
+  Widget _buildCommunityOverlay(double bottomPadding) {
+    final bool isDropUpOpen = _isCommunityTab && _isCommunityMenuOpen;
+    final double navBottom = bottomPadding > 0 ? bottomPadding + 6 : 12;
+
+    return IgnorePointer(
+      ignoring: _isDrawerOpen || _isEndDrawerOpen,
+      child: SizedBox(
+        height: 220,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.bottomCenter,
+          children: [
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              bottom: navBottom + (isDropUpOpen ? 96 : 84),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 180),
+                opacity: isDropUpOpen ? 1.0 : 0.0,
+                child: IgnorePointer(
+                  ignoring: !isDropUpOpen,
+                  child: AnimatedSlide(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    offset:
+                    isDropUpOpen ? Offset.zero : const Offset(0, 0.05),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildCommunityMenuBubble(
+                          icon: Icons.edit_rounded,
+                          label: '글쓰기',
+                          onTap: () {
+                            setState(() {
+                              _isCommunityMenuOpen = false;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildCommunityMenuBubble(
+                          icon: Icons.article_rounded,
+                          label: '내 글',
+                          onTap: () {
+                            setState(() {
+                              _isCommunityMenuOpen = false;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildCommunityMenuBubble(
+                          icon: Icons.favorite_rounded,
+                          label: '좋아요',
+                          onTap: () {
+                            setState(() {
+                              _isCommunityMenuOpen = false;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: navBottom,
+              child: _buildCenterCommunityItem(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCenterCommunityItem() {
+    final bool isSelected = _isCommunityTab;
+    final bool isDropUpOpen = _isCommunityTab && _isCommunityMenuOpen;
+
+    const Color selectedColor = Color(0xFFFF8E7C);
+    const Color selectedDark = Color(0xFFF47F69);
+    const Color unselectedColor = Color(0xFF98A2B3);
+
+    final bool useRoundButton = isSelected;
+
+    final double buttonWidth = useRoundButton ? 62 : 74;
+    final double buttonHeight = useRoundButton ? 62 : 56;
+
+    final Decoration decoration = BoxDecoration(
+      gradient: useRoundButton
+          ? const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFFFFAF9B),
+          selectedColor,
+          selectedDark,
+        ],
+      )
+          : null,
+      color: useRoundButton ? null : Colors.transparent,
+      borderRadius: BorderRadius.circular(useRoundButton ? 31 : 22),
+      border: Border.all(
+        color: useRoundButton
+            ? Colors.white.withOpacity(0.34)
+            : Colors.transparent,
+        width: 1.1,
+      ),
+      boxShadow: useRoundButton
+          ? [
+        BoxShadow(
+          color: selectedColor.withOpacity(0.24),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
+        ),
+      ]
+          : [],
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _handleCenterCommunityButton,
+      child: SizedBox(
+        width: 92,
+        height: 92,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              bottom: useRoundButton ? 18 : 7,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                width: buttonWidth,
+                height: buttonHeight,
+                decoration: decoration,
+                alignment: Alignment.center,
+                child: useRoundButton
+                    ? TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  tween: Tween<double>(
+                    begin: 0,
+                    end: isDropUpOpen ? 1 : 0,
+                  ),
+                  builder: (context, value, child) {
+                    return Transform.rotate(
+                      angle: value * 3.14,
+                      child: Transform.scale(
+                        scale: 0.9 + (value * 0.1),
+                        child: Opacity(
+                          opacity: 0.7 + (value * 0.3),
+                          child: Icon(
+                            isDropUpOpen
+                                ? Icons.close_rounded
+                                : Icons.favorite_rounded,
+                            size: 28,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                )
+                    : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_rounded,
+                      size: 21,
+                      color: unselectedColor,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '커뮤니티',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: unselectedColor,
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (useRoundButton)
+              Positioned(
+                bottom: 0,
+                child: Container(
+                  width: 30,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: selectedDark.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommunityMenuBubble({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white.withOpacity(0.98),
+      elevation: 10,
+      shadowColor: const Color(0x22000000),
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        splashColor: const Color(0xFFFF8E7C).withOpacity(0.10),
+        highlightColor: const Color(0xFFFF8E7C).withOpacity(0.05),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: const Color(0xFFFFE5DF),
+              width: 1.1,
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withOpacity(0.99),
+                const Color(0xFFFFFBFA),
+              ],
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF2EE),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 17,
+                    color: const Color(0xFFFF8E7C),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildNavItem({
     required int index,
     required String label,
@@ -2296,16 +2670,25 @@ class _MainWrapperState extends State<MainWrapper> {
                     : Colors.transparent,
                 width: 1,
               ),
+              boxShadow: isSelected
+                  ? [
+                BoxShadow(
+                  color: const Color(0xFFFF8E7C).withOpacity(0.10),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+                  : [],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   isSelected ? filledIcon : outlinedIcon,
-                  size: 23,
+                  size: 22,
                   color: isSelected ? selectedColor : unselectedColor,
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   label,
                   maxLines: 1,
@@ -2314,7 +2697,6 @@ class _MainWrapperState extends State<MainWrapper> {
                     fontSize: 11,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                     color: isSelected ? selectedColor : unselectedColor,
-                    fontFamily: 'SF Pro',
                     height: 1.0,
                   ),
                 ),

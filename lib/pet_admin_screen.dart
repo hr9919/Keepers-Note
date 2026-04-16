@@ -189,6 +189,16 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     return int.tryParse(value.toString());
   }
 
+  String _resolveEyeId(String eyeTypeId, String? eyeColorId) {
+    if (eyeTypeId == 'dot_eye') return 'dot_eye';
+
+    if (eyeColorId == null || eyeColorId.isEmpty) {
+      return eyeTypeId;
+    }
+
+    return '${eyeColorId}_$eyeTypeId';
+  }
+
   String _toStr(dynamic value) => value?.toString() ?? '';
 
   List<Map<String, dynamic>> _currentSource(bool isCat) {
@@ -517,6 +527,7 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     }
   }
 
+
   Map<String, dynamic>? _currentSelectedItem(bool isCat) {
     final filtered = _filteredItems(isCat);
     if (filtered.isEmpty) return null;
@@ -531,6 +542,291 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     } catch (_) {
       return filtered.first;
     }
+  }
+
+  bool _isItemSelected(Map<String, dynamic> item, bool isCat) {
+    if (_isPendingTab) {
+      final selectedTypeId = isCat ? _selectedCatTypeId : _selectedDogTypeId;
+      final selectedColorId = isCat ? _selectedCatColorId : _selectedDogColorId;
+      final selectedEyeTypeId =
+      isCat ? _selectedCatEyeTypeId : _selectedDogEyeTypeId;
+      final selectedEyeColorId =
+      isCat ? _selectedCatEyeColorId : _selectedDogEyeColorId;
+
+      return _itemTypeId(item, isCat) == selectedTypeId &&
+          _itemColorId(item) == selectedColorId &&
+          _itemEyeTypeId(item) == selectedEyeTypeId &&
+          _itemEyeColorId(item) == (selectedEyeColorId ?? '');
+    }
+
+    final selectedVariantNo =
+    isCat ? _selectedCatVariantNo : _selectedDogVariantNo;
+
+    return _itemTypeId(item, isCat) ==
+        (isCat ? _selectedCatTypeId : _selectedDogTypeId) &&
+        _itemColorId(item) == (isCat ? _selectedCatColorId : _selectedDogColorId) &&
+        _itemEyeTypeId(item) ==
+            (isCat ? _selectedCatEyeTypeId : _selectedDogEyeTypeId) &&
+        _itemEyeColorId(item) ==
+            ((isCat ? _selectedCatEyeColorId : _selectedDogEyeColorId) ?? '') &&
+        _itemVariantNo(item) == selectedVariantNo;
+  }
+
+  void _selectItem(Map<String, dynamic> item, bool isCat) {
+    setState(() {
+      _selectedImageFile = null;
+
+      if (isCat) {
+        _selectedCatTypeId = _itemTypeId(item, true);
+        _selectedCatColorId = _itemColorId(item);
+        _selectedCatEyeTypeId = _itemEyeTypeId(item);
+        _selectedCatEyeColorId = _itemEyeColorId(item);
+        _selectedCatVariantNo = _itemVariantNo(item);
+        _normalizeCatSelection();
+      } else {
+        _selectedDogTypeId = _itemTypeId(item, false);
+        _selectedDogColorId = _itemColorId(item);
+        _selectedDogEyeTypeId = _itemEyeTypeId(item);
+        _selectedDogEyeColorId = _itemEyeColorId(item);
+        _selectedDogVariantNo = _itemVariantNo(item);
+        _normalizeDogSelection();
+      }
+    });
+  }
+
+  String _variantSummaryText(Map<String, dynamic> item, bool isCat) {
+    return [
+      _itemTypeName(item, isCat),
+      _itemColorName(item),
+      _itemEyeTypeName(item),
+      _itemEyeColorName(item),
+      '${isCat ? 'cat' : 'dog'} ${_itemVariantNo(item)}',
+    ].where((e) => e.trim().isNotEmpty).join(' · ');
+  }
+
+  Widget _buildVariantResultCard({
+    required Map<String, dynamic> item,
+    required bool isCat,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final String? imagePath = item['imagePath']?.toString();
+    final bool hasImage = imagePath != null && imagePath.isNotEmpty;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFFFFF1EC)
+                : Colors.white.withOpacity(0.96),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFFFFBFB1)
+                  : const Color(0xFFFFE0D9),
+              width: selected ? 1.3 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.035),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8F6),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFFFD7CF),
+                    width: 1.1,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(15),
+                  child: hasImage
+                      ? Image.network(
+                    '$_baseUrl$imagePath',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        _buildImagePlaceholder('이미지 오류'),
+                  )
+                      : _buildImagePlaceholder(_isPendingTab ? '미등록' : '이미지 없음'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _itemTypeName(item, isCat),
+                      style: const TextStyle(
+                        fontSize: 14.2,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      [
+                        _itemColorName(item),
+                        _itemEyeTypeName(item),
+                        _itemEyeColorName(item),
+                      ].where((e) => e.trim().isNotEmpty).join(' · '),
+                      style: const TextStyle(
+                        fontSize: 12.4,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBF9),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: const Color(0xFFFFE1DA),
+                            ),
+                          ),
+                          child: Text(
+                            '${isCat ? 'cat' : 'dog'} ${_itemVariantNo(item)}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFB36E60),
+                            ),
+                          ),
+                        ),
+                        if (selected)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF8E7C),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              '선택됨',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVariantListSection({
+    required bool isCat,
+    required List<Map<String, dynamic>> items,
+  }) {
+    if (items.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFFFE0D9)),
+        ),
+        child: const Center(
+          child: Text(
+            '선택한 조건에 맞는 항목이 없어요.',
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF94A3B8),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFFFE0D9)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.photo_library_rounded,
+                size: 18,
+                color: Color(0xFFFF8E7C),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _isPendingTab
+                      ? '선택 조건에 맞는 미등록 조합 ${items.length}개'
+                      : '선택 조건에 맞는 등록 사진 ${items.length}개',
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...items.map(
+                (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildVariantResultCard(
+                item: item,
+                isCat: isCat,
+                selected: _isItemSelected(item, isCat),
+                onTap: () => _selectItem(item, isCat),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickImage() async {
@@ -578,15 +874,15 @@ class _PetAdminScreenState extends State<PetAdminScreen>
             : '$_baseUrl/api/admin/dog-variants/upload',
       );
 
+      final resolvedEyeId = _resolveEyeId(eyeTypeId, eyeColorId);
+
       final req = http.MultipartRequest('POST', uri)
         ..fields['kakaoId'] = widget.kakaoId
         ..fields[isCatTab ? 'catTypeId' : 'dogTypeId'] = typeId
         ..fields['colorId'] = colorId
-        ..fields['eyeTypeId'] = eyeTypeId;
-
-      if (eyeColorId != null && eyeColorId.isNotEmpty) {
-        req.fields['eyeColorId'] = eyeColorId;
-      }
+        ..fields['eyeTypeId'] = eyeTypeId
+        ..fields['eyeColorId'] = eyeColorId ?? ''
+        ..fields['eyeId'] = resolvedEyeId;
 
       req.files.add(
         await http.MultipartFile.fromPath(
@@ -594,7 +890,6 @@ class _PetAdminScreenState extends State<PetAdminScreen>
           _selectedImageFile!.path,
         ),
       );
-
       final streamed = await req.send();
       final response = await http.Response.fromStream(streamed);
 
@@ -632,7 +927,10 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     final int? variantNo =
     isCatTab ? _selectedCatVariantNo : _selectedDogVariantNo;
 
-    if (typeId == null || colorId == null || eyeTypeId == null || variantNo == null) {
+    if (typeId == null ||
+        colorId == null ||
+        eyeTypeId == null ||
+        variantNo == null) {
       _showSnack('삭제할 펫 조합을 먼저 선택해주세요.');
       return;
     }
@@ -934,24 +1232,34 @@ class _PetAdminScreenState extends State<PetAdminScreen>
   }
 
   Widget _buildImagePlaceholder(String text) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(
-          Icons.image_outlined,
-          size: 42,
-          color: Color(0xFFFFB8AA),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.image_outlined,
+              size: 28,
+              color: Color(0xFFFFB8AA),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF94A3B8),
+                height: 1.1,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF94A3B8),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -963,22 +1271,22 @@ class _PetAdminScreenState extends State<PetAdminScreen>
     final colorItems = _uniqueColors(isCat);
     final eyeTypeItems = _uniqueEyeTypes(isCat);
     final eyeColorItems = _uniqueEyeColors(isCat);
-    final variantNos = _uniqueVariantNos(isCat);
 
     final selectedTypeId = isCat ? _selectedCatTypeId : _selectedDogTypeId;
     final selectedColorId = isCat ? _selectedCatColorId : _selectedDogColorId;
-    final selectedEyeTypeId = isCat ? _selectedCatEyeTypeId : _selectedDogEyeTypeId;
+    final selectedEyeTypeId =
+    isCat ? _selectedCatEyeTypeId : _selectedDogEyeTypeId;
     final selectedEyeColorId =
     isCat ? _selectedCatEyeColorId : _selectedDogEyeColorId;
-    final selectedVariantNo =
-    isCat ? _selectedCatVariantNo : _selectedDogVariantNo;
 
+    final filteredItems = _filteredItems(isCat);
     final currentItem = _currentSelectedItem(isCat);
 
     final bool isSingleColor = _isSingleColorType(isCat);
     final bool isSingleEyeColor = _isSingleEyeColorType(isCat);
     final String? fixedColorName = _fixedColorName(isCat);
     final String? fixedEyeColorName = _fixedEyeColorName(isCat);
+    final isDotEye = selectedEyeTypeId == 'dot_eye';
 
     return RefreshIndicator(
       onRefresh: _refreshCurrentTab,
@@ -1171,7 +1479,7 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                       ),
                     )
                         .toList(),
-                    onChanged: isSingleEyeColor
+                    onChanged: (isSingleEyeColor || isDotEye)
                         ? null
                         : (value) {
                       setState(() {
@@ -1186,7 +1494,7 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                       });
                     },
                   ),
-                  if (isSingleEyeColor) ...[
+                  if (isSingleEyeColor || isDotEye) ...[
                     const SizedBox(height: 8),
                     Text(
                       '이 눈 종류는 눈 색이 ${fixedEyeColorName ?? '자동'}으로 고정돼요.',
@@ -1200,66 +1508,29 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                 ],
               ),
             ),
-            if (!_isPendingTab)
-              _buildDropdownCard(
-                title: '번호 선택',
-                child: DropdownButtonFormField<int>(
-                  value: selectedVariantNo,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  items: variantNos
-                      .map(
-                        (e) => DropdownMenuItem<int>(
-                      value: e,
-                      child: Text('${isCat ? 'cat' : 'dog'} $e'),
-                    ),
-                  )
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedImageFile = null;
-                      if (isCat) {
-                        _selectedCatVariantNo = value;
-                      } else {
-                        _selectedDogVariantNo = value;
-                      }
-                    });
-                  },
-                ),
-              ),
             const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.94),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFFFE0D9)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  if (currentItem != null) ...[
+            if (currentItem != null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.94),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFFFE0D9)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
                     Row(
                       children: [
                         Expanded(
                           child: Text(
-                            [
-                              _itemTypeName(currentItem, isCat),
-                              _itemColorName(currentItem),
-                              _itemEyeTypeName(currentItem),
-                              _itemEyeColorName(currentItem),
-                              if (!_isPendingTab)
-                                '${isCat ? 'cat' : 'dog'} ${_itemVariantNo(currentItem)}',
-                            ].where((e) => e.trim().isNotEmpty).join(' · '),
+                            _variantSummaryText(currentItem, isCat),
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -1270,29 +1541,112 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                       ],
                     ),
                     const SizedBox(height: 14),
-                  ],
-                  _buildImageBox(currentItem),
-                  const SizedBox(height: 14),
-                  if (_isPendingTab)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _isUploading ? null : _pickImage,
-                            icon: const Icon(Icons.photo_library_rounded),
-                            label: const Text('이미지 선택'),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                    _buildImageBox(currentItem),
+                    const SizedBox(height: 14),
+                    if (_isPendingTab)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _isUploading ? null : _pickImage,
+                              icon: const Icon(Icons.photo_library_rounded),
+                              label: const Text('이미지 선택'),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                side: const BorderSide(
+                                  color: Color(0xFFFFD4CB),
+                                ),
+                                foregroundColor: const Color(0xFF5C6773),
                               ),
-                              side: const BorderSide(color: Color(0xFFFFD4CB)),
-                              foregroundColor: const Color(0xFF5C6773),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isUploading ? null : _uploadCurrent,
+                              icon: _isUploading
+                                  ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.1,
+                                  color: Colors.white,
+                                ),
+                              )
+                                  : const Icon(Icons.cloud_upload_rounded),
+                              label: Text(_isUploading ? '등록중...' : '등록'),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                backgroundColor: const Color(0xFFFF8E7C),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: (_isDeleting || _isUploading)
+                                  ? null
+                                  : _pickImage,
+                              icon: const Icon(Icons.photo_library_rounded),
+                              label: const Text('새 이미지 선택'),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                side: const BorderSide(
+                                  color: Color(0xFFFFD4CB),
+                                ),
+                                foregroundColor: const Color(0xFF5C6773),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: (_isDeleting || _isUploading)
+                                  ? null
+                                  : _deleteCurrent,
+                              icon: _isDeleting
+                                  ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.1,
+                                  color: Colors.white,
+                                ),
+                              )
+                                  : const Icon(Icons.delete_rounded),
+                              label: Text(_isDeleting ? '삭제중...' : '삭제'),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                backgroundColor: const Color(0xFFEF6C5B),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_selectedImageFile != null) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: _isUploading ? null : _uploadCurrent,
                             icon: _isUploading
@@ -1304,8 +1658,9 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                                 color: Colors.white,
                               ),
                             )
-                                : const Icon(Icons.cloud_upload_rounded),
-                            label: Text(_isUploading ? '등록중...' : '등록'),
+                                : const Icon(Icons.add_photo_alternate_rounded),
+                            label:
+                            Text(_isUploading ? '등록중...' : '같은 카테고리로 새 이미지 추가'),
                             style: ElevatedButton.styleFrom(
                               minimumSize: const Size.fromHeight(48),
                               backgroundColor: const Color(0xFFFF8E7C),
@@ -1318,95 +1673,20 @@ class _PetAdminScreenState extends State<PetAdminScreen>
                           ),
                         ),
                       ],
-                    )
-                  else
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: (_isDeleting || _isUploading)
-                                ? null
-                                : _pickImage,
-                            icon: const Icon(Icons.photo_library_rounded),
-                            label: const Text('새 이미지 선택'),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              side: const BorderSide(color: Color(0xFFFFD4CB)),
-                              foregroundColor: const Color(0xFF5C6773),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: (_isDeleting || _isUploading)
-                                ? null
-                                : _deleteCurrent,
-                            icon: _isDeleting
-                                ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.1,
-                                color: Colors.white,
-                              ),
-                            )
-                                : const Icon(Icons.delete_rounded),
-                            label: Text(_isDeleting ? '삭제중...' : '삭제'),
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              backgroundColor: const Color(0xFFEF6C5B),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  if (!_isPendingTab && _selectedImageFile != null) ...[
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _isUploading ? null : _uploadCurrent,
-                        icon: _isUploading
-                            ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.1,
-                            color: Colors.white,
-                          ),
-                        )
-                            : const Icon(Icons.add_photo_alternate_rounded),
-                        label: Text(_isUploading ? '등록중...' : '같은 카테고리로 새 이미지 추가'),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          backgroundColor: const Color(0xFFFF8E7C),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                        ),
-                      ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
+            const SizedBox(height: 12),
+            _buildVariantListSection(
+              isCat: isCat,
+              items: filteredItems,
             ),
           ],
         ],
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
