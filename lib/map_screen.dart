@@ -40,6 +40,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Set<String> _enabledResources = {};
   bool _showAllNpcs = true;
   bool _showAllAnimals = false;
+  bool _isFilterPanelOpen = false;
 
   bool _showVoteNoticeBar = false;
   bool _hasShownVoteNoticeOnce = false;
@@ -309,6 +310,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       setState(() {
         _showVoteNoticeBar = false;
       });
+    });
+  }
+
+  void _toggleFilterPanel() {
+    setState(() {
+      _isFilterPanelOpen = !_isFilterPanelOpen;
+    });
+  }
+
+  void _closeFilterPanel() {
+    if (!_isFilterPanelOpen) return;
+    setState(() {
+      _isFilterPanelOpen = false;
     });
   }
 
@@ -1407,139 +1421,300 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildFilterDrawer() {
+  Widget _buildMapFilterPanel() {
     final double topPadding = MediaQuery.of(context).padding.top;
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
-    const double navBarHeight = 80.0;
+
+    final mobileResourceItems = <String>[
+      if (_getDistinctNamesByCategory(['tree']).contains('roaming_oak'))
+        'roaming_oak',
+      if (_getDistinctNamesByCategory(['mineral']).contains('fluorite'))
+        'fluorite',
+    ];
 
     final gatherItems = _getDistinctNamesByCategory([
       'fruit',
       'bubble',
-      'tree',
       'material',
-      'mineral',
     ]);
+
     final mushroomItems = _getDistinctNamesByCategory(['mushroom']);
 
-    return Drawer(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      width: MediaQuery.of(context).size.width * 0.82,
-      child: Container(
-        margin: EdgeInsets.fromLTRB(
-          0,
-          topPadding + 70,
-          12,
-          bottomPadding + navBarHeight + 12,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 20,
-              offset: const Offset(-4, 0),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 10, 12),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      '지도 필터',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 340),
+      curve: _isFilterPanelOpen
+          ? Curves.easeOutQuad
+          : Curves.easeInCubic,
+      top: topPadding + 72,
+      right: _isFilterPanelOpen ? 12 : -320,
+      child: IgnorePointer(
+        ignoring: !_isFilterPanelOpen,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          opacity: _isFilterPanelOpen ? 1 : 0.96,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 286,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height
+                    - topPadding
+                    - bottomPadding
+                    - 120,
+              ),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.992),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFF0E3DC),
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.09),
+                    blurRadius: 22,
+                    offset: const Offset(-4, 10),
                   ),
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: () {
-                        _resetFiltersToDefault();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('필터가 기본값으로 초기화됐어요.'),
-                            duration: Duration(milliseconds: 1400),
-                          ),
-                        );
-                      },
-                      child: Ink(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF4F1),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: const Color(0xFFFF8E7C).withOpacity(0.25),
-                          ),
-                        ),
-                        child: const Text(
-                          '기본값',
+                  BoxShadow(
+                    color: const Color(0xFFFF8E7C).withOpacity(0.045),
+                    blurRadius: 14,
+                    offset: const Offset(-2, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      const Expanded(
+                        child: Text(
+                          '정렬 및 필터',
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFFF8E7C),
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF443834),
                           ),
                         ),
                       ),
+                      _buildMapPanelIconButton(
+                        icon: Icons.refresh_rounded,
+                        onTap: () {
+                          _resetFiltersToDefault();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('필터가 기본값으로 초기화됐어요.'),
+                              duration: Duration(milliseconds: 1400),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 6),
+                      _buildMapPanelIconButton(
+                        icon: Icons.close_rounded,
+                        onTap: _closeFilterPanel,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '필터',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF6E625D),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, size: 22),
-                    visualDensity: VisualDensity.compact,
+                  const SizedBox(height: 8),
+                  _buildCompactTogglePair(),
+                  const SizedBox(height: 14),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _buildMapFilterSection(
+                            title: '유동 자원',
+                            items: mobileResourceItems,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildMapFilterSection(
+                            title: '채집 자원',
+                            items: gatherItems,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildMapFilterSection(
+                            title: '버섯 종류',
+                            items: mushroomItems,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildToggleRow(
-                      icon: Icons.people_alt_outlined,
-                      title: '마을 주민',
-                      value: _showAllNpcs,
-                      onChanged: (val) => setState(() => _showAllNpcs = val),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildToggleRow(
-                      icon: Icons.pets_outlined,
-                      title: '동물 친구들',
-                      value: _showAllAnimals,
-                      onChanged: (val) => setState(() => _showAllAnimals = val),
-                    ),
-                    const SizedBox(height: 22),
-                    _buildMapFilterSection(
-                      title: '채집 자원',
-                      items: gatherItems,
-                    ),
-                    const SizedBox(height: 18),
-                    _buildMapFilterSection(
-                      title: '버섯 종류',
-                      items: mushroomItems,
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapPanelIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: const Color(0xFFFFF8F5),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: const Color(0xFFF2E3DC),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: const Color(0xFFFF8E7C),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactTogglePair() {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _buildCompactToggleCard(
+            icon: Icons.people_alt_outlined,
+            title: 'NPC',
+            value: _showAllNpcs,
+            onTap: () {
+              setState(() {
+                _showAllNpcs = !_showAllNpcs;
+              });
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildCompactToggleCard(
+            icon: Icons.pets_outlined,
+            title: '동물',
+            value: _showAllAnimals,
+            onTap: () {
+              setState(() {
+                _showAllAnimals = !_showAllAnimals;
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactToggleCard({
+    required IconData icon,
+    required String title,
+    required bool value,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: value
+                ? const Color(0xFFFFF2EF)
+                : const Color(0xFFFFFBFA),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: value
+                  ? const Color(0xFFFFD8CF)
+                  : const Color(0xFFF0E3DC),
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(
+                  value ? 0.10 : 0.04,
+                ),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                icon,
+                size: 16,
+                color: value
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF7B6D64),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: value
+                        ? const Color(0xFFFF8E7C)
+                        : const Color(0xFF7B6D64),
+                  ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 6),
+              _buildMiniSwitch(value: value),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniSwitch({required bool value}) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 34,
+      height: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: value
+            ? const Color(0xFFFF8E7C).withOpacity(0.55)
+            : const Color(0xFFD9D9D9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 16,
+          height: 16,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
         ),
       ),
     );
@@ -1676,78 +1851,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       );
     }
 
-  Widget _buildToggleRow({
-    required IconData icon,
-    required String title,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: const Color(0xFF475569)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-          ),
-          _buildDrawerCustomSwitch(
-            value: value,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawerCustomSwitch({
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return GestureDetector(
-      onTap: () => onChanged(!value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 53,
-        height: 30,
-        decoration: BoxDecoration(
-          color: value
-              ? const Color(0xFFFF8E7C).withOpacity(0.56)
-              : const Color(0xFFD9D9D9),
-          borderRadius: BorderRadius.circular(99),
-        ),
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 200),
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2.5),
-            child: Container(
-              width: 25,
-              height: 25,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildFloatingMapHeader() {
     return Column(
       children: [
@@ -1820,7 +1923,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
             _buildMapGlassIconButton(
               icon: Icons.tune_rounded,
-              onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+              onTap: _toggleFilterPanel,
             ),
           ],
         ),
@@ -2375,7 +2478,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         key: _scaffoldKey,
         backgroundColor: seaColor,
         drawerScrimColor: Colors.black.withOpacity(0.2),
-        endDrawer: _buildFilterDrawer(),
         body: _isLoading
             ? const Center(
           child: CircularProgressIndicator(color: Colors.white),
@@ -2507,6 +2609,24 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   bottom: bottomPadding + 20,
                   child: _buildZoomButtons(constraints, mapSize),
                 ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: !_isFilterPanelOpen,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      opacity: _isFilterPanelOpen ? 1 : 0,
+                      child: GestureDetector(
+                        onTap: _closeFilterPanel,
+                        child: Container(
+                          color: Colors.black.withOpacity(0.18),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                _buildMapFilterPanel(),
               ],
             );
           },

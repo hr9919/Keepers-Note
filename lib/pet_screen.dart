@@ -319,20 +319,75 @@ class _PetScreenState extends State<PetScreen>
       final catResponse = responses[0];
       final dogResponse = responses[1];
 
-      debugPrint('cat snack status: ${catResponse.statusCode}');
-      debugPrint('cat snack body: ${utf8.decode(catResponse.bodyBytes)}');
+      debugPrint('cat snacks status: ${catResponse.statusCode}');
+      debugPrint('cat snacks body: ${utf8.decode(catResponse.bodyBytes)}');
 
-      debugPrint('dog snack status: ${dogResponse.statusCode}');
-      debugPrint('dog snack body: ${utf8.decode(dogResponse.bodyBytes)}');
+      debugPrint('dog snacks status: ${dogResponse.statusCode}');
+      debugPrint('dog snacks body: ${utf8.decode(dogResponse.bodyBytes)}');
 
       if (catResponse.statusCode == 200) {
         final List<dynamic> data =
         jsonDecode(utf8.decode(catResponse.bodyBytes)) as List<dynamic>;
+
         _catSnackOptions = data
             .map((e) => PetSnackOption.fromJson(Map<String, dynamic>.from(e)))
             .toList();
+
+        // ✅ 고양이 사료 / 공용 사료 보강
+        void ensureCatSnackOption({
+          required String itemId,
+          required String nameKo,
+          required String imagePath,
+        }) {
+          final exists = _catSnackOptions.any(
+                (e) => e.sourceType == 'snacks' && e.itemId == itemId,
+          );
+
+          if (!exists) {
+            _catSnackOptions.add(
+              PetSnackOption(
+                sourceType: 'snack',
+                itemId: itemId,
+                nameKo: nameKo,
+                imagePath: imagePath,
+                category: 'snack',
+              ),
+            );
+          }
+        }
+
+        ensureCatSnackOption(
+          itemId: 'cat_food',
+          nameKo: '고양이 사료',
+          imagePath: 'assets/images/snacks/feed_cat.png',
+        );
+
+        ensureCatSnackOption(
+          itemId: 'common_food',
+          nameKo: '공용 사료',
+          imagePath: 'assets/images/snacks/feed_common.png',
+        );
+
+        _catSnackOptions.sort(
+              (a, b) => _snackOptionDisplayName(a).compareTo(_snackOptionDisplayName(b)),
+        );
       } else {
-        _catSnackOptions = [];
+        _catSnackOptions = [
+          PetSnackOption(
+            sourceType: 'snacks',
+            itemId: 'cat_food',
+            nameKo: '고양이 사료',
+            imagePath: 'assets/images/snacks/feed_cat.png',
+            category: 'snack',
+          ),
+          PetSnackOption(
+            sourceType: 'snacks',
+            itemId: 'common_food',
+            nameKo: '공용 사료',
+            imagePath: 'assets/images/snacks/feed_common.png',
+            category: 'snack',
+          ),
+        ];
       }
 
       if (dogResponse.statusCode == 200) {
@@ -345,21 +400,39 @@ class _PetScreenState extends State<PetScreen>
         _dogSnackOptions = [];
       }
 
-      debugPrint('cat snack parsed count: ${_catSnackOptions.length}');
-      debugPrint('dog snack parsed count: ${_dogSnackOptions.length}');
+      debugPrint('cat snacks parsed count: ${_catSnackOptions.length}');
+      debugPrint('dog snacks parsed count: ${_dogSnackOptions.length}');
       if (_catSnackOptions.isNotEmpty) {
         debugPrint(
-          'first cat snack: ${_catSnackOptions.first.sourceType} / ${_catSnackOptions.first.itemId} / ${_catSnackOptions.first.nameKo}',
+          'first cat snacks: ${_catSnackOptions.first.sourceType} / ${_catSnackOptions.first.itemId} / ${_catSnackOptions.first.nameKo}',
         );
       }
       if (_dogSnackOptions.isNotEmpty) {
         debugPrint(
-          'first dog snack: ${_dogSnackOptions.first.sourceType} / ${_dogSnackOptions.first.itemId} / ${_dogSnackOptions.first.nameKo}',
+          'first dog snacks: ${_dogSnackOptions.first.sourceType} / ${_dogSnackOptions.first.itemId} / ${_dogSnackOptions.first.nameKo}',
         );
       }
     } catch (e) {
       debugPrint('간식 옵션 로드 실패: $e');
-      _catSnackOptions = [];
+
+      // ✅ cat은 최소 사료 2종 유지
+      _catSnackOptions = [
+        PetSnackOption(
+          sourceType: 'snacks',
+          itemId: 'cat_food',
+          nameKo: '고양이 사료',
+          imagePath: 'assets/images/feed/feed_cat.png',
+          category: 'snacks',
+        ),
+        PetSnackOption(
+          sourceType: 'snacks',
+          itemId: 'common_food',
+          nameKo: '공용 사료',
+          imagePath: 'assets/images/feed/feed_common.png',
+          category: 'snacks',
+        ),
+      ];
+
       _dogSnackOptions = [];
     }
   }
@@ -5568,6 +5641,17 @@ class _PetScreenState extends State<PetScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setSheetState) {
+          debugPrint('snacks lab pet: ${pet.name}');
+          debugPrint('snacks lab isCat: ${pet.isCat}');
+          debugPrint('snacks lab source count: ${_snackOptionsForPet(pet).length}');
+          if (_snackOptionsForPet(pet).isNotEmpty) {
+            debugPrint(
+              'snacks lab first option: ${_snackOptionsForPet(pet).first.sourceType} / '
+                  '${_snackOptionsForPet(pet).first.itemId} / '
+                  '${_snackOptionsForPet(pet).first.nameKo}',
+            );
+          }
+
           final triedCount = pet.triedSnacks.length;
           final totalSnackCount = _snackOptionsForPet(pet).length;
 

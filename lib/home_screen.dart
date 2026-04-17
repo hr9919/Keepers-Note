@@ -75,6 +75,7 @@ class _HomeScreenState extends State<HomeScreen>
   Timer? _weatherRefreshTimer;
   bool _isUserInteracting = false;
   bool _isWeatherCardPressed = false;
+  bool _isPreviewFilterPanelOpen = false;
   int _currentEventIndex = 0;
 
   static const Set<String> _previewDefaultResourceKeys = {
@@ -363,6 +364,19 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     return null;
+  }
+
+  void _togglePreviewFilterPanel() {
+    setState(() {
+      _isPreviewFilterPanelOpen = !_isPreviewFilterPanelOpen;
+    });
+  }
+
+  void _closePreviewFilterPanel() {
+    if (!_isPreviewFilterPanelOpen) return;
+    setState(() {
+      _isPreviewFilterPanelOpen = false;
+    });
   }
 
   void _togglePreviewResource(String resourceName) {
@@ -2095,55 +2109,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildPreviewTopToggle({
-    required String title,
-    required bool value,
-    required VoidCallback onTap,
-    required IconData icon,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: value
-                ? const Color(0xFFFFF4F1)
-                : const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: value
-                  ? const Color(0xFFFF8E7C)
-                  : const Color(0xFFE2E8F0),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: value
-                    ? const Color(0xFFFF8E7C)
-                    : const Color(0xFF64748B),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
@@ -2253,6 +2218,25 @@ class _HomeScreenState extends State<HomeScreen>
               child: _buildCustomAppBar(context, topPadding),
             ),
 
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !_isPreviewFilterPanelOpen,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  opacity: _isPreviewFilterPanelOpen ? 1 : 0,
+                  child: GestureDetector(
+                    onTap: _closePreviewFilterPanel,
+                    child: Container(
+                      color: Colors.black.withOpacity(0.18),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            _buildHomePreviewFilterPanel(),
+
             if (_searchSuggestions.isNotEmpty)
               Positioned.fill(
                 child: GestureDetector(
@@ -2274,6 +2258,506 @@ class _HomeScreenState extends State<HomeScreen>
                 right: 0,
                 child: _buildSearchSuggestionsOverlay(),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomePreviewFilterPanel() {
+    final double topPadding = MediaQuery.of(context).padding.top;
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    final mobileResourceItems = <String>[
+      if (_getDistinctPreviewResourceKeysByCategory(['tree'])
+          .contains('roaming_oak'))
+        'roaming_oak',
+      if (_getDistinctPreviewResourceKeysByCategory(['mineral'])
+          .contains('fluorite'))
+        'fluorite',
+    ];
+
+    final gatherItems = _getDistinctPreviewResourceKeysByCategory([
+      'fruit',
+      'bubble',
+      'material',
+    ]);
+
+    final mushroomItems =
+    _getDistinctPreviewResourceKeysByCategory(['mushroom']);
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 340),
+      curve: _isPreviewFilterPanelOpen
+          ? Curves.easeOutQuad
+          : Curves.easeInCubic,
+      top: topPadding + 86,
+      right: _isPreviewFilterPanelOpen ? 12 : -320,
+      child: IgnorePointer(
+        ignoring: !_isPreviewFilterPanelOpen,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          opacity: _isPreviewFilterPanelOpen ? 1 : 0.96,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 286,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height
+                    - topPadding
+                    - bottomPadding
+                    - 120,
+              ),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.992),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFF0E3DC),
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.09),
+                    blurRadius: 22,
+                    offset: const Offset(-4, 10),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFFFF8E7C).withOpacity(0.045),
+                    blurRadius: 14,
+                    offset: const Offset(-2, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      const Expanded(
+                        child: Text(
+                          '정렬 및 필터',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF443834),
+                          ),
+                        ),
+                      ),
+                      _buildHomeFilterPanelIconButton(
+                        icon: Icons.refresh_rounded,
+                        onTap: _resetPreviewFiltersToDefault,
+                      ),
+                      const SizedBox(width: 6),
+                      _buildHomeFilterPanelIconButton(
+                        icon: Icons.close_rounded,
+                        onTap: _closePreviewFilterPanel,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '필터',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF6E625D),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHomePreviewCompactTogglePair(),
+                  const SizedBox(height: 14),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _buildHomePreviewFilterSection(
+                            title: '유동 자원',
+                            items: mobileResourceItems,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildHomePreviewFilterSection(
+                            title: '채집 자원',
+                            items: gatherItems,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildHomePreviewFilterSection(
+                            title: '버섯 종류',
+                            items: mushroomItems,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(
+                              color: const Color(0xFFE7DBD3),
+                            ),
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.025),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(15),
+                              onTap: _resetPreviewFiltersToDefault,
+                              child: const Center(
+                                child: Text(
+                                  '기본값',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12.5,
+                                    color: Color(0xFF8A7B71),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFFFF9C88),
+                                Color(0xFFFF8E7C),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: const Color(0xFFFF8E7C)
+                                    .withOpacity(0.22),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(15),
+                              onTap: _closePreviewFilterPanel,
+                              child: const Center(
+                                child: Text(
+                                  '적용',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12.5,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _resetPreviewFiltersToDefault() {
+    _applyPreviewFilter(
+      resources: {..._previewDefaultResourceKeys},
+      showNpcs: false,
+      showAnimals: false,
+    );
+  }
+
+  Widget _buildHomeFilterPanelIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: const Color(0xFFFFF8F5),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: const Color(0xFFF2E3DC),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: const Color(0xFFFF8E7C),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomePreviewCompactTogglePair() {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _buildHomePreviewCompactToggleCard(
+            icon: Icons.person_rounded,
+            title: 'NPC',
+            value: _previewShowNpcs,
+            onTap: () {
+              setState(() {
+                _previewShowNpcs = !_previewShowNpcs;
+                _mapPreviewResources =
+                    _getFilteredPreviewResources(_allPreviewCandidates);
+              });
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildHomePreviewCompactToggleCard(
+            icon: Icons.pets_rounded,
+            title: '동물',
+            value: _previewShowAnimals,
+            onTap: () {
+              setState(() {
+                _previewShowAnimals = !_previewShowAnimals;
+                _mapPreviewResources =
+                    _getFilteredPreviewResources(_allPreviewCandidates);
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHomePreviewCompactToggleCard({
+    required IconData icon,
+    required String title,
+    required bool value,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: value
+                ? const Color(0xFFFFF2EF)
+                : const Color(0xFFFFFBFA),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: value
+                  ? const Color(0xFFFFD8CF)
+                  : const Color(0xFFF0E3DC),
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(
+                  value ? 0.10 : 0.04,
+                ),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                icon,
+                size: 16,
+                color: value
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF7B6D64),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: value
+                        ? const Color(0xFFFF8E7C)
+                        : const Color(0xFF7B6D64),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              _buildHomePreviewMiniSwitch(value: value),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomePreviewMiniSwitch({required bool value}) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 34,
+      height: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: value
+            ? const Color(0xFFFF8E7C).withOpacity(0.55)
+            : const Color(0xFFD9D9D9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 16,
+          height: 16,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomePreviewFilterSection({
+    required String title,
+    required List<String> items,
+  }) {
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF94A3B8),
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children:
+          items.map((item) => _buildHomePreviewFilterChip(item)).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHomePreviewFilterChip(String resourceName) {
+    final bool selected = _previewEnabledResources.contains(resourceName);
+    final ResourceModel? sample =
+    _getPreviewRepresentativeByResourceName(resourceName);
+
+    String? fallbackIconPath;
+    if (resourceName == 'roaming_oak') {
+      fallbackIconPath = 'assets/images/resources/roaming-oak.png';
+    } else if (resourceName == 'fluorite') {
+      fallbackIconPath = 'assets/images/resources/fluorite.png';
+    }
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (_previewEnabledResources.contains(resourceName)) {
+            _previewEnabledResources.remove(resourceName);
+          } else {
+            _previewEnabledResources.add(resourceName);
+          }
+          _mapPreviewResources =
+              _getFilteredPreviewResources(_allPreviewCandidates);
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFFFFF4F1)
+              : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFFFF8E7C)
+                : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (sample != null || fallbackIconPath != null)
+              Container(
+                width: 18,
+                height: 18,
+                alignment: Alignment.center,
+                child: Image.asset(
+                  sample?.iconPath ?? fallbackIconPath!,
+                  width: 14,
+                  height: 14,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(
+                      Icons.image_not_supported_outlined,
+                      size: 14,
+                      color: Color(0xFF94A3B8),
+                    );
+                  },
+                ),
+              )
+            else
+              const Icon(
+                Icons.inventory_2_outlined,
+                size: 14,
+                color: Color(0xFF94A3B8),
+              ),
+            const SizedBox(width: 5),
+            Text(
+              _getPreviewDisplayName(resourceName),
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: selected
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF475569),
+              ),
+            ),
           ],
         ),
       ),
@@ -4368,7 +4852,7 @@ class _HomeScreenState extends State<HomeScreen>
                     right: 12,
                     bottom: 12,
                     child: GestureDetector(
-                      onTap: _showPreviewFilterPopup,
+                      onTap: _togglePreviewFilterPanel,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
