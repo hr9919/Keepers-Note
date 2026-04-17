@@ -319,12 +319,6 @@ class _PetScreenState extends State<PetScreen>
       final catResponse = responses[0];
       final dogResponse = responses[1];
 
-      debugPrint('cat snacks status: ${catResponse.statusCode}');
-      debugPrint('cat snacks body: ${utf8.decode(catResponse.bodyBytes)}');
-
-      debugPrint('dog snacks status: ${dogResponse.statusCode}');
-      debugPrint('dog snacks body: ${utf8.decode(dogResponse.bodyBytes)}');
-
       if (catResponse.statusCode == 200) {
         final List<dynamic> data =
         jsonDecode(utf8.decode(catResponse.bodyBytes)) as List<dynamic>;
@@ -5641,12 +5635,12 @@ class _PetScreenState extends State<PetScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setSheetState) {
-          debugPrint('snacks lab pet: ${pet.name}');
-          debugPrint('snacks lab isCat: ${pet.isCat}');
-          debugPrint('snacks lab source count: ${_snackOptionsForPet(pet).length}');
+          debugPrint('snack lab pet: ${pet.name}');
+          debugPrint('snack lab isCat: ${pet.isCat}');
+          debugPrint('snack lab source count: ${_snackOptionsForPet(pet).length}');
           if (_snackOptionsForPet(pet).isNotEmpty) {
             debugPrint(
-              'snacks lab first option: ${_snackOptionsForPet(pet).first.sourceType} / '
+              'snack lab first option: ${_snackOptionsForPet(pet).first.sourceType} / '
                   '${_snackOptionsForPet(pet).first.itemId} / '
                   '${_snackOptionsForPet(pet).first.nameKo}',
             );
@@ -5675,6 +5669,103 @@ class _PetScreenState extends State<PetScreen>
             }
 
             await _updatePetSnacks(updatedPet);
+          }
+
+          Future<void> toggleTried(PetSnackOption option) async {
+            final target = PetSnackChoice(
+              sourceType: option.sourceType,
+              itemId: option.itemId,
+            );
+
+            final nextTried = Set<PetSnackChoice>.from(pet.triedSnacks);
+            if (nextTried.contains(target)) {
+              nextTried.remove(target);
+            } else {
+              nextTried.add(target);
+            }
+
+            final updatedPet = pet.copyWith(triedSnacks: nextTried);
+            await applyUpdatedPet(updatedPet);
+          }
+
+          Future<void> toggleFavorite(PetSnackOption option) async {
+            final target = PetSnackChoice(
+              sourceType: option.sourceType,
+              itemId: option.itemId,
+            );
+
+            final nextFavorites = Set<PetSnackChoice>.from(pet.favoriteSnacks);
+            if (nextFavorites.contains(target)) {
+              nextFavorites.remove(target);
+            } else {
+              nextFavorites.add(target);
+            }
+
+            final updatedPet = pet.copyWith(favoriteSnacks: nextFavorites);
+            await applyUpdatedPet(updatedPet);
+          }
+
+          Future<void> toggleDisliked(PetSnackOption option) async {
+            final target = PetSnackChoice(
+              sourceType: option.sourceType,
+              itemId: option.itemId,
+            );
+
+            final nextDisliked = Set<PetSnackChoice>.from(pet.dislikedSnacks);
+            if (nextDisliked.contains(target)) {
+              nextDisliked.remove(target);
+            } else {
+              nextDisliked.add(target);
+            }
+
+            final updatedPet = pet.copyWith(dislikedSnacks: nextDisliked);
+            await applyUpdatedPet(updatedPet);
+          }
+
+          Widget buildIconActionButton({
+            required VoidCallback onTap,
+            required IconData icon,
+            required bool selected,
+            required Color activeColor,
+            required Color activeBg,
+            required Color activeBorder,
+            required Color inactiveColor,
+            double size = 34,
+          }) {
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(11),
+                onTap: onTap,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: selected ? activeBg : Colors.white,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(
+                      color: selected ? activeBorder : const Color(0xFFE7E7E7),
+                      width: 1,
+                    ),
+                    boxShadow: selected
+                        ? [
+                      BoxShadow(
+                        color: activeColor.withOpacity(0.12),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                        : null,
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 17,
+                    color: selected ? activeColor : inactiveColor,
+                  ),
+                ),
+              ),
+            );
           }
 
           return AnimatedContainer(
@@ -5729,11 +5820,12 @@ class _PetScreenState extends State<PetScreen>
                         width: 54,
                         height: 54,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFF1EE),
+                          color: const Color(0xFFFFF4F1),
                           borderRadius: BorderRadius.circular(18),
                         ),
+                        alignment: Alignment.center,
                         child: const Icon(
-                          Icons.phishing_rounded,
+                          Icons.restaurant_menu_rounded,
                           color: Color(0xFFFF8E7C),
                           size: 28,
                         ),
@@ -5746,18 +5838,18 @@ class _PetScreenState extends State<PetScreen>
                             Text(
                               '${pet.name}의 간식 실험실',
                               style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black87,
+                                fontSize: 17.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF2D3436),
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              '먹여본 간식을 체크하고 선호/비선호 간식을 골라주세요',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF8E8E93),
-                                height: 1.35,
+                            const SizedBox(height: 5),
+                            Text(
+                              '먹어본 간식 $triedCount개 / 전체 $totalSnackCount개',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                color: Color(0xFF8A8A8A),
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -5767,59 +5859,81 @@ class _PetScreenState extends State<PetScreen>
                   ),
                 ),
                 const SizedBox(height: 14),
-
                 Row(
                   children: [
                     Expanded(
                       child: _buildSnackInfoChip(
-                        icon: Icons.check_circle_rounded,
-                        label: '먹어본 간식',
-                        value: '$triedCount개 / $totalSnackCount개',
-                        color: const Color(0xFFFF8E7C),
-                        bgColor: const Color(0xFFFFF1EE),
+                        icon: Icons.favorite_rounded,
+                        label: '좋아해요',
+                        value: favoriteLabel.isEmpty ? '아직 없음' : favoriteLabel,
+                        color: const Color(0xFFFFB545),
+                        bgColor: const Color(0xFFFFF7E8),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildSnackInfoChip(
-                        icon: Icons.star_rounded,
-                        label: '선호 간식',
-                        value: favoriteLabel,
-                        color: const Color(0xFFFFC24B),
-                        bgColor: const Color(0xFFFFF8E8),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: _buildSnackInfoChip(
                         icon: Icons.heart_broken_rounded,
-                        label: '비선호 간식',
-                        value: dislikedLabel,
-                        color: const Color(0xFF98A2B3),
-                        bgColor: const Color(0xFFF2F4F7),
+                        label: '싫어해요',
+                        value: dislikedLabel.isEmpty ? '아직 없음' : dislikedLabel,
+                        color: const Color(0xFFFF8A8A),
+                        bgColor: const Color(0xFFFFF1F1),
                       ),
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 14),
-
-                _buildSnackSearchBar(pet, setSheetState),
-
-                const SizedBox(height: 12),
-
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 6),
-                  child: Text(
-                    _snackSearchQuery.trim().isNotEmpty ? '관련순' : '이름순',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600,
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.search_rounded,
+                        color: Color(0xFFFF8E7C),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _snackSearchController,
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => _submitSnackSearch(pet, setSheetState),
+                          decoration: const InputDecoration(
+                            hintText: '간식 이름 검색',
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      if ((_submittedSnackQuery ?? '').isNotEmpty)
+                        GestureDetector(
+                          onTap: () {
+                            _snackSearchController.clear();
+                            setSheetState(() {
+                              _snackSearchQuery = '';
+                              _submittedSnackQuery = null;
+                              _highlightedSnackFishId = null;
+                            });
+                          },
+                          child: const Icon(
+                            Icons.close_rounded,
+                            color: Color(0xFFB0B0B0),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-
+                const SizedBox(height: 12),
                 Expanded(
                   child: visibleOptions.isEmpty
                       ? const Center(
@@ -5896,14 +6010,12 @@ class _PetScreenState extends State<PetScreen>
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               alignment: Alignment.center,
-                              child: option.imagePath != null &&
-                                  option.imagePath!.trim().isNotEmpty
+                              child: option.imagePath != null && option.imagePath!.trim().isNotEmpty
                                   ? Image.asset(
                                 _imageAssetPath(option.imagePath),
                                 width: 28,
                                 height: 28,
-                                errorBuilder: (_, __, ___) =>
-                                const Icon(
+                                errorBuilder: (_, __, ___) => const Icon(
                                   Icons.phishing,
                                   color: Color(0xFFFF8E7C),
                                 ),
@@ -5915,191 +6027,116 @@ class _PetScreenState extends State<PetScreen>
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                              child: Row(
                                 children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          displayName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontSize: 14.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF2D3436),
-                                          ),
-                                        ),
-                                      ),
-                                      if (isFav)
-                                        Container(
-                                          padding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                            const Color(0xFFFFF1D6),
-                                            borderRadius:
-                                            BorderRadius.circular(999),
-                                          ),
-                                          child: const Text(
-                                            '선호',
-                                            style: TextStyle(
-                                              fontSize: 10,
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: AutoSizeText(
+                                            displayName,
+                                            maxLines: 1,
+                                            minFontSize: 10,
+                                            maxFontSize: 14,
+                                            stepGranularity: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 14,
                                               fontWeight: FontWeight.w700,
-                                              color: Color(0xFFE0A100),
+                                              color: Color(0xFF2D3436),
                                             ),
                                           ),
                                         ),
-                                      if (isDisliked) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                            const Color(0xFFF2F4F7),
-                                            borderRadius:
-                                            BorderRadius.circular(999),
-                                          ),
-                                          child: const Text(
-                                            '비선호',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF667085),
+                                        if (isFav)
+                                          Container(
+                                            margin: const EdgeInsets.only(left: 6),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 7,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFFF1D6),
+                                              borderRadius: BorderRadius.circular(999),
+                                            ),
+                                            child: const Text(
+                                              '선호',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFFE0A100),
+                                              ),
                                             ),
                                           ),
-                                        ),
+                                        if (isDisliked) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 7,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFFE7E7),
+                                              borderRadius: BorderRadius.circular(999),
+                                            ),
+                                            child: const Text(
+                                              '비선호',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFFFF6B6B),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      buildIconActionButton(
+                                        onTap: () => toggleTried(option),
+                                        icon: isTried
+                                            ? Icons.check_rounded
+                                            : Icons.check_outlined,
+                                        selected: isTried,
+                                        activeColor: const Color(0xFFFF8E7C),
+                                        activeBg: const Color(0xFFFFF1EC),
+                                        activeBorder: const Color(0xFFFFD8CF),
+                                        inactiveColor: const Color(0xFFB5B5B5),
+                                        size: 34,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      buildIconActionButton(
+                                        onTap: () => toggleFavorite(option),
+                                        icon: isFav
+                                            ? Icons.favorite_rounded
+                                            : Icons.favorite_border_rounded,
+                                        selected: isFav,
+                                        activeColor: const Color(0xFFFFB545),
+                                        activeBg: const Color(0xFFFFF7E8),
+                                        activeBorder: const Color(0xFFFFD67A),
+                                        inactiveColor: const Color(0xFFB5B5B5),
+                                        size: 34,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      buildIconActionButton(
+                                        onTap: () => toggleDisliked(option),
+                                        icon: isDisliked
+                                            ? Icons.heart_broken_rounded
+                                            : Icons.heart_broken_outlined,
+                                        selected: isDisliked,
+                                        activeColor: const Color(0xFFFF6B6B),
+                                        activeBg: const Color(0xFFFFF1F1),
+                                        activeBorder: const Color(0xFFFFD6D6),
+                                        inactiveColor: const Color(0xFFB5B5B5),
+                                        size: 34,
+                                      ),
                                     ],
                                   ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _buildSnackActionButton(
-                                  icon: isTried
-                                      ? Icons.check_rounded
-                                      : Icons.add_rounded,
-                                  label: isTried ? '기록됨' : '기록',
-                                  active: isTried,
-                                  onTap: () async {
-                                    final updatedTried =
-                                    Set<PetSnackChoice>.from(
-                                      pet.triedSnacks,
-                                    );
-                                    final updatedFavorites =
-                                    Set<PetSnackChoice>.from(
-                                      pet.favoriteSnacks,
-                                    );
-
-                                    if (isTried) {
-                                      updatedTried.remove(target);
-                                      updatedFavorites.remove(target);
-                                    } else {
-                                      updatedTried.add(target);
-                                    }
-
-                                    final updatedPet = pet.copyWith(
-                                      triedSnacks: updatedTried,
-                                      favoriteSnacks: updatedFavorites,
-                                    );
-
-                                    await applyUpdatedPet(updatedPet);
-                                  },
-                                  activeColor: const Color(0xFFFF8E7C),
-                                  activeBgColor: const Color(0xFFFFF1EE),
-                                ),
-                                const SizedBox(width: 6),
-                                _buildSnackActionButton(
-                                  icon: Icons.favorite_rounded,
-                                  label: '선호',
-                                  active: isFav,
-                                  onTap: () async {
-                                    final updatedTried =
-                                    Set<PetSnackChoice>.from(
-                                      pet.triedSnacks,
-                                    )
-                                      ..add(target);
-
-                                    final updatedFavorites =
-                                    Set<PetSnackChoice>.from(
-                                      pet.favoriteSnacks,
-                                    );
-
-                                    final updatedDisliked =
-                                    Set<PetSnackChoice>.from(
-                                      pet.dislikedSnacks,
-                                    )
-                                      ..remove(target);
-
-                                    if (isFav) {
-                                      updatedFavorites.remove(target);
-                                    } else {
-                                      if (updatedFavorites.length >= 3) {
-                                        return;
-                                      }
-                                      updatedFavorites.add(target);
-                                    }
-
-                                    final updatedPet = pet.copyWith(
-                                      triedSnacks: updatedTried,
-                                      favoriteSnacks: updatedFavorites,
-                                      dislikedSnacks: updatedDisliked,
-                                    );
-
-                                    await applyUpdatedPet(updatedPet);
-                                  },
-                                  activeColor: const Color(0xFFFFB938),
-                                  activeBgColor: const Color(0xFFFFF8E8),
-                                ),
-                                const SizedBox(width: 6),
-                                _buildSnackActionButton(
-                                  icon: Icons.heart_broken_rounded,
-                                  label: '비선호',
-                                  active: isDisliked,
-                                  onTap: () async {
-                                    final updatedDisliked =
-                                    Set<PetSnackChoice>.from(
-                                      pet.dislikedSnacks,
-                                    );
-                                    final updatedFavorites =
-                                    Set<PetSnackChoice>.from(
-                                      pet.favoriteSnacks,
-                                    );
-
-                                    if (isDisliked) {
-                                      updatedDisliked.remove(target);
-                                    } else {
-                                      if (updatedDisliked.length >= 3) {
-                                        return;
-                                      }
-                                      updatedDisliked.add(target);
-                                      updatedFavorites.remove(target);
-                                    }
-
-                                    final updatedPet = pet.copyWith(
-                                      favoriteSnacks: updatedFavorites,
-                                      dislikedSnacks: updatedDisliked,
-                                    );
-
-                                    await applyUpdatedPet(updatedPet);
-                                  },
-                                  activeColor: const Color(0xFF98A2B3),
-                                  activeBgColor: const Color(0xFFF2F4F7),
-                                ),
-                              ],
                             ),
                           ],
                         ),
