@@ -159,8 +159,21 @@ class _MainWrapperState extends State<MainWrapper> {
     int? postId;
     String? eventId;
 
-    // 커스텀 스킴: keepersnote://post/123
-    if (uri.scheme == 'keepersnote') {
+    // 1) 카카오 execution params 우선 처리
+    final target = uri.queryParameters['target'];
+    final queryPostId = uri.queryParameters['postId'];
+    final queryEventId = uri.queryParameters['eventId'];
+
+    if (target == 'community_post' && queryPostId != null) {
+      postId = int.tryParse(queryPostId);
+    }
+
+    if (target == 'event' && queryEventId != null && queryEventId.isNotEmpty) {
+      eventId = queryEventId;
+    }
+
+    // 2) 커스텀 스킴: keepersnote://community/post/123
+    if (postId == null && uri.scheme == 'keepersnote') {
       final host = uri.host;
 
       if (host == 'community' &&
@@ -174,8 +187,9 @@ class _MainWrapperState extends State<MainWrapper> {
       }
     }
 
-    // https: https://keepersnote.app/post/123
-    if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+    // 3) https: https://keepersnote.app/community/post/123
+    if (postId == null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
         uri.host == 'keepersnote.app') {
       final segments = uri.pathSegments;
 
@@ -192,8 +206,8 @@ class _MainWrapperState extends State<MainWrapper> {
 
     if (postId != null) {
       debugPrint('게시글 이동: $postId');
-      if (!mounted) return;
 
+      if (!mounted) return;
       setState(() {
         _selectedIndex = 2;
         _isCommunityMenuOpen = false;
@@ -206,7 +220,6 @@ class _MainWrapperState extends State<MainWrapper> {
 
     if (eventId != null) {
       debugPrint('이벤트 이동: $eventId');
-      // 나중에 이벤트 상세 연결
       return;
     }
   }
@@ -1980,14 +1993,14 @@ class _MainWrapperState extends State<MainWrapper> {
   Widget _buildPrettyDrawerHeader() {
     final ImageProvider headerProvider = _headerImageUrl != null
         ? NetworkImage(_headerImageUrl!)
-        : const AssetImage('assets/images/profile_header_bg.png');
+        : const AssetImage('assets/images/profile_header.png');
 
     final ImageProvider profileProvider = _profileImageUrl != null
         ? NetworkImage(_profileImageUrl!)
-        : const AssetImage('assets/images/profile.png');
+        : const AssetImage('assets/images/profile_image.png');
 
-    final String displayUid = _userUid.isEmpty ? _kakaoId : _userUid;
-    final bool hasUid = displayUid.isNotEmpty;
+    final bool hasUid = _userUid.isNotEmpty && _userUid != 'UID를 입력해보세요';
+    final String displayUid = hasUid ? _userUid : 'UID를 입력해보세요';
 
     return GestureDetector(
       onTap: () {
@@ -2078,8 +2091,22 @@ class _MainWrapperState extends State<MainWrapper> {
                             color: Colors.transparent,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(999),
-                              onTap: hasUid
-                                  ? () async {
+                              onTap: () async {
+                                if (!hasUid) {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => CommunityUidVerificationScreen(
+                                        kakaoId: _kakaoId,
+                                      ),
+                                    ),
+                                  );
+
+                                  if (!mounted) return;
+                                  await _fetchUserInfo();
+                                  return;
+                                }
+
                                 await Clipboard.setData(
                                   ClipboardData(text: displayUid),
                                 );
@@ -2123,8 +2150,7 @@ class _MainWrapperState extends State<MainWrapper> {
                                       ),
                                     ),
                                   );
-                              }
-                                  : null,
+                              },
                               child: Ink(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
@@ -2154,14 +2180,14 @@ class _MainWrapperState extends State<MainWrapper> {
                                     Icon(
                                       hasUid
                                           ? Icons.badge_rounded
-                                          : Icons.schedule_rounded,
+                                          : Icons.edit_note_rounded,
                                       size: 14,
                                       color: Colors.white.withOpacity(0.96),
                                     ),
                                     const SizedBox(width: 6),
                                     Flexible(
                                       child: Text(
-                                        hasUid ? displayUid : 'UID 불러오는 중...',
+                                        displayUid,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
@@ -2179,6 +2205,13 @@ class _MainWrapperState extends State<MainWrapper> {
                                         size: 13,
                                         color: Colors.white.withOpacity(0.88),
                                       ),
+                                    ] else ...[
+                                      const SizedBox(width: 7),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        size: 13,
+                                        color: Colors.white.withOpacity(0.88),
+                                      ),
                                     ],
                                   ],
                                 ),
@@ -2187,7 +2220,9 @@ class _MainWrapperState extends State<MainWrapper> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            hasUid ? '즐거운 타운생활 되세요!' : 'UID를 불러오고 있어요',
+                            hasUid
+                                ? '즐거운 타운생활 되세요!'
+                                : 'UID를 입력하면 커뮤니티를 이용할 수 있어요',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
@@ -2200,7 +2235,6 @@ class _MainWrapperState extends State<MainWrapper> {
                   ),
                 ],
               ),
-
               Positioned(
                 right: 0,
                 bottom: 0,
@@ -2497,7 +2531,7 @@ class _MainWrapperState extends State<MainWrapper> {
                           const SizedBox(height: 12),
                           _buildCommunityMenuBubble(
                             icon: Icons.verified_user_rounded,
-                            label: 'UID 검증 관리',
+                            label: '관리 메뉴',
                             onTap: () {
                               _closeCommunityMenuAndRun('uid_admin');
                             },
@@ -2728,19 +2762,26 @@ class _MainWrapperState extends State<MainWrapper> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.98),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFFFFFCFB),
+                Color(0xFFFFF4F1),
+              ],
+            ),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: const Color(0xFFF1DFD8),
-              width: 1.1,
+              color: const Color(0xFFFFD7CE),
+              width: 1.15,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+                color: const Color(0xFFFF8E7C).withOpacity(0.10),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -2751,8 +2792,18 @@ class _MainWrapperState extends State<MainWrapper> {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF1ED),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFFFFF3EF),
+                      Color(0xFFFFE5DE),
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: const Color(0xFFFFD7CE),
+                  ),
                 ),
                 child: Icon(
                   icon,

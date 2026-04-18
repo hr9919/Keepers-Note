@@ -22,9 +22,6 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
   List<Map<String, dynamic>> _uidItems = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _reportItems = <Map<String, dynamic>>[];
 
-  // For suspension period input
-  final TextEditingController _suspendDaysController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
@@ -70,25 +67,32 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
     }
   }
 
-  Future<void> _reviewReport(int reportId, String action, {int suspendDays = 7}) async {
+  Future<void> _reviewReport(
+      int reportId,
+      String action, {
+        int suspendDays = 7,
+      }) async {
     final uri = Uri.parse(
-      '$_baseUrl/api/community/reports/$reportId/$action',
-    ).replace(queryParameters: {
-      'kakaoId': widget.kakaoId,
-    });
+      '$_baseUrl/api/community/reports/$reportId/action',
+    );
 
-    // If action is 'SUSPEND_USER', add suspendDays to the body
-    final requestBody = action == 'SUSPEND_USER'
-        ? jsonEncode({'suspendDays': suspendDays})
-        : null;
+    final Map<String, dynamic> body = <String, dynamic>{
+      'kakaoId': int.tryParse(widget.kakaoId) ?? 0,
+      'action': action,
+    };
+
+    if (action == 'SUSPEND_USER') {
+      body['suspendDays'] = suspendDays;
+    }
 
     final response = await http.post(
       uri,
-      body: requestBody,
-      headers: {'Content-Type': 'application/json'},
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
     );
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('신고 처리 실패');
+      throw Exception('신고 처리 실패: ${response.body}');
     }
 
     await _fetchAdminData();
@@ -243,6 +247,10 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
   }
 
   Widget _buildReportCard(Map<String, dynamic> item) {
+    final TextEditingController suspendController = TextEditingController(
+      text: '7',
+    );
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -272,34 +280,83 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
           Text('상태: ${item['status'] ?? '-'}'),
           Text('접수일: ${item['createdAt'] ?? '-'}'),
           const SizedBox(height: 12),
+
+          TextField(
+            controller: suspendController,
+            decoration: InputDecoration(
+              labelText: '정지 기간(일)',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              isDense: true,
+            ),
+            keyboardType: TextInputType.number,
+          ),
+
+          const SizedBox(height: 12),
+
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
+                  onPressed: () => _reviewReport(
+                    item['reportId'] as int,
+                    'REJECT', // 백엔드에서 INVALIDATE로 만들었으면 여기만 바꾸기
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF7B8794),
+                    side: const BorderSide(color: Color(0xFFD9E2EC)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('신고 무효'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton(
                   onPressed: () {
-                    final suspendDays = int.tryParse(_suspendDaysController.text) ?? 7;
-                    _reviewReport(item['reportId'] as int, 'SUSPEND_USER', suspendDays: suspendDays);
+                    final suspendDays =
+                        int.tryParse(suspendController.text.trim()) ?? 7;
+                    _reviewReport(
+                      item['reportId'] as int,
+                      'SUSPEND_USER',
+                      suspendDays: suspendDays,
+                    );
                   },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF8E7C),
+                    side: const BorderSide(color: Color(0xFFFFD2C8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                   child: const Text('정지'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () => _reviewReport(item['reportId'] as int, 'approve'),
+                  onPressed: () => _reviewReport(
+                    item['reportId'] as int,
+                    'APPROVE',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8E7C),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                   child: const Text('승인'),
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _suspendDaysController,
-            decoration: InputDecoration(
-              labelText: '정지 기간(일)',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.number,
           ),
         ],
       ),

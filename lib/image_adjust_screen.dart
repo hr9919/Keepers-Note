@@ -24,7 +24,7 @@ class ImageAdjustScreen extends StatefulWidget {
   final String imagePath;
   final String title;
   final ImageAdjustShape shape;
-  final double viewportAspectRatio;
+  final double? viewportAspectRatio;
   final Color accentColor;
   final double borderRadius;
 
@@ -42,7 +42,20 @@ class ImageAdjustScreen extends StatefulWidget {
   State<ImageAdjustScreen> createState() => _ImageAdjustScreenState();
 }
 
+enum _CropHandle {
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
+}
+
 class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
+  static const double _minCropWidth = 120;
+  static const double _minCropHeight = 120;
+  static const double _handleTouchSize = 36;
+  static const double _canvasHorizontalPadding = 24;
+  static const double _canvasVerticalPadding = 26;
+
   ui.Image? _decodedImage;
   Size? _rawImageSize;
   bool _isSaving = false;
@@ -55,6 +68,17 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
   double _gestureStartScale = 1.0;
   Offset _gestureStartOffset = Offset.zero;
   Offset _gestureFocalImagePoint = Offset.zero;
+
+  Rect? _freeCropRect;
+  Size? _lastCanvasSize;
+
+  bool get _isFreeformCrop =>
+      widget.shape == ImageAdjustShape.roundedRect &&
+          widget.viewportAspectRatio == null;
+
+  bool get _useSharpRect =>
+      widget.shape == ImageAdjustShape.roundedRect &&
+          widget.viewportAspectRatio == null;
 
   @override
   void initState() {
@@ -75,37 +99,158 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
     });
   }
 
-  Rect _cropRectFor(Size size) {
-    const horizontalPadding = 24.0;
-    final maxWidth = size.width - horizontalPadding * 2;
+  Rect _cropBoundsFor(Size size) {
+    return Rect.fromLTWH(
+      _canvasHorizontalPadding,
+      _canvasVerticalPadding,
+      math.max(80, size.width - (_canvasHorizontalPadding * 2)),
+      math.max(80, size.height - (_canvasVerticalPadding * 2)),
+    );
+  }
 
-    double cropWidth = maxWidth;
-    double cropHeight = cropWidth / widget.viewportAspectRatio;
+  Rect _defaultCropRectFor(Size size) {
+    final bounds = _cropBoundsFor(size);
 
-    final maxHeight = size.height * 0.58;
-    if (cropHeight > maxHeight) {
-      cropHeight = maxHeight;
-      cropWidth = cropHeight * widget.viewportAspectRatio;
+    if (_isFreeformCrop) {
+      final width = bounds.width * 0.82;
+
+      final imageRatio = _rawImageSize == null
+          ? 1.0
+          : _rawImageSize!.height / _rawImageSize!.width;
+
+      double height = width * imageRatio;
+
+      final minHeight = math.min(_minCropHeight, bounds.height);
+      final maxHeight = bounds.height * 0.76;
+      height = height.clamp(minHeight, maxHeight).toDouble();
+
+      final resolvedWidth = width.clamp(
+        math.min(_minCropWidth, bounds.width),
+        bounds.width,
+      ).toDouble();
+
+      return Rect.fromCenter(
+        center: bounds.center,
+        width: resolvedWidth,
+        height: height,
+      );
     }
 
-    final left = (size.width - cropWidth) / 2;
-    final top = (size.height - cropHeight) / 2 - 18;
+    final aspectRatio = widget.viewportAspectRatio ?? 1.0;
 
-    return Rect.fromLTWH(left, top, cropWidth, cropHeight);
+    double cropWidth = bounds.width;
+    double cropHeight = cropWidth / aspectRatio;
+
+    if (cropHeight > bounds.height) {
+      cropHeight = bounds.height;
+      cropWidth = cropHeight * aspectRatio;
+    }
+
+    return Rect.fromCenter(
+      center: bounds.center,
+      width: cropWidth,
+      height: cropHeight,
+    );
+  }
+
+  Rect _clampFreeCropRect(Rect rect, Size size) {
+    final bounds = _cropBoundsFor(size);
+
+    double left = rect.left;
+    double top = rect.top;
+    double right = rect.right;
+    double bottom = rect.bottom;
+
+    final maxWidth = bounds.width;
+    final maxHeight = bounds.height;
+
+    final minWidth = math.min(_minCropWidth, maxWidth);
+    final minHeight = math.min(_minCropHeight, maxHeight);
+
+    final width = (right - left).clamp(minWidth, maxWidth).toDouble();
+    final height = (bottom - top).clamp(minHeight, maxHeight).toDouble();
+
+    right = left + width;
+    bottom = top + height;
+
+    if (left < bounds.left) {
+      right += bounds.left - left;
+      left = bounds.left;
+    }
+    if (top < bounds.top) {
+      bottom += bounds.top - top;
+      top = bounds.top;
+    }
+    if (right > bounds.right) {
+      left -= right - bounds.right;
+      right = bounds.right;
+    }
+    if (bottom > bounds.bottom) {
+      top -= bottom - bounds.bottom;
+      bottom = bounds.bottom;
+    }
+
+    if (right - left < minWidth) {
+      right = math.min(bounds.right, left + minWidth);
+      left = math.max(bounds.left, right - minWidth);
+    }
+
+    if (bottom - top < minHeight) {
+      bottom = math.min(bounds.bottom, top + minHeight);
+      top = math.max(bounds.top, bottom - minHeight);
+    }
+
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  Rect _resolvedCropRect(Size size) {
+    if (!_isFreeformCrop) {
+      return _defaultCropRectFor(size);
+    }
+
+    final defaultRect = _defaultCropRectFor(size);
+
+    if (_freeCropRect == null) {
+      _freeCropRect = defaultRect;
+      _lastCanvasSize = size;
+      return _freeCropRect!;
+    }
+
+    if (_lastCanvasSize != size) {
+      _freeCropRect = _clampFreeCropRect(_freeCropRect!, size);
+      _lastCanvasSize = size;
+    }
+
+    return _freeCropRect!;
   }
 
   double get _effectiveScale => _baseScale * _scale;
 
   void _initTransformIfNeeded(Rect cropRect) {
     if (_rawImageSize == null) return;
-    if (_baseScale != 1.0 || _offset != Offset.zero) return;
 
     final imageW = _rawImageSize!.width;
     final imageH = _rawImageSize!.height;
 
     final scaleX = cropRect.width / imageW;
     final scaleY = cropRect.height / imageH;
-    _baseScale = math.max(scaleX, scaleY);
+    final nextBaseScale = math.max(scaleX, scaleY);
+
+    final bool needsInit =
+        _baseScale == 1.0 &&
+            _offset == Offset.zero &&
+            _normalizedOffset == Offset.zero;
+
+    if (!needsInit) {
+      // ✅ 자유 크롭에서는 cropRect가 작아질 때 baseScale를 다시 낮추지 않음
+      // ✅ cropRect가 커져서 현재 배율로 못 덮는 경우만 보정은
+      //    _ensureImageCoversCropRect()에서 처리
+      _offset = _clampOffset(_offset, cropRect);
+      _syncNormalizedOffset(cropRect);
+      return;
+    }
+
+    _baseScale = nextBaseScale;
     _scale = 1.0;
     _normalizedOffset = Offset.zero;
 
@@ -116,6 +261,9 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
       cropRect.center.dx - displayW / 2,
       cropRect.center.dy - displayH / 2,
     );
+
+    _offset = _clampOffset(_offset, cropRect);
+    _syncNormalizedOffset(cropRect);
   }
 
   Offset _clampOffset(Offset proposed, Rect cropRect) {
@@ -124,15 +272,48 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
     final displayW = _rawImageSize!.width * _effectiveScale;
     final displayH = _rawImageSize!.height * _effectiveScale;
 
-    final minDx = cropRect.right - displayW;
-    final maxDx = cropRect.left;
-    final minDy = cropRect.bottom - displayH;
-    final maxDy = cropRect.top;
+    final rawMinDx = cropRect.right - displayW;
+    final rawMaxDx = cropRect.left;
+    final rawMinDy = cropRect.bottom - displayH;
+    final rawMaxDy = cropRect.top;
+
+    final minDx = math.min(rawMinDx, rawMaxDx);
+    final maxDx = math.max(rawMinDx, rawMaxDx);
+    final minDy = math.min(rawMinDy, rawMaxDy);
+    final maxDy = math.max(rawMinDy, rawMaxDy);
 
     return Offset(
-      proposed.dx.clamp(minDx, maxDx),
-      proposed.dy.clamp(minDy, maxDy),
+      proposed.dx.clamp(minDx, maxDx).toDouble(),
+      proposed.dy.clamp(minDy, maxDy).toDouble(),
     );
+  }
+
+  void _ensureImageCoversCropRect(Rect cropRect) {
+    if (_rawImageSize == null) return;
+
+    final minEffectiveScale = math.max(
+      cropRect.width / _rawImageSize!.width,
+      cropRect.height / _rawImageSize!.height,
+    );
+
+    double nextBaseScale = _baseScale;
+    double nextScale = _scale;
+
+    if (_effectiveScale < minEffectiveScale) {
+      nextScale = minEffectiveScale / nextBaseScale;
+
+      if (nextScale > 2.6) {
+        nextBaseScale = minEffectiveScale;
+        nextScale = 1.0;
+      }
+
+      _baseScale = nextBaseScale;
+      _scale = nextScale.clamp(1.0, 2.6).toDouble();
+      _rebuildOffsetFromNormalized(cropRect);
+    }
+
+    _offset = _clampOffset(_offset, cropRect);
+    _syncNormalizedOffset(cropRect);
   }
 
   void _syncNormalizedOffset(Rect cropRect) {
@@ -179,6 +360,65 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
     });
   }
 
+  void _updateFreeCropRect(
+      _CropHandle handle,
+      DragUpdateDetails details,
+      Size canvasSize,
+      ) {
+    if (!_isFreeformCrop) return;
+
+    final current = _freeCropRect ?? _defaultCropRectFor(canvasSize);
+    final bounds = _cropBoundsFor(canvasSize);
+
+    double left = current.left;
+    double top = current.top;
+    double right = current.right;
+    double bottom = current.bottom;
+
+    final dx = details.delta.dx;
+    final dy = details.delta.dy;
+
+    switch (handle) {
+      case _CropHandle.topLeft:
+        left += dx;
+        top += dy;
+        left = left.clamp(bounds.left, right - _minCropWidth).toDouble();
+        top = top.clamp(bounds.top, bottom - _minCropHeight).toDouble();
+        break;
+
+      case _CropHandle.topRight:
+        right += dx;
+        top += dy;
+        right = right.clamp(left + _minCropWidth, bounds.right).toDouble();
+        top = top.clamp(bounds.top, bottom - _minCropHeight).toDouble();
+        break;
+
+      case _CropHandle.bottomLeft:
+        left += dx;
+        bottom += dy;
+        left = left.clamp(bounds.left, right - _minCropWidth).toDouble();
+        bottom = bottom.clamp(top + _minCropHeight, bounds.bottom).toDouble();
+        break;
+
+      case _CropHandle.bottomRight:
+        right += dx;
+        bottom += dy;
+        right = right.clamp(left + _minCropWidth, bounds.right).toDouble();
+        bottom = bottom.clamp(top + _minCropHeight, bounds.bottom).toDouble();
+        break;
+    }
+
+    final nextRect = _clampFreeCropRect(
+      Rect.fromLTRB(left, top, right, bottom),
+      canvasSize,
+    );
+
+    setState(() {
+      _freeCropRect = nextRect;
+      _ensureImageCoversCropRect(nextRect);
+    });
+  }
+
   Future<void> _save(Rect cropRect) async {
     if (_isSaving || _decodedImage == null || _rawImageSize == null) return;
 
@@ -204,6 +444,8 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
 
       if (widget.shape == ImageAdjustShape.circle) {
         canvas.clipPath(Path()..addOval(clipRect));
+      } else if (_useSharpRect) {
+        canvas.clipRect(clipRect);
       } else {
         canvas.clipRRect(
           RRect.fromRectAndRadius(
@@ -260,6 +502,48 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
     }
   }
 
+  Widget _buildFreeCropHandle({
+    required Rect cropRect,
+    required _CropHandle handle,
+    required Size canvasSize,
+  }) {
+    double left;
+    double top;
+
+    switch (handle) {
+      case _CropHandle.topLeft:
+        left = cropRect.left - (_handleTouchSize / 2);
+        top = cropRect.top - (_handleTouchSize / 2);
+        break;
+      case _CropHandle.topRight:
+        left = cropRect.right - (_handleTouchSize / 2);
+        top = cropRect.top - (_handleTouchSize / 2);
+        break;
+      case _CropHandle.bottomLeft:
+        left = cropRect.left - (_handleTouchSize / 2);
+        top = cropRect.bottom - (_handleTouchSize / 2);
+        break;
+      case _CropHandle.bottomRight:
+        left = cropRect.right - (_handleTouchSize / 2);
+        top = cropRect.bottom - (_handleTouchSize / 2);
+        break;
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onPanUpdate: (details) =>
+            _updateFreeCropRect(handle, details, canvasSize),
+        child: SizedBox(
+          width: _handleTouchSize,
+          height: _handleTouchSize,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final accent = widget.accentColor;
@@ -267,6 +551,7 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFFAF8),
       appBar: AppBar(
+        centerTitle: true,
         backgroundColor: const Color(0xFFFFFAF8),
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -283,10 +568,11 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final fullSize = Size(constraints.maxWidth, constraints.maxHeight);
-          final cropRect = _cropRectFor(fullSize);
+          final cropRect = _resolvedCropRect(fullSize);
 
           if (_rawImageSize != null) {
             _initTransformIfNeeded(cropRect);
+            _ensureImageCoversCropRect(cropRect);
           }
 
           return Column(
@@ -321,18 +607,16 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
 
                           final adjustedScaleDelta =
                               1 + ((details.scale - 1) * 0.08);
-                          final newScale =
-                          (_gestureStartScale * adjustedScaleDelta)
-                              .clamp(1.0, 2.6);
+                          final newScale = (_gestureStartScale * adjustedScaleDelta)
+                              .clamp(1.0, 2.6)
+                              .toDouble();
                           final nextEffectiveScale = _baseScale * newScale;
 
                           final nextOffset = Offset(
                             focal.dx -
-                                _gestureFocalImagePoint.dx *
-                                    nextEffectiveScale,
+                                _gestureFocalImagePoint.dx * nextEffectiveScale,
                             focal.dy -
-                                _gestureFocalImagePoint.dy *
-                                    nextEffectiveScale,
+                                _gestureFocalImagePoint.dy * nextEffectiveScale,
                           );
 
                           setState(() {
@@ -380,10 +664,33 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                             shape: widget.shape,
                             accent: accent,
                             borderRadius: widget.borderRadius,
+                            useSharpRect: _useSharpRect,
                           ),
                         ),
                       ),
                     ),
+                    if (_isFreeformCrop) ...[
+                      _buildFreeCropHandle(
+                        cropRect: cropRect,
+                        handle: _CropHandle.topLeft,
+                        canvasSize: fullSize,
+                      ),
+                      _buildFreeCropHandle(
+                        cropRect: cropRect,
+                        handle: _CropHandle.topRight,
+                        canvasSize: fullSize,
+                      ),
+                      _buildFreeCropHandle(
+                        cropRect: cropRect,
+                        handle: _CropHandle.bottomLeft,
+                        canvasSize: fullSize,
+                      ),
+                      _buildFreeCropHandle(
+                        cropRect: cropRect,
+                        handle: _CropHandle.bottomRight,
+                        canvasSize: fullSize,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -407,18 +714,6 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                   ),
                   child: Column(
                     children: [
-                      Text(
-                        widget.shape == ImageAdjustShape.circle
-                            ? '원형 프레임에 맞게 드래그하고 확대해보세요'
-                            : '배경 프레임 안에서 위치와 확대를 조정해보세요',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF7B8794),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
                       Row(
                         children: [
                           const Icon(
@@ -439,8 +734,7 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                                 activeTrackColor: accent,
                                 thumbColor: accent,
                                 overlayColor: accent.withOpacity(0.14),
-                                inactiveTrackColor:
-                                const Color(0xFFF3D8D1),
+                                inactiveTrackColor: const Color(0xFFF3D8D1),
                               ),
                               child: Slider(
                                 min: 1.0,
@@ -451,14 +745,8 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                                     : (value) {
                                   setState(() {
                                     _scale = value;
-                                    _rebuildOffsetFromNormalized(
-                                      cropRect,
-                                    );
-                                    _offset = _clampOffset(
-                                      _offset,
-                                      cropRect,
-                                    );
-                                    _syncNormalizedOffset(cropRect);
+                                    _rebuildOffsetFromNormalized(cropRect);
+                                    _ensureImageCoversCropRect(cropRect);
                                   });
                                 },
                               ),
@@ -492,17 +780,15 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
-                                foregroundColor:
-                                const Color(0xFF7B8794),
+                                foregroundColor: const Color(0xFF7B8794),
                               ),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: _isSaving
-                                  ? null
-                                  : () => Navigator.pop(context),
+                              onPressed:
+                              _isSaving ? null : () => Navigator.pop(context),
                               style: OutlinedButton.styleFrom(
                                 minimumSize: const Size.fromHeight(48),
                                 side: const BorderSide(
@@ -511,8 +797,7 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
-                                foregroundColor:
-                                const Color(0xFF7B8794),
+                                foregroundColor: const Color(0xFF7B8794),
                               ),
                               child: const Text(
                                 '취소',
@@ -543,8 +828,7 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                                   ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child:
-                                CircularProgressIndicator(
+                                child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   color: Colors.white,
                                 ),
@@ -577,34 +861,57 @@ class _CropOverlayPainter extends CustomPainter {
   final ImageAdjustShape shape;
   final Color accent;
   final double borderRadius;
+  final bool useSharpRect;
 
   _CropOverlayPainter({
     required this.cropRect,
     required this.shape,
     required this.accent,
     required this.borderRadius,
+    required this.useSharpRect,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final overlayPaint = Paint()..color = Colors.black.withOpacity(0.34);
     final clearPaint = Paint()..blendMode = BlendMode.clear;
-    final borderPaint = Paint()
-      ..color = accent.withOpacity(0.95)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
 
     canvas.saveLayer(Offset.zero & size, Paint());
     canvas.drawRect(Offset.zero & size, overlayPaint);
 
     if (shape == ImageAdjustShape.circle) {
       canvas.drawOval(cropRect, clearPaint);
+
+      final borderPaint = Paint()
+        ..color = accent.withOpacity(0.95)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+
       canvas.drawOval(cropRect, borderPaint);
+    } else if (useSharpRect) {
+      canvas.drawRect(cropRect, clearPaint);
+
+      final dotPaint = Paint()
+        ..color = accent
+        ..style = PaintingStyle.fill
+        ..isAntiAlias = true;
+
+      const dotRadius = 5.0;
+
+      canvas.drawCircle(cropRect.topLeft, dotRadius, dotPaint);
+      canvas.drawCircle(cropRect.topRight, dotRadius, dotPaint);
+      canvas.drawCircle(cropRect.bottomLeft, dotRadius, dotPaint);
+      canvas.drawCircle(cropRect.bottomRight, dotRadius, dotPaint);
     } else {
       final rrect = RRect.fromRectAndRadius(
         cropRect,
         Radius.circular(borderRadius),
       );
+      final borderPaint = Paint()
+        ..color = accent.withOpacity(0.95)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+
       canvas.drawRRect(rrect, clearPaint);
       canvas.drawRRect(rrect, borderPaint);
     }
@@ -617,6 +924,7 @@ class _CropOverlayPainter extends CustomPainter {
     return cropRect != oldDelegate.cropRect ||
         shape != oldDelegate.shape ||
         accent != oldDelegate.accent ||
-        borderRadius != oldDelegate.borderRadius;
+        borderRadius != oldDelegate.borderRadius ||
+        useSharpRect != oldDelegate.useSharpRect;
   }
 }

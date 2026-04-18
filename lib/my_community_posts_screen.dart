@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'community_write_screen.dart';
+import 'services/community_tag_api_service.dart';
 
 class MyCommunityPostsScreen extends StatefulWidget {
   final String kakaoId;
@@ -197,6 +199,17 @@ class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
                     },
                   ),
                   _buildActionTile(
+                    icon: Icons.edit_rounded,
+                    iconBg: const Color(0xFFEFF6FF),
+                    iconColor: const Color(0xFF4A7BD0),
+                    title: '글 수정',
+                    subtitle: '기존 내용으로 수정 화면을 열어요',
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await _openEditPost(post);
+                    },
+                  ),
+                  _buildActionTile(
                     icon: Icons.delete_rounded,
                     iconBg: const Color(0xFFFFF1F1),
                     iconColor: const Color(0xFFE46C6C),
@@ -217,12 +230,45 @@ class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
     );
   }
 
+  Future<void> _openEditPost(MyCommunityPostItem post) async {
+    try {
+      final tagItems = await CommunityTagApiService.fetchActiveTags();
+      final availableTags = tagItems.map((e) => e.tagName).toList();
+
+      if (!mounted) return;
+
+      final bool? updated = await Navigator.of(context, rootNavigator: true).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => CommunityWriteScreen(
+            kakaoId: widget.kakaoId,
+            availableTags: availableTags,
+            isEditMode: true,
+            editingPostId: post.id,
+            initialTitle: post.title,
+            initialBody: post.body,
+            initialTags: post.tags,
+            initialImageUrls: post.imageUrls,
+          ),
+        ),
+      );
+
+      if (updated == true) {
+        await _fetchMyPosts();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('수정 화면을 여는 중 문제가 발생했어요. $e')),
+      );
+    }
+  }
+
   Future<void> _sharePost(MyCommunityPostItem post) async {
     final String shareText = [
       if (post.title.trim().isNotEmpty) post.title.trim(),
       if (post.body.trim().isNotEmpty) post.body.trim(),
       '',
-      '게시글 ID: ${post.id}',
+      'https://keepersnote.app/community/post/${post.id}',
     ].join('\n');
 
     await Clipboard.setData(ClipboardData(text: shareText));
@@ -608,7 +654,7 @@ class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
                     ? ClipRRect(
                   borderRadius: BorderRadius.circular(20),
                   child: Image.network(
-                    post.imageUrls.first,
+                    _resolveImagePath(post.imageUrls.first),
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => const Icon(
                       Icons.image_not_supported_outlined,
@@ -720,6 +766,13 @@ class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
     );
   }
 
+  String _resolveImagePath(String path) {
+    if (path.isEmpty) return '';
+    if (path.startsWith('http')) return path;
+    if (path.startsWith('/')) return '$_baseUrl$path';
+    return '$_baseUrl/$path';
+  }
+
   void _openImageViewer(MyCommunityPostItem post) {
     if (post.imageUrls.isEmpty) return;
 
@@ -735,18 +788,23 @@ class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
                 Center(
                   child: GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: InteractiveViewer(
-                      minScale: 1.0,
-                      maxScale: 4.0,
-                      child: Image.network(
-                        post.imageUrls.first,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.broken_image_outlined,
-                          size: 42,
-                          color: Colors.white54,
-                        ),
-                      ),
+                    child: PageView.builder(
+                      itemCount: post.imageUrls.length,
+                      itemBuilder: (context, index) {
+                        return InteractiveViewer(
+                          minScale: 1.0,
+                          maxScale: 4.0,
+                          child: Image.network(
+                            _resolveImagePath(post.imageUrls[index]),
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.broken_image_outlined,
+                              size: 42,
+                              color: Colors.white54,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),

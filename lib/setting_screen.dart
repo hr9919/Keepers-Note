@@ -238,7 +238,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           image: DecorationImage(
             image: _headerImageUrl != null
                 ? NetworkImage(_headerImageUrl!)
-                : const AssetImage('assets/images/profile_header_bg.png') as ImageProvider,
+                : const AssetImage('assets/images/profile_header.png') as ImageProvider,
             fit: BoxFit.cover,
           ),
           borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
@@ -334,7 +334,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     image: DecorationImage(
                       image: _profileImageUrl != null
                           ? NetworkImage(_profileImageUrl!)
-                          : const AssetImage('assets/images/profile.png')
+                          : const AssetImage('assets/images/profile_image.png')
                       as ImageProvider,
                       fit: BoxFit.cover,
                     ),
