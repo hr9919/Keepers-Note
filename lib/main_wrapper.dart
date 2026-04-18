@@ -5,8 +5,11 @@ import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/services.dart';
-
+import 'community_uid_verification_screen.dart';
+import 'community_uid_admin_screen.dart';
 import 'community_screen.dart';
+import 'community_write_screen.dart';
+import 'my_community_posts_screen.dart';
 import 'home_screen.dart';
 import 'weather_admin_screen.dart';
 import 'encyclopedia_screen.dart';
@@ -21,10 +24,16 @@ import 'models/global_search_item.dart';
 import 'event_screen.dart';
 import 'models/event_item.dart';
 import 'services/event_api_service.dart';
+import 'services/community_tag_api_service.dart';
 
 
 class MainWrapper extends StatefulWidget {
-  const MainWrapper({super.key});
+  final Uri? initialDeepLink;
+
+  const MainWrapper({
+    super.key,
+    this.initialDeepLink,
+  });
 
   @override
   State<MainWrapper> createState() => _MainWrapperState();
@@ -35,14 +44,20 @@ class _MainWrapperState extends State<MainWrapper> {
   int _searchResetSignal = 0;
   final TextEditingController _todoController = TextEditingController();
 
+  int? _initialCommunityPostId;
+
   bool _isScrimPressed = false;
   bool _isDrawerOpen = false;
   bool _isEndDrawerOpen = false;
   bool _isAdmin = false;
   int _homeRefreshKey = 0;
+  bool _isOpeningCommunityRoute = false;
 
   bool get _isCommunityTab => _selectedIndex == 2;
   bool _isCommunityMenuOpen = false;
+
+  String? _pendingCommunityAction;
+  bool _isLaunchingCommunityAction = false;
 
   String _userName = "로그인 중...";
   String _userUid = "";
@@ -80,12 +95,47 @@ class _MainWrapperState extends State<MainWrapper> {
     super.initState();
     _fetchUserInfo();
     _loadEvents();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final uri = widget.initialDeepLink;
+      if (uri != null) {
+        _handleDeepLink(uri);
+      }
+    });
   }
 
   @override
   void dispose() {
     _todoController.dispose();
     super.dispose();
+  }
+
+  Future<Map<String, dynamic>?> _fetchCommunityUidStatus() async {
+
+    final ready = await _ensureKakaoIdReady();
+    if (!ready) {
+      return null;
+    }
+
+    final uri = Uri.parse(
+      'http://161.33.30.40:8080/api/community/uid-verification/status',
+    ).replace(
+      queryParameters: {'kakaoId': _kakaoId},
+    );
+
+    try {
+      final response = await http.get(uri);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+
+      return Map<String, dynamic>.from(
+        jsonDecode(utf8.decode(response.bodyBytes)),
+      );
+    } catch (e) {
+      return null;
+    }
   }
 
   Future<void> _loadEvents() async {
@@ -100,6 +150,64 @@ class _MainWrapperState extends State<MainWrapper> {
       debugPrint('MainWrapper events loaded: ${events.length}');
     } catch (e) {
       debugPrint('이벤트 불러오기 실패: $e');
+    }
+  }
+
+  void _handleDeepLink(Uri uri) {
+    debugPrint('딥링크 처리: $uri');
+
+    int? postId;
+    String? eventId;
+
+    // 커스텀 스킴: keepersnote://post/123
+    if (uri.scheme == 'keepersnote') {
+      final host = uri.host;
+
+      if (host == 'community' &&
+          uri.pathSegments.length >= 2 &&
+          uri.pathSegments[0] == 'post') {
+        postId = int.tryParse(uri.pathSegments[1]);
+      }
+
+      if (host == 'event' && uri.pathSegments.isNotEmpty) {
+        eventId = uri.pathSegments.first;
+      }
+    }
+
+    // https: https://keepersnote.app/post/123
+    if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host == 'keepersnote.app') {
+      final segments = uri.pathSegments;
+
+      if (segments.length >= 3 &&
+          segments[0] == 'community' &&
+          segments[1] == 'post') {
+        postId = int.tryParse(segments[2]);
+      }
+
+      if (segments.length >= 2 && segments[0] == 'event') {
+        eventId = segments[1];
+      }
+    }
+
+    if (postId != null) {
+      debugPrint('게시글 이동: $postId');
+      if (!mounted) return;
+
+      setState(() {
+        _selectedIndex = 2;
+        _isCommunityMenuOpen = false;
+        _pendingSearchItem = null;
+        _searchResetSignal++;
+        _initialCommunityPostId = postId;
+      });
+      return;
+    }
+
+    if (eventId != null) {
+      debugPrint('이벤트 이동: $eventId');
+      // 나중에 이벤트 상세 연결
+      return;
     }
   }
 
@@ -297,49 +405,6 @@ class _MainWrapperState extends State<MainWrapper> {
     } catch (e) {
       debugPrint('메일 실행 실패: $e');
     }
-  }
-
-  Future<void> _closeDrawerAndPush(Widget page) async {
-    FocusManager.instance.primaryFocus?.unfocus();
-
-    await Future.delayed(const Duration(milliseconds: 110)); // ripple 살짝 보여주기
-
-    if (_isDrawerOpen) {
-      setState(() => _isDrawerOpen = false);
-      await Future.delayed(_kPanelDuration);
-    }
-
-    if (_isEndDrawerOpen) {
-      setState(() => _isEndDrawerOpen = false);
-      await Future.delayed(_kPanelDuration);
-    }
-
-    if (!mounted) return;
-
-    await Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 240),
-        reverseTransitionDuration: const Duration(milliseconds: 250),
-        pageBuilder: (_, animation, __) => page,
-        transitionsBuilder: (_, animation, __, child) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          );
-
-          return FadeTransition(
-            opacity: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.02, 0.0),
-                end: Offset.zero,
-              ).animate(curved),
-              child: child,
-            ),
-          );
-        },
-      ),
-    );
   }
 
   Future<void> _openDrawerSmooth() async {
@@ -679,16 +744,16 @@ class _MainWrapperState extends State<MainWrapper> {
 
     switch (item.screen) {
       case SearchTargetScreen.encyclopedia:
-        _selectedIndex = 3; // 임시로 채집 대신 쓰지 말고, 아래 별도 처리 추천
+        _selectedIndex = 2; // 임시로 채집 대신 쓰지 말고, 아래 별도 처리 추천
         break;
       case SearchTargetScreen.cooking:
-        _selectedIndex = 4;
-        break;
-      case SearchTargetScreen.gathering:
         _selectedIndex = 3;
         break;
-      case SearchTargetScreen.pet:
+      case SearchTargetScreen.gathering:
         _selectedIndex = 1;
+        break;
+      case SearchTargetScreen.pet:
+        _selectedIndex = 4;
         break;
     }
 
@@ -929,7 +994,11 @@ class _MainWrapperState extends State<MainWrapper> {
         resetSearchSignal: _searchResetSignal,
       ),
       CommunityScreen(
+        key: ValueKey('community_${_initialCommunityPostId ?? 'none'}'),
         openDrawer: _openDrawerSmooth,
+        kakaoId: _kakaoId,
+        isAdmin: _isAdmin,
+        initialPostId: _selectedIndex == 2 ? _initialCommunityPostId : null,
       ),
       CookingScreen(
         openDrawer: _openDrawerSmooth,
@@ -1046,7 +1115,7 @@ class _MainWrapperState extends State<MainWrapper> {
                   curve: _kPanelCurve,
                   opacity: (_isDrawerOpen || _isEndDrawerOpen) ? 0.0 : 1.0,
                   child: SizedBox(
-                    height: 230,
+                    height: 440,
                     child: Stack(
                       clipBehavior: Clip.none,
                       alignment: Alignment.bottomCenter,
@@ -1798,94 +1867,113 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
-  Future<void> _showComingSoonDialog({
-    required String title,
-    required String message,
-  }) async {
-    await showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.10),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF4F1),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    '🚧',
-                    style: TextStyle(fontSize: 26),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF2D3436),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 1.45,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF7C8796),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF8E7C),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                    ),
-                    child: const Text(
-                      '확인',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+  Future<bool> _ensureKakaoIdReady() async {
+
+    if (_kakaoId.isNotEmpty) return true;
+
+    await _fetchUserInfo();
+
+    await WidgetsBinding.instance.endOfFrame;
+    await Future.delayed(const Duration(milliseconds: 50));
+
+
+    return mounted && _kakaoId.isNotEmpty;
+  }
+
+  Future<void> _openCommunityWrite() async {
+    if (_isOpeningCommunityRoute) {
+      return;
+    }
+    _isOpeningCommunityRoute = true;
+
+    try {
+      FocusManager.instance.primaryFocus?.unfocus();
+
+      if (_isDrawerOpen) {
+        await _closeDrawerSmooth();
+      }
+      if (_isEndDrawerOpen) {
+        await _closeEndDrawerSmooth();
+      }
+
+      if (!mounted) return;
+
+      final ready = await _ensureKakaoIdReady();
+
+      if (!ready) {
+        return;
+      }
+
+      final status = await _fetchCommunityUidStatus();
+
+      if (!mounted) return;
+      if (status == null) {
+        return;
+      }
+
+      final communityStatus =
+          status['communityStatus']?.toString().toUpperCase() ?? 'NONE';
+      final hasPendingRequest = status['hasPendingRequest'] == true;
+
+      if (communityStatus == 'APPROVED') {
+        final tagItems = await CommunityTagApiService.fetchActiveTags();
+        final availableTags = tagItems.map((e) => e.tagName).toList();
+
+        final created = await Navigator.of(context, rootNavigator: true).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => CommunityWriteScreen(
+              kakaoId: _kakaoId,
+              availableTags: availableTags,
             ),
           ),
         );
-      },
+        return;
+      }
+
+      if (hasPendingRequest) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('UID 승인 대기 중이에요.')),
+        );
+        return;
+      }
+
+      await Navigator.of(context, rootNavigator: true).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => CommunityUidVerificationScreen(
+            kakaoId: _kakaoId,
+          ),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('$st');
+    } finally {
+      _isOpeningCommunityRoute = false;
+    }
+  }
+
+  Future<void> _openMyCommunityPosts() async {
+    setState(() {
+      _isCommunityMenuOpen = false;
+    });
+
+    final ready = await _ensureKakaoIdReady();
+    if (!ready) return null;
+
+    if (!mounted) return;
+
+    if (_kakaoId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.')),
+      );
+      return;
+    }
+
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MyCommunityPostsScreen(kakaoId: _kakaoId),
+      ),
     );
   }
 
@@ -2367,7 +2455,7 @@ class _MainWrapperState extends State<MainWrapper> {
     return IgnorePointer(
       ignoring: _isDrawerOpen || _isEndDrawerOpen,
       child: SizedBox(
-        height: 220,
+        height: 440,
         child: Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.bottomCenter,
@@ -2384,8 +2472,9 @@ class _MainWrapperState extends State<MainWrapper> {
                   child: AnimatedSlide(
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
-                    offset:
-                    isDropUpOpen ? Offset.zero : const Offset(0, 0.05),
+                    offset: isDropUpOpen
+                        ? Offset.zero
+                        : const Offset(0, 0.05),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -2393,31 +2482,27 @@ class _MainWrapperState extends State<MainWrapper> {
                           icon: Icons.edit_rounded,
                           label: '글쓰기',
                           onTap: () {
-                            setState(() {
-                              _isCommunityMenuOpen = false;
-                            });
+                            _closeCommunityMenuAndRun('write');
                           },
                         ),
                         const SizedBox(height: 12),
                         _buildCommunityMenuBubble(
                           icon: Icons.article_rounded,
-                          label: '내 글',
+                          label: '내 게시물 보기',
                           onTap: () {
-                            setState(() {
-                              _isCommunityMenuOpen = false;
-                            });
+                            _closeCommunityMenuAndRun('my_posts');
                           },
                         ),
-                        const SizedBox(height: 12),
-                        _buildCommunityMenuBubble(
-                          icon: Icons.favorite_rounded,
-                          label: '좋아요',
-                          onTap: () {
-                            setState(() {
-                              _isCommunityMenuOpen = false;
-                            });
-                          },
-                        ),
+                        if (_isAdmin) ...[
+                          const SizedBox(height: 12),
+                          _buildCommunityMenuBubble(
+                            icon: Icons.verified_user_rounded,
+                            label: 'UID 검증 관리',
+                            onTap: () {
+                              _closeCommunityMenuAndRun('uid_admin');
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -2432,6 +2517,71 @@ class _MainWrapperState extends State<MainWrapper> {
         ),
       ),
     );
+  }
+
+  Future<void> _runQueuedCommunityAction() async {
+    if (_isLaunchingCommunityAction) return;
+
+    final action = _pendingCommunityAction;
+    if (action == null) return;
+
+    _isLaunchingCommunityAction = true;
+
+    try {
+      // 드롭업 닫힘 애니메이션이 완전히 끝날 때까지 대기
+      await Future.delayed(const Duration(milliseconds: 420));
+      await WidgetsBinding.instance.endOfFrame;
+      await Future.delayed(const Duration(milliseconds: 80));
+
+      if (!mounted) return;
+
+      _pendingCommunityAction = null;
+
+      if (action == 'write') {
+        await _openCommunityWrite();
+      } else if (action == 'my_posts') {
+        await _openMyCommunityPosts();
+      }
+    } finally {
+      _isLaunchingCommunityAction = false;
+    }
+  }
+
+  Future<void> _closeCommunityMenuAndRun(String action) async {
+    if (_isOpeningCommunityRoute) {
+      return;
+    }
+
+
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    setState(() {
+      _pendingCommunityAction = action;
+      _isCommunityMenuOpen = false;
+    });
+
+
+    await Future.delayed(_kPanelDuration);
+    await WidgetsBinding.instance.endOfFrame;
+
+
+    if (!mounted) return;
+
+    final pending = _pendingCommunityAction;
+    _pendingCommunityAction = null;
+
+    if (pending == 'write') {
+      await _openCommunityWrite();
+    } else if (pending == 'my_posts') {
+      await _openMyCommunityPosts();
+    } else if (pending == 'uid_admin') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CommunityUidAdminScreen(kakaoId: _kakaoId),
+        ),
+      );
+    }
   }
 
   Widget _buildCenterCommunityItem() {
@@ -2573,61 +2723,53 @@ class _MainWrapperState extends State<MainWrapper> {
     required VoidCallback onTap,
   }) {
     return Material(
-      color: Colors.white.withOpacity(0.98),
-      elevation: 10,
-      shadowColor: const Color(0x22000000),
-      borderRadius: BorderRadius.circular(24),
-      clipBehavior: Clip.antiAlias,
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        splashColor: const Color(0xFFFF8E7C).withOpacity(0.10),
-        highlightColor: const Color(0xFFFF8E7C).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(999),
         child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            color: Colors.white.withOpacity(0.98),
+            borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: const Color(0xFFFFE5DF),
+              color: const Color(0xFFF1DFD8),
               width: 1.1,
             ),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withOpacity(0.99),
-                const Color(0xFFFFFBFA),
-              ],
-            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF2EE),
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 17,
-                    color: const Color(0xFFFF8E7C),
-                  ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF1ED),
+                  borderRadius: BorderRadius.circular(999),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF374151),
-                  ),
+                child: Icon(
+                  icon,
+                  color: const Color(0xFFFF8E7C),
+                  size: 18,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF3E332F),
+                ),
+              ),
+            ],
           ),
         ),
       ),

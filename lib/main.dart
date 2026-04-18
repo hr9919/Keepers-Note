@@ -6,6 +6,9 @@ import 'package:http/http.dart' as http;
 import 'onboarding_screen.dart';
 import 'main_wrapper.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:app_links/app_links.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +26,7 @@ class KeepersNoteApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: "Keeper's Note",
       theme: ThemeData(useMaterial3: true),
@@ -52,6 +56,11 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<Offset> _bookSlide;
   late final Animation<double> _captionFade;
   late final Animation<Offset> _captionSlide;
+
+  final AppLinks _appLinks = AppLinks();
+  StreamSubscription<Uri>? _linkSubscription;
+  Uri? _pendingDeepLink;
+  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -116,12 +125,77 @@ class _SplashScreenState extends State<SplashScreen>
     _prepareAndNavigate();
   }
 
+  Future<void> _initDeepLinks() async {
+    try {
+      final Uri? initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) {
+        debugPrint('초기 딥링크 수신: $initialUri');
+        _pendingDeepLink = initialUri;
+      }
+    } catch (e) {
+      debugPrint('초기 딥링크 처리 실패: $e');
+    }
+
+    // 앱이 완전히 종료된 상태에서 카카오 스킴으로 열린 경우
+    try {
+      final String? kakaoUrl = await receiveKakaoScheme();
+      if (kakaoUrl != null && kakaoUrl.isNotEmpty) {
+        final Uri uri = Uri.parse(kakaoUrl);
+        debugPrint('카카오 초기 스킴 수신: $uri');
+
+        final String? target = uri.queryParameters['target'];
+        final String? postId = uri.queryParameters['postId'];
+
+        if (target == 'community_post' && postId != null) {
+          final converted = Uri.parse(
+            'https://keepersnote.app/community/post/$postId',
+          );
+          debugPrint('카카오 공유 링크 변환: $converted');
+          _pendingDeepLink = converted;
+        }
+      }
+    } catch (e) {
+      debugPrint('카카오 초기 스킴 처리 실패: $e');
+    }
+
+    // 앱이 실행 중일 때 카카오 스킴으로 들어오는 경우
+    _linkSubscription = _appLinks.uriLinkStream.listen(
+          (Uri uri) {
+        debugPrint('실시간 딥링크 수신: $uri');
+        _pendingDeepLink = uri;
+      },
+      onError: (Object error) {
+        debugPrint('실시간 딥링크 수신 오류: $error');
+      },
+    );
+
+    kakaoSchemeStream.listen((String? url) {
+      if (url == null || url.isEmpty) return;
+
+      final Uri uri = Uri.parse(url);
+      debugPrint('카카오 실시간 스킴 수신: $uri');
+
+      final String? target = uri.queryParameters['target'];
+      final String? postId = uri.queryParameters['postId'];
+
+      if (target == 'community_post' && postId != null) {
+        final converted = Uri.parse(
+          'https://keepersnote.app/community/post/$postId',
+        );
+        debugPrint('카카오 공유 링크 변환: $converted');
+        _pendingDeepLink = converted;
+      }
+    });
+  }
+
   void _log(String message) {
     debugPrint('[Splash/Login] $message');
   }
 
   Future<void> _prepareAndNavigate() async {
     final stopwatch = Stopwatch()..start();
+
+    await _initDeepLinks();
 
     bool isLoggedIn = false;
     try {
@@ -139,10 +213,12 @@ class _SplashScreenState extends State<SplashScreen>
       await Future.delayed(_minimumSplashDuration - elapsed);
     }
 
-    if (!mounted) return;
+    if (!mounted || _isNavigating) return;
+    _isNavigating = true;
 
-    final Widget nextScreen =
-    isLoggedIn ? const MainWrapper() : const OnboardingScreen();
+    final Widget nextScreen = isLoggedIn
+        ? MainWrapper(initialDeepLink: _pendingDeepLink)
+        : const OnboardingScreen();
 
     Navigator.pushReplacement(
       context,
@@ -269,6 +345,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
+    _linkSubscription?.cancel();
     _animationController.dispose();
     super.dispose();
   }
