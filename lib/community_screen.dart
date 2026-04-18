@@ -61,6 +61,7 @@ enum CommunitySortType { latest, popular }
 
 class CommunityPost {
   final int id;
+  final int? authorKakaoId;
   final String author;
   final String uid;
   final String title;
@@ -68,6 +69,7 @@ class CommunityPost {
   final List<String> imageUrls;
   final List<String> tags;
   final int likeCount;
+  final int commentCount;
   final String createdLabel;
   final bool isAdminPick;
   final bool hasYoutube;
@@ -75,13 +77,14 @@ class CommunityPost {
   final bool likedByMe;
   final String profileImageUrl;
   final bool mine;
-  final int commentCount;
   final String visibility;
   final bool lockedByOwner;
+  final bool allowComments;
   final bool isFollowingAuthor;
 
   const CommunityPost({
     required this.id,
+    this.authorKakaoId,
     required this.author,
     required this.uid,
     required this.title,
@@ -89,6 +92,7 @@ class CommunityPost {
     required this.imageUrls,
     required this.tags,
     required this.likeCount,
+    this.commentCount = 0,
     required this.createdLabel,
     this.isAdminPick = false,
     this.hasYoutube = false,
@@ -96,19 +100,16 @@ class CommunityPost {
     this.likedByMe = false,
     required this.profileImageUrl,
     this.mine = false,
-    this.commentCount = 0,
     this.visibility = 'PUBLIC',
     this.lockedByOwner = false,
+    this.allowComments = true,
     this.isFollowingAuthor = false,
   });
 
   factory CommunityPost.fromJson(Map<String, dynamic> json) {
     List<String> readStringList(dynamic value) {
       if (value is List) {
-        return value
-            .map((e) => e.toString().trim())
-            .where((e) => e.isNotEmpty)
-            .toList();
+        return value.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
       }
       return const <String>[];
     }
@@ -152,8 +153,23 @@ class CommunityPost {
       return fallback;
     }
 
+    int? readNullableInt(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value == null) continue;
+        if (value is int) return value;
+        if (value is num) return value.toInt();
+        if (value is String) {
+          final parsed = int.tryParse(value);
+          if (parsed != null) return parsed;
+        }
+      }
+      return null;
+    }
+
     return CommunityPost(
       id: readInt(const ['id']),
+      authorKakaoId: readNullableInt(const ['authorKakaoId', 'userKakaoId', 'kakaoId']),
       author: readString(const ['authorName', 'author', 'nickname'], fallback: '사용자'),
       uid: readString(const ['authorUid', 'uid', 'gameUid'], fallback: 'UID'),
       title: readString(const ['title']),
@@ -161,6 +177,7 @@ class CommunityPost {
       imageUrls: readStringList(json['imageUrls'] ?? json['images'] ?? json['postImages']),
       tags: readStringList(json['tags'] ?? json['tagNames'] ?? json['postTags']),
       likeCount: readInt(const ['likeCount']),
+      commentCount: readInt(const ['commentCount']),
       createdLabel: readString(const ['createdLabel', 'createdAtLabel', 'createdAt']),
       isAdminPick: readBool(const ['adminPick', 'isAdminPick']),
       hasYoutube: readBool(const ['hasYoutube']),
@@ -168,10 +185,10 @@ class CommunityPost {
       likedByMe: readBool(const ['likedByMe', 'liked']),
       profileImageUrl: readString(const ['profileImageUrl', 'authorProfileImageUrl', 'userProfileImageUrl']),
       mine: readBool(const ['mine']),
-      commentCount: readInt(const ['commentCount']),
       visibility: readString(const ['visibility'], fallback: 'PUBLIC'),
       lockedByOwner: readBool(const ['lockedByOwner']),
-      isFollowingAuthor: readBool(const ['isFollowingAuthor']),
+      allowComments: readBool(const ['allowComments'], fallback: true),
+      isFollowingAuthor: readBool(const ['isFollowingAuthor', 'followingAuthor']),
     );
   }
 
@@ -182,6 +199,7 @@ class CommunityPost {
   }) {
     return CommunityPost(
       id: id,
+      authorKakaoId: authorKakaoId,
       author: author,
       uid: uid,
       title: title,
@@ -189,6 +207,7 @@ class CommunityPost {
       imageUrls: imageUrls,
       tags: tags,
       likeCount: likeCount ?? this.likeCount,
+      commentCount: commentCount ?? this.commentCount,
       createdLabel: createdLabel,
       isAdminPick: isAdminPick,
       hasYoutube: hasYoutube,
@@ -196,9 +215,9 @@ class CommunityPost {
       likedByMe: likedByMe ?? this.likedByMe,
       profileImageUrl: profileImageUrl,
       mine: mine,
-      commentCount: commentCount ?? this.commentCount,
       visibility: visibility,
       lockedByOwner: lockedByOwner,
+      allowComments: allowComments,
       isFollowingAuthor: isFollowingAuthor,
     );
   }
@@ -219,12 +238,12 @@ class CommunityComment {
   const CommunityComment({
     required this.id,
     required this.postId,
-    required this.authorKakaoId,
+    this.authorKakaoId,
     required this.authorName,
     required this.authorUid,
     required this.profileImageUrl,
     required this.content,
-    required this.parentCommentId,
+    this.parentCommentId,
     required this.createdAt,
     required this.mine,
   });
@@ -235,6 +254,14 @@ class CommunityComment {
       if (value is num) return value.toInt();
       if (value is String) return int.tryParse(value) ?? fallback;
       return fallback;
+    }
+
+    int? readNullableInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value);
+      return null;
     }
 
     String readString(dynamic value, {String fallback = ''}) {
@@ -257,14 +284,72 @@ class CommunityComment {
     return CommunityComment(
       id: readInt(json['id']),
       postId: readInt(json['postId']),
-      authorKakaoId: json['authorKakaoId'] == null ? null : readInt(json['authorKakaoId']),
+      authorKakaoId: readNullableInt(json['authorKakaoId']),
       authorName: readString(json['authorName'], fallback: '사용자'),
       authorUid: readString(json['authorUid'], fallback: 'UID'),
       profileImageUrl: readString(json['profileImageUrl']),
       content: readString(json['content']),
-      parentCommentId: json['parentCommentId'] == null ? null : readInt(json['parentCommentId']),
+      parentCommentId: readNullableInt(json['parentCommentId']),
       createdAt: readString(json['createdAt']),
       mine: readBool(json['mine']),
+    );
+  }
+}
+
+class CommunityFollowUserSummary {
+  final int? kakaoId;
+  final String nickname;
+  final String uid;
+  final String profileImageUrl;
+  final bool followingByMe;
+
+  const CommunityFollowUserSummary({
+    this.kakaoId,
+    required this.nickname,
+    required this.uid,
+    required this.profileImageUrl,
+    this.followingByMe = false,
+  });
+
+  factory CommunityFollowUserSummary.fromJson(Map<String, dynamic> json) {
+    int? readNullableInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    String readString(List<String> keys, {String fallback = ''}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value == null) continue;
+        final text = value.toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      return fallback;
+    }
+
+    bool readBool(List<String> keys, {bool fallback = false}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is bool) return value;
+        if (value is num) return value != 0;
+        if (value is String) {
+          final lower = value.toLowerCase();
+          if (lower == 'true' || lower == '1') return true;
+          if (lower == 'false' || lower == '0') return false;
+        }
+      }
+      return fallback;
+    }
+
+    return CommunityFollowUserSummary(
+      kakaoId: readNullableInt(json['kakaoId']),
+      nickname: readString(const ['nickname', 'authorName'], fallback: '사용자'),
+      uid: readString(const ['gameUid', 'uid', 'authorUid'], fallback: 'UID'),
+      profileImageUrl: readString(const ['profileImageUrl', 'authorProfileImageUrl']),
+      followingByMe: readBool(const ['followingByMe', 'isFollowing']),
     );
   }
 }
@@ -295,15 +380,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
   static const int _virtualInitialPage = 1000;
   int _currentFeedPage = _virtualInitialPage;
 
-  final TextEditingController _commentController = TextEditingController();
-  final Map<int, List<CommunityComment>> _commentsByPostId = <int, List<CommunityComment>>{};
-
   bool _didOpenInitialPost = false;
 
   bool _showTopButton = false;
   bool _isGridView = true;
   bool _isFilterPanelOpen = false;
   bool _showLikedOnly = false;
+  bool _showFollowingOnly = false;
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -311,6 +394,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
   CommunitySortType _sortType = CommunitySortType.latest;
   List<CommunityPost> _posts = <CommunityPost>[];
   List<CommunityTagItem> _tagItems = const <CommunityTagItem>[];
+  final TextEditingController _commentController = TextEditingController();
+  final Map<int, List<CommunityComment>> _commentsByPostId = <int, List<CommunityComment>>{};
 
   @override
   void initState() {
@@ -445,95 +530,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
   List<String> get _availableTagNames =>
       _tagItems.map((e) => e.tagName).where((e) => e.trim().isNotEmpty).toList();
 
-
-  Color _postBorderColor(CommunityPost post) {
-    if (post.mine) return const Color(0xFF8EDBC2);
-    if (post.isAdminPick) return const Color(0xFFFFB3A4);
-    if (post.isFollowingAuthor) return const Color(0xFFF3D36B);
-    return const Color(0xFFCFE59A);
-  }
-
-  String _formatMetaCreatedLabel(String raw) {
-    final text = raw.trim();
-    if (text.isEmpty) return '';
-    final parsed = DateTime.tryParse(text);
-    if (parsed == null) return text;
-    final now = DateTime.now();
-    final local = parsed.toLocal();
-    final sameDay = now.year == local.year && now.month == local.month && now.day == local.day;
-    if (sameDay) {
-      final hh = local.hour.toString().padLeft(2, '0');
-      final mm = local.minute.toString().padLeft(2, '0');
-      return '$hh:$mm';
-    }
-    return '${local.year}.${local.month.toString().padLeft(2, '0')}.${local.day.toString().padLeft(2, '0')}';
-  }
-
-  Widget _buildPostMetaLine(CommunityPost post, {double fontSize = 11.3}) {
-    final bool showLock = post.mine && post.lockedByOwner;
-    final String lockLabel = post.visibility == 'PRIVATE' ? '나만보기' : '팔로워에게만';
-    final String timeLabel = _formatMetaCreatedLabel(post.createdLabel);
-    return Row(
-      children: [
-        Flexible(
-          child: Text(
-            'UID . ${post.uid}${timeLabel.isNotEmpty ? ' · $timeLabel' : ''}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF95A0AE),
-            ),
-          ),
-        ),
-        if (showLock) ...[
-          const SizedBox(width: 6),
-          const Icon(Icons.lock_rounded, size: 12, color: Color(0xFFB08A7D)),
-          const SizedBox(width: 3),
-          Flexible(
-            child: Text(
-              lockLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: fontSize - 0.1,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFFB08A7D),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Future<List<CommunityComment>> _fetchComments(int postId) async {
-    final uri = Uri.parse('$_baseUrl/api/community/posts/$postId/comments').replace(
-      queryParameters: <String, String>{
-        if ((widget.kakaoId ?? '').isNotEmpty) 'kakaoId': widget.kakaoId!,
-      },
-    );
-
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('댓글 조회 실패 (${response.statusCode})');
-    }
-    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    if (decoded is! List) return const <CommunityComment>[];
-    return decoded
-        .whereType<Map>()
-        .map((e) => CommunityComment.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
-  }
-
-  void _showSnackBar(String text) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
-    );
-  }
-
   Future<void> _sharePostToKakao(CommunityPost post) async {
     final Uri webUrl = Uri.parse(
       'https://keepersnote.app/community/post/${post.id}',
@@ -618,6 +614,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           if (!_selectedTags.contains('전체') && _selectedTags.isNotEmpty)
             'tag': _selectedTags.join(','),
           if (_showLikedOnly) 'likedOnly': 'true',
+          if (_showFollowingOnly) 'followingOnly': 'true',
           if ((widget.kakaoId ?? '').isNotEmpty) 'kakaoId': widget.kakaoId!,
         },
       );
@@ -975,6 +972,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           initialTags: post.tags,
           initialImageUrls: post.imageUrls,
           initialVisibility: post.visibility,
+          initialAllowComments: post.allowComments,
         ),
       ),
     );
@@ -1797,6 +1795,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                               () => _toggleTagSelection('전체'),
                           isHashTag: true,
                         ),
+                        _buildFollowingFilterChip(),
                         _buildLikedFilterChip(),
                         ...filterTags.map(
                               (tag) => _buildFilterChip(
@@ -1820,6 +1819,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                   ..clear()
                                   ..add('전체');
                                 _showLikedOnly = false;
+                                _showFollowingOnly = false;
                               });
                               _fetchPosts();
                             },
@@ -1917,6 +1917,55 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   color: selected
                       ? const Color(0xFFE25476)
                       : const Color(0xFFBF7A8E),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFollowingFilterChip() {
+    final selected = _showFollowingOnly;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() => _showFollowingOnly = !_showFollowingOnly);
+          _fetchPosts();
+        },
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFFFFF7D8)
+                : const Color(0xFFFFFBF2),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFFE5C86E)
+                  : const Color(0xFFF1E4BF),
+              width: selected ? 1.4 : 1.0,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const <Widget>[
+              Icon(
+                Icons.people_alt_rounded,
+                size: 13,
+                color: Color(0xFFB08A3C),
+              ),
+              SizedBox(width: 5),
+              Text(
+                '팔로우',
+                style: TextStyle(
+                  fontSize: 11.6,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFFB08A3C),
                 ),
               ),
             ],
@@ -2295,13 +2344,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   Widget _buildPostCard(CommunityPost post) {
     final bool liked = post.likedByMe;
+    final Color borderColor = _postBorderColor(post);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.97),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _postBorderColor(post), width: 1.2),
+        border: Border.all(color: borderColor, width: 1.2),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.028),
@@ -2326,33 +2376,43 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       _buildProfileAvatar(post, radius: 18),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Row(
-                              children: <Widget>[
-                                Flexible(
-                                  child: Text(
-                                    post.author,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 13.2,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF2F3941),
-                                      letterSpacing: -0.1,
-                                    ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => _openUserProfile(post),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Row(
+                                    children: <Widget>[
+                                      Flexible(
+                                        child: Text(
+                                          post.author,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 13.2,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF2F3941),
+                                            letterSpacing: -0.1,
+                                          ),
+                                        ),
+                                      ),
+                                      if (post.isAdminPick) ...[
+                                        const SizedBox(width: 6),
+                                        _buildVerifiedBadge(),
+                                      ],
+                                    ],
                                   ),
-                                ),
-                                if (post.isAdminPick) ...[
-                                  const SizedBox(width: 6),
-                                  _buildVerifiedBadge(),
+                                  const SizedBox(height: 2),
+                                  _buildPostMetaLine(post, fontSize: 11.3),
                                 ],
-                              ],
+                              ),
                             ),
-                            const SizedBox(height: 2),
-                            _buildPostMetaLine(post, fontSize: 11.3),
-                          ],
+                          ),
                         ),
                       ),
                       _buildMoreButton(onTap: () => _openPostMoreSheet(post)),
@@ -2368,7 +2428,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       baseUrl: _baseUrl,
                       showLeadingTag: false,
                       useIntrinsicAspectRatio: true,
-                      onTapImage: (index) => _openImageViewer(post, initialIndex: index),
+                      onTapImage: (index) {
+                        _openImageViewer(post, initialIndex: index);
+                      },
                     ),
                   ),
                 ),
@@ -2395,7 +2457,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                             ),
                           ),
                           if (post.tags.isNotEmpty) ...[
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 10),
                             Wrap(
                               spacing: 6,
                               runSpacing: 6,
@@ -2404,6 +2466,20 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           ],
                         ],
                       ),
+                      if (post.body.isNotEmpty) ...[
+                        const SizedBox(height: 7),
+                        Text(
+                          post.body,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13.1,
+                            height: 1.52,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF69747F),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       Row(
                         children: [
@@ -2425,6 +2501,127 @@ class _CommunityScreenState extends State<CommunityScreen> {
         ),
       ),
     );
+  }
+
+
+  Color _postBorderColor(CommunityPost post) {
+    if (post.mine) return const Color(0xFF8EDBC2);
+    if (post.isAdminPick) return const Color(0xFFFFB3A4);
+    if (post.isFollowingAuthor) return const Color(0xFFF3D36B);
+    return const Color(0xFFCFE59A);
+  }
+
+  String _formatMetaCreatedLabel(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return '';
+    final parsed = DateTime.tryParse(text);
+    if (parsed == null) return text;
+    final local = parsed.toLocal();
+    final now = DateTime.now();
+    final sameDay = now.year == local.year && now.month == local.month && now.day == local.day;
+    if (sameDay) {
+      final hh = local.hour.toString().padLeft(2, '0');
+      final mm = local.minute.toString().padLeft(2, '0');
+      return '$hh:$mm';
+    }
+    return '${local.year}.${local.month.toString().padLeft(2, '0')}.${local.day.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildPostMetaLine(CommunityPost post, {double fontSize = 11.3}) {
+    final bool showLock = post.mine && post.lockedByOwner;
+    final String lockLabel = post.visibility == 'PRIVATE' ? '나만보기' : '팔로워에게만';
+    final String timeLabel = _formatMetaCreatedLabel(post.createdLabel);
+    return Row(
+      children: [
+        Flexible(
+          child: Text(
+            'UID . ${post.uid}${timeLabel.isNotEmpty ? ' · $timeLabel' : ''}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF95A0AE),
+            ),
+          ),
+        ),
+        if (showLock) ...[
+          const SizedBox(width: 6),
+          const Icon(Icons.lock_rounded, size: 12, color: Color(0xFFB08A7D)),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              lockLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: fontSize - 0.1,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFB08A7D),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<List<CommunityComment>> _fetchComments(int postId) async {
+    final uri = Uri.parse('$_baseUrl/api/community/posts/$postId/comments').replace(
+      queryParameters: <String, String>{
+        if ((widget.kakaoId ?? '').isNotEmpty) 'kakaoId': widget.kakaoId!,
+      },
+    );
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('댓글 조회 실패 (${response.statusCode})');
+    }
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! List) return const <CommunityComment>[];
+    return decoded.whereType<Map>().map((e) => CommunityComment.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  void _showSnackBar(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _openUserProfile(CommunityPost post) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CommunityUserProfileScreen(
+          baseUrl: _baseUrl,
+          currentKakaoId: widget.kakaoId,
+          authorKakaoId: post.authorKakaoId,
+          authorName: post.author,
+          authorUid: post.uid,
+          profileImageUrl: _resolveProfileImagePath(post.profileImageUrl),
+          isMine: post.mine,
+          isInitiallyFollowing: post.isFollowingAuthor,
+        ),
+      ),
+    );
+    await _fetchPosts();
+  }
+
+  Future<void> _openUserProfileFromComment(CommunityComment comment) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CommunityUserProfileScreen(
+          baseUrl: _baseUrl,
+          currentKakaoId: widget.kakaoId,
+          authorKakaoId: comment.authorKakaoId,
+          authorName: comment.authorName,
+          authorUid: comment.authorUid,
+          profileImageUrl: _resolveProfileImagePath(comment.profileImageUrl),
+          isMine: comment.authorKakaoId != null &&
+              widget.kakaoId != null &&
+              int.tryParse(widget.kakaoId!) == comment.authorKakaoId,
+          isInitiallyFollowing: false,
+        ),
+      ),
+    );
+    await _fetchPosts();
   }
 
   String _resolveProfileImagePath(String path) {
@@ -2480,54 +2677,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
     if (!enableTap) return avatar;
 
     return GestureDetector(
-      onTap: () => _openProfileImageViewer(post),
+      onTap: () => _openUserProfile(post),
       child: avatar,
-    );
-  }
-
-  Widget _buildCommentAvatar(CommunityComment comment, {double radius = 16}) {
-    final resolved = _resolveProfileImagePath(comment.profileImageUrl);
-    if (resolved.isEmpty) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundColor: const Color(0xFFFFF2EE),
-        child: Text(
-          comment.authorName.isEmpty ? '?' : comment.authorName.characters.first,
-          style: TextStyle(
-            color: const Color(0xFFFF8E7C),
-            fontWeight: FontWeight.w800,
-            fontSize: radius * 0.85,
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      width: radius * 2,
-      height: radius * 2,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFFFFF2EE),
-        border: Border.all(color: const Color(0xFFFFE1DA)),
-      ),
-      child: ClipOval(
-        child: Image.network(
-          resolved,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => CircleAvatar(
-            radius: radius,
-            backgroundColor: const Color(0xFFFFF2EE),
-            child: Text(
-              comment.authorName.isEmpty ? '?' : comment.authorName.characters.first,
-              style: TextStyle(
-                color: const Color(0xFFFF8E7C),
-                fontWeight: FontWeight.w800,
-                fontSize: radius * 0.85,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -2681,6 +2832,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Future<void> _openPostDetailSheet(CommunityPost post) async {
     _commentController.clear();
     Future<List<CommunityComment>> commentsFuture = _fetchComments(post.id);
+    CommunityComment? replyTarget;
     bool localSubmitting = false;
 
     await showGeneralDialog<void>(
@@ -2691,7 +2843,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       transitionDuration: const Duration(milliseconds: 220),
       pageBuilder: (_, __, ___) {
         final media = MediaQuery.of(context);
-        final maxCardHeight = media.size.height * 0.82;
+        final maxCardHeight = media.size.height * 0.84;
 
         return SafeArea(
           child: Center(
@@ -2741,7 +2893,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
                             _showSnackBar('로그인 정보가 필요해요.');
                             return;
                           }
-
+                          if (!post.allowComments) {
+                            _showSnackBar('댓글이 비활성화된 게시글이에요.');
+                            return;
+                          }
                           setSheetState(() {
                             localSubmitting = true;
                           });
@@ -2752,14 +2907,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
                               body: jsonEncode({
                                 'kakaoId': int.tryParse(widget.kakaoId ?? ''),
                                 'content': text,
-                                'parentCommentId': null,
+                                'parentCommentId': replyTarget?.id,
                               }),
                             ).timeout(const Duration(seconds: 10));
-
                             if (response.statusCode < 200 || response.statusCode >= 300) {
                               throw Exception('댓글 등록 실패 (${response.statusCode})');
                             }
                             _commentController.clear();
+                            replyTarget = null;
                             await refreshComments();
                           } catch (e) {
                             _showSnackBar('댓글 등록 중 문제가 발생했어요. $e');
@@ -2772,23 +2927,229 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           }
                         }
 
+                        Future<void> deleteComment(CommunityComment comment) async {
+                          if ((widget.kakaoId ?? '').isEmpty) return;
+                          final response = await http.delete(
+                            Uri.parse('$_baseUrl/api/community/posts/${post.id}/comments/${comment.id}').replace(
+                              queryParameters: {'kakaoId': widget.kakaoId!},
+                            ),
+                          ).timeout(const Duration(seconds: 10));
+                          if (response.statusCode < 200 || response.statusCode >= 300) {
+                            throw Exception('댓글 삭제 실패 (${response.statusCode})');
+                          }
+                          await refreshComments();
+                        }
+
+                        Future<void> reportComment(CommunityComment comment) async {
+                          final String? reason = await showModalBottomSheet<String>(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            builder: (sheetContext) {
+                              const reasons = <String>['스팸 / 광고', '욕설 / 혐오 표현', '부적절한 이미지', '도배 / 반복 게시', '기타'];
+                              return SafeArea(
+                                top: false,
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(26),
+                                      border: Border.all(color: const Color(0xFFF0E3DC)),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const SizedBox(height: 10),
+                                        Container(width: 42, height: 4, decoration: BoxDecoration(color: const Color(0xFFE9DDD6), borderRadius: BorderRadius.circular(999))),
+                                        const SizedBox(height: 14),
+                                        ...reasons.map((reason) => ListTile(title: Text(reason), onTap: () => Navigator.pop(sheetContext, reason))),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                          if (reason == null || (widget.kakaoId ?? '').isEmpty) return;
+                          final response = await http.post(
+                            Uri.parse('$_baseUrl/api/community/reports'),
+                            headers: const {'Content-Type': 'application/json'},
+                            body: jsonEncode({
+                              'postId': post.id,
+                              'kakaoId': int.tryParse(widget.kakaoId ?? ''),
+                              'reasonCode': reason,
+                              'detailText': 'comment:${comment.id}:${comment.content}',
+                            }),
+                          ).timeout(const Duration(seconds: 10));
+                          if (response.statusCode < 200 || response.statusCode >= 300) {
+                            throw Exception('댓글 신고 실패 (${response.statusCode})');
+                          }
+                          _showSnackBar('댓글 신고가 접수되었어요.');
+                        }
+
+                        Future<void> openCommentMenu(CommunityComment comment) async {
+                          await showModalBottomSheet<void>(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            builder: (sheetContext) {
+                              return SafeArea(
+                                top: false,
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(24),
+                                      border: Border.all(color: const Color(0xFFF0E3DC)),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const SizedBox(height: 10),
+                                        Container(width: 42, height: 4, decoration: BoxDecoration(color: const Color(0xFFE9DDD6), borderRadius: BorderRadius.circular(999))),
+                                        const SizedBox(height: 10),
+                                        if (comment.mine)
+                                          ListTile(
+                                            leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFE46C6C)),
+                                            title: const Text('댓글 삭제'),
+                                            onTap: () async {
+                                              Navigator.pop(sheetContext);
+                                              try {
+                                                await deleteComment(comment);
+                                              } catch (e) {
+                                                _showSnackBar('댓글 삭제 중 문제가 발생했어요. $e');
+                                              }
+                                            },
+                                          )
+                                        else
+                                          ListTile(
+                                            leading: const Icon(Icons.outlined_flag_rounded, color: Color(0xFFE0A11B)),
+                                            title: const Text('댓글 신고'),
+                                            onTap: () async {
+                                              Navigator.pop(sheetContext);
+                                              try {
+                                                await reportComment(comment);
+                                              } catch (e) {
+                                                _showSnackBar('댓글 신고 중 문제가 발생했어요. $e');
+                                              }
+                                            },
+                                          ),
+                                        const SizedBox(height: 10),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        }
+
                         return FutureBuilder<List<CommunityComment>>(
                           future: commentsFuture,
                           builder: (context, snapshot) {
                             final bool loading = snapshot.connectionState == ConnectionState.waiting;
                             final List<CommunityComment> localComments = snapshot.data ?? _commentsByPostId[post.id] ?? const <CommunityComment>[];
+                            final rootComments = localComments.where((c) => c.parentCommentId == null).toList();
+                            List<CommunityComment> repliesFor(int parentId) => localComments.where((c) => c.parentCommentId == parentId).toList();
+
+                            Widget buildCommentTile(CommunityComment comment, {bool isReply = false}) {
+                              final String commentTime = _formatMetaCreatedLabel(comment.createdAt);
+                              return Padding(
+                                padding: EdgeInsets.only(left: isReply ? 26 : 0, bottom: 14),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildCommentAvatar(comment, radius: 16),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(comment.authorName, style: const TextStyle(fontSize: 12.8, fontWeight: FontWeight.w800, color: Color(0xFF33414B))),
+                                                    const SizedBox(height: 2),
+                                                    Text('UID . ${comment.authorUid}', style: const TextStyle(fontSize: 11.1, fontWeight: FontWeight.w700, color: Color(0xFF9CA6B2))),
+                                                  ],
+                                                ),
+                                              ),
+                                              if (commentTime.isNotEmpty)
+                                                Text(commentTime, style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w600, color: Color(0xFF9CA6B2))),
+                                              const SizedBox(width: 4),
+                                              InkWell(
+                                                borderRadius: BorderRadius.circular(999),
+                                                onTap: () => openCommentMenu(comment),
+                                                child: const Padding(
+                                                  padding: EdgeInsets.all(4),
+                                                  child: Icon(Icons.more_vert_rounded, size: 16, color: Color(0xFF9CA6B2)),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 7),
+                                          GestureDetector(
+                                            onTap: () {
+                                              setSheetState(() {
+                                                replyTarget = comment;
+                                                _commentController.text = '@${comment.authorName} ';
+                                                _commentController.selection = TextSelection.fromPosition(
+                                                  TextPosition(offset: _commentController.text.length),
+                                                );
+                                              });
+                                            },
+                                            child: Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFFBFA),
+                                                borderRadius: BorderRadius.circular(16),
+                                                border: Border.all(color: const Color(0xFFF1E4DE)),
+                                              ),
+                                              child: RichText(
+                                                text: TextSpan(
+                                                  style: const TextStyle(
+                                                    fontSize: 13.2,
+                                                    height: 1.45,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF5E6975),
+                                                  ),
+                                                  children: [
+                                                    if (replyTarget == null && isReply) ...[
+                                                      TextSpan(
+                                                        text: '@${comment.authorName} ',
+                                                        style: const TextStyle(
+                                                          color: Color(0xFF8B7BD6),
+                                                          fontWeight: FontWeight.w800,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                    TextSpan(text: comment.content),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Container(
+                                            height: 1,
+                                            color: const Color(0xFFF1E4DE),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
 
                             return Column(
                               children: [
                                 const SizedBox(height: 10),
-                                Container(
-                                  width: 44,
-                                  height: 5,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE9DDD6),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                ),
+                                Container(width: 44, height: 5, decoration: BoxDecoration(color: const Color(0xFFE9DDD6), borderRadius: BorderRadius.circular(999))),
                                 Expanded(
                                   child: SingleChildScrollView(
                                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -2807,26 +3168,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                                     child: Column(
                                                       crossAxisAlignment: CrossAxisAlignment.start,
                                                       children: [
-                                                        Row(
-                                                          children: [
-                                                            Flexible(
-                                                              child: Text(
-                                                                post.author,
-                                                                maxLines: 1,
-                                                                overflow: TextOverflow.ellipsis,
-                                                                style: const TextStyle(
-                                                                  fontSize: 13.6,
-                                                                  fontWeight: FontWeight.w800,
-                                                                  color: Color(0xFF2F3941),
-                                                                ),
-                                                              ),
-                                                            ),
-                                                            if (post.isAdminPick) ...[
-                                                              const SizedBox(width: 6),
-                                                              _buildVerifiedBadge(),
-                                                            ],
-                                                          ],
-                                                        ),
+                                                        Row(children: [Flexible(child: Text(post.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.6, fontWeight: FontWeight.w800, color: Color(0xFF2F3941)))), if (post.isAdminPick) ...[const SizedBox(width: 6), _buildVerifiedBadge()]]),
                                                         const SizedBox(height: 2),
                                                         _buildPostMetaLine(post, fontSize: 11.4),
                                                       ],
@@ -2835,75 +3177,37 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                                 ],
                                               ),
                                             ),
-                                            _buildDetailActionButton(
-                                              icon: Icons.ios_share_rounded,
-                                              onTap: () async => _openShareOptions(post),
-                                            ),
+                                            _buildDetailActionButton(icon: Icons.ios_share_rounded, onTap: () async { await _openShareOptions(post); }),
                                             const SizedBox(width: 8),
-                                            _buildDetailActionButton(
-                                              icon: Icons.more_vert_rounded,
-                                              onTap: () async => _openPostMoreSheet(post),
-                                            ),
+                                            _buildDetailActionButton(icon: Icons.more_vert_rounded, onTap: () async { await _openPostMoreSheet(post); }),
                                           ],
                                         ),
                                         const SizedBox(height: 12),
                                         ClipRRect(
                                           borderRadius: BorderRadius.circular(16),
-                                          child: _PostImageCarousel(
-                                            post: post,
-                                            baseUrl: _baseUrl,
-                                            showLeadingTag: false,
-                                            useIntrinsicAspectRatio: true,
-                                            onTapImage: (index) => _openImageViewer(post, initialIndex: index),
-                                          ),
+                                          child: _PostImageCarousel(post: post, baseUrl: _baseUrl, showLeadingTag: false, useIntrinsicAspectRatio: true, onTapImage: (index) { _openImageViewer(post, initialIndex: index); }),
                                         ),
                                         const SizedBox(height: 12),
                                         Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Expanded(
-                                              child: Text(
-                                                post.title,
-                                                style: const TextStyle(
-                                                  fontSize: 16.2,
-                                                  fontWeight: FontWeight.w900,
-                                                  color: Color(0xFF34414A),
-                                                  height: 1.3,
-                                                ),
-                                              ),
-                                            ),
+                                            Expanded(child: Text(post.title, style: const TextStyle(fontSize: 16.2, fontWeight: FontWeight.w900, color: Color(0xFF34414A), height: 1.3))),
                                             if (post.tags.isNotEmpty) ...[
                                               const SizedBox(width: 10),
-                                              Wrap(
-                                                spacing: 6,
-                                                runSpacing: 6,
-                                                children: post.tags.take(2).map((tag) => _buildContentTagChip(tag, compact: true)).toList(),
-                                              ),
+                                              Wrap(spacing: 6, runSpacing: 6, children: post.tags.take(2).map((tag) => _buildContentTagChip(tag, compact: true)).toList()),
                                             ],
                                           ],
                                         ),
                                         if (post.body.isNotEmpty) ...[
                                           const SizedBox(height: 12),
-                                          Text(
-                                            post.body,
-                                            style: const TextStyle(
-                                              fontSize: 13.7,
-                                              height: 1.58,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF69747F),
-                                            ),
-                                          ),
+                                          Text(post.body, style: const TextStyle(fontSize: 13.7, height: 1.58, fontWeight: FontWeight.w600, color: Color(0xFF69747F))),
                                         ],
                                         const SizedBox(height: 14),
                                         Row(
                                           children: [
                                             _buildCommentButton(count: localComments.length),
                                             const Spacer(),
-                                            _buildLikeButton(
-                                              liked: post.likedByMe,
-                                              count: post.likeCount,
-                                              onTap: () => _toggleLike(post.id),
-                                            ),
+                                            _buildLikeButton(liked: post.likedByMe, count: post.likeCount, onTap: () => _toggleLike(post.id)),
                                           ],
                                         ),
                                         const SizedBox(height: 16),
@@ -2912,14 +3216,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                         if (loading)
                                           const Padding(
                                             padding: EdgeInsets.symmetric(vertical: 16),
-                                            child: Center(
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2.2,
-                                                color: Color(0xFFFF8E7C),
-                                              ),
-                                            ),
+                                            child: Center(child: CircularProgressIndicator(strokeWidth: 2.2, color: Color(0xFFFF8E7C))),
                                           )
-                                        else if (localComments.isEmpty)
+                                        else if (rootComments.isEmpty)
                                           Container(
                                             width: double.infinity,
                                             padding: const EdgeInsets.symmetric(vertical: 20),
@@ -2929,87 +3228,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                               borderRadius: BorderRadius.circular(16),
                                               border: Border.all(color: const Color(0xFFF1E4DE)),
                                             ),
-                                            child: const Text(
-                                              '아직 댓글이 없어요.',
-                                              style: TextStyle(
-                                                fontSize: 12.8,
-                                                fontWeight: FontWeight.w700,
-                                                color: Color(0xFF98A2AE),
-                                              ),
-                                            ),
+                                            child: const Text('아직 댓글이 없어요.', style: TextStyle(fontSize: 12.8, fontWeight: FontWeight.w700, color: Color(0xFF98A2AE))),
                                           )
                                         else
                                           Column(
-                                            children: localComments.map((comment) {
-                                              final String commentTime = _formatMetaCreatedLabel(comment.createdAt);
-                                              return Padding(
-                                                padding: const EdgeInsets.only(bottom: 14),
-                                                child: Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    _buildCommentAvatar(comment, radius: 16),
-                                                    const SizedBox(width: 10),
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          Row(
-                                                            children: [
-                                                              Expanded(
-                                                                child: Text(
-                                                                  comment.authorName,
-                                                                  style: const TextStyle(
-                                                                    fontSize: 12.8,
-                                                                    fontWeight: FontWeight.w800,
-                                                                    color: Color(0xFF33414B),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                              if (commentTime.isNotEmpty)
-                                                                Text(
-                                                                  commentTime,
-                                                                  style: const TextStyle(
-                                                                    fontSize: 10.8,
-                                                                    fontWeight: FontWeight.w600,
-                                                                    color: Color(0xFF9CA6B2),
-                                                                  ),
-                                                                ),
-                                                            ],
-                                                          ),
-                                                          const SizedBox(height: 2),
-                                                          Text(
-                                                            'UID . ${comment.authorUid}',
-                                                            style: const TextStyle(
-                                                              fontSize: 11.1,
-                                                              fontWeight: FontWeight.w700,
-                                                              color: Color(0xFF9CA6B2),
-                                                            ),
-                                                          ),
-                                                          const SizedBox(height: 7),
-                                                          Container(
-                                                            width: double.infinity,
-                                                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                                                            decoration: BoxDecoration(
-                                                              color: const Color(0xFFFFFBFA),
-                                                              borderRadius: BorderRadius.circular(16),
-                                                              border: Border.all(color: const Color(0xFFF1E4DE)),
-                                                            ),
-                                                            child: Text(
-                                                              comment.content,
-                                                              style: const TextStyle(
-                                                                fontSize: 13.2,
-                                                                height: 1.45,
-                                                                fontWeight: FontWeight.w600,
-                                                                color: Color(0xFF5E6975),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              );
+                                            children: rootComments.expand((comment) {
+                                              final children = repliesFor(comment.id);
+                                              return [
+                                                buildCommentTile(comment),
+                                                ...children.map((reply) => buildCommentTile(reply, isReply: true)),
+                                              ];
                                             }).toList(),
                                           ),
                                       ],
@@ -3020,66 +3248,59 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
-                                    border: Border(
-                                      top: BorderSide(color: const Color(0xFFF1E4DE).withOpacity(0.95)),
-                                    ),
+                                    border: Border(top: BorderSide(color: const Color(0xFFF1E4DE).withOpacity(0.95))),
                                   ),
-                                  child: Row(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _commentController,
-                                          minLines: 1,
-                                          maxLines: 3,
-                                          decoration: InputDecoration(
-                                            hintText: '댓글을 입력해주세요.',
-                                            hintStyle: const TextStyle(
-                                              color: Color(0xFFADB5C2),
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13,
-                                            ),
-                                            filled: true,
-                                            fillColor: const Color(0xFFFFFBFA),
-                                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                            border: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(16),
-                                              borderSide: const BorderSide(color: Color(0xFFF1E4DE)),
-                                            ),
-                                            enabledBorder: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(16),
-                                              borderSide: const BorderSide(color: Color(0xFFF1E4DE)),
-                                            ),
-                                            focusedBorder: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(16),
-                                              borderSide: const BorderSide(color: Color(0xFFFFB4A4), width: 1.3),
-                                            ),
+                                      if (replyTarget != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(bottom: 8),
+                                          child: Row(
+                                            children: [
+                                              Expanded(child: Text('@${replyTarget!.authorName}', style: const TextStyle(fontSize: 11.8, fontWeight: FontWeight.w800, color: Color(0xFF8B7BD6)))),
+                                              GestureDetector(
+                                                onTap: () {
+                                                  setSheetState(() {
+                                                    replyTarget = null;
+                                                    _commentController.clear();
+                                                  });
+                                                },
+                                                child: const Icon(Icons.close_rounded, size: 18, color: Color(0xFFB08A7D)),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      GestureDetector(
-                                        onTap: localSubmitting ? null : submitLocalComment,
-                                        child: Container(
-                                          width: 44,
-                                          height: 44,
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFF8E7C),
-                                            borderRadius: BorderRadius.circular(14),
-                                          ),
-                                          child: localSubmitting
-                                              ? const Padding(
-                                            padding: EdgeInsets.all(11),
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: TextField(
+                                              controller: _commentController,
+                                              minLines: 1,
+                                              maxLines: 3,
+                                              decoration: InputDecoration(
+                                                hintText: replyTarget != null ? '대댓글을 입력해주세요.' : '댓글을 입력해주세요.',
+                                                hintStyle: const TextStyle(color: Color(0xFFADB5C2), fontWeight: FontWeight.w700, fontSize: 13),
+                                                filled: true,
+                                                fillColor: const Color(0xFFFFFBFA),
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFF1E4DE))),
+                                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFF1E4DE))),
+                                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFFB4A4), width: 1.3)),
+                                              ),
                                             ),
-                                          )
-                                              : const Icon(
-                                            Icons.send_rounded,
-                                            size: 20,
-                                            color: Colors.white,
                                           ),
-                                        ),
+                                          const SizedBox(width: 10),
+                                          GestureDetector(
+                                            onTap: localSubmitting ? null : submitLocalComment,
+                                            child: Container(
+                                              width: 44,
+                                              height: 44,
+                                              decoration: BoxDecoration(color: const Color(0xFFFF8E7C), borderRadius: BorderRadius.circular(14)),
+                                              child: localSubmitting ? const Padding(padding: EdgeInsets.all(11), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.send_rounded, size: 20, color: Colors.white),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -3097,86 +3318,67 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ),
         );
       },
-      transitionBuilder: (_, animation, __, child) {
-        return FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-            ),
-            child: child,
-          ),
-        );
-      },
     );
   }
 
-  bool _isTextOverflowingOneLine({
-    required String text,
-    required TextStyle style,
-    required double maxWidth,
-  }) {
-    final textPainter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout(maxWidth: maxWidth);
-
-    return textPainter.didExceedMaxLines;
+  Widget _buildCommentButton({required int count}) {
+    return _AnimatedCommunityLikeButton(
+      liked: false,
+      onTap: () {},
+      count: count,
+      size: 42,
+      iconSize: 19,
+      backgroundColor: Colors.white.withOpacity(0.94),
+      borderColor: const Color(0xFFF2E3DE),
+      likedColor: const Color(0xFF97A3B1),
+      idleColor: const Color(0xFFD0A49A),
+      countTextColor: const Color(0xFFC19C92),
+      circular: false,
+      iconTopOffset: 0.0,
+      horizontalPadding: 11,
+      iconOverride: Icons.chat_bubble_outline_rounded,
+      enableTapAnimation: false,
+    );
   }
 
-  Future<void> _sharePostWithDeepLink(CommunityPost post) async {
-    final String link = 'https://keepersnote.app/community/post/${post.id}';
-
-    final String text = '''
-🌈 타운키퍼 모여라! 💖
-
-📌 ${post.title}
-
-두근두근타운 유저들을 위한 필수 앱  
-✨ 키퍼노트 ✨ 에서 이 글을 발견했어요!
-
-지금 바로 확인해보세요! 👀💬
-
-📎 $link
-''';
-
-    await Share.share(text);
-  }
-
-  Widget _buildGridMoreButton({
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: 36,
-      height: 36,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Text(
-                '⋯',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  height: 1.0,
-                  fontWeight: FontWeight.w700,
-                ),
+  Widget _buildCommentAvatar(CommunityComment comment, {double radius = 16}) {
+    final resolved = _resolveProfileImagePath(comment.profileImageUrl);
+    Widget avatar;
+    if (resolved.isEmpty) {
+      avatar = CircleAvatar(
+        radius: radius,
+        backgroundColor: const Color(0xFFFFF2EE),
+        child: Text(
+          comment.authorName.isEmpty ? '?' : comment.authorName.characters.first,
+          style: TextStyle(
+            color: const Color(0xFFFF8E7C),
+            fontWeight: FontWeight.w800,
+            fontSize: radius * 0.85,
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFFFFF2EE),
+        border: Border.all(color: const Color(0xFFFFE1DA)),
+      ),
+      child: ClipOval(
+        child: Image.network(
+          resolved,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => CircleAvatar(
+            radius: radius,
+            backgroundColor: const Color(0xFFFFF2EE),
+            child: Text(
+              comment.authorName.isEmpty ? '?' : comment.authorName.characters.first,
+              style: TextStyle(
+                color: const Color(0xFFFF8E7C),
+                fontWeight: FontWeight.w800,
+                fontSize: radius * 0.85,
               ),
             ),
           ),
@@ -3210,28 +3412,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
       circular: false,
       iconTopOffset: 0.0,
       horizontalPadding: 11,
-    );
-  }
-
-  Widget _buildCommentButton({
-    required int count,
-  }) {
-    return _AnimatedCommunityLikeButton(
-      liked: false,
-      onTap: () {},
-      count: count,
-      size: 42,
-      iconSize: 19,
-      backgroundColor: Colors.white.withOpacity(0.94),
-      borderColor: const Color(0xFFF2E3DE),
-      likedColor: const Color(0xFF97A3B1),
-      idleColor: const Color(0xFFD0A49A),
-      countTextColor: const Color(0xFFC19C92),
-      circular: false,
-      iconTopOffset: 0.0,
-      horizontalPadding: 11,
-      iconOverride: Icons.chat_bubble_outline_rounded,
-      enableTapAnimation: false,
     );
   }
 
@@ -3371,6 +3551,47 @@ class _CommunityScreenState extends State<CommunityScreen> {
             Icons.keyboard_arrow_up_rounded,
             size: 28,
             color: Color(0xFFFF8E7C),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sharePostWithDeepLink(CommunityPost post) async {
+    final String title = post.title.isNotEmpty ? post.title : '키퍼노트 커뮤니티 글';
+    final String body = post.body.isNotEmpty ? post.body : '키퍼노트에서 이 글을 확인해보세요.';
+    final String url = 'https://keepersnote.app/community/post/${post.id}';
+
+    await Share.share('$title\n\n$body\n\n$url');
+  }
+
+  Widget _buildGridMoreButton({
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.94),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFF2E3DE)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.more_vert_rounded,
+            size: 16,
+            color: Color(0xFFC39B91),
           ),
         ),
       ),
@@ -3981,89 +4202,134 @@ class _AnimatedCommunityLikeButton extends StatefulWidget {
     required this.liked,
     required this.onTap,
     this.count,
-    required this.size,
-    required this.iconSize,
+    this.size = 42,
+    this.iconSize = 19,
     required this.backgroundColor,
     required this.borderColor,
     required this.likedColor,
     required this.idleColor,
     this.countTextColor,
-    required this.circular,
+    this.circular = false,
     this.iconTopOffset = 0,
-    this.horizontalPadding = 10,
+    this.horizontalPadding = 11,
     this.iconOverride,
     this.enableTapAnimation = true,
   });
 
   @override
-  State<_AnimatedCommunityLikeButton> createState() => _AnimatedCommunityLikeButtonState();
+  State<_AnimatedCommunityLikeButton> createState() =>
+      _AnimatedCommunityLikeButtonState();
 }
 
-class _AnimatedCommunityLikeButtonState extends State<_AnimatedCommunityLikeButton> {
-  bool _pressed = false;
+class _AnimatedCommunityLikeButtonState
+    extends State<_AnimatedCommunityLikeButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      lowerBound: 0.0,
+      upperBound: 1.0,
+      value: 0.0,
+    );
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.14)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.14, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 55,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedCommunityLikeButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enableTapAnimation && widget.liked != oldWidget.liked && widget.liked) {
+      _controller
+        ..stop()
+        ..forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    if (widget.enableTapAnimation) {
+      _controller
+        ..stop()
+        ..forward(from: 0.0);
+    }
+    widget.onTap();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final borderRadius = widget.circular ? BorderRadius.circular(999) : BorderRadius.circular(19);
-    final iconData = widget.iconOverride ?? (widget.liked ? Icons.favorite_rounded : Icons.favorite_border_rounded);
-    final iconColor = widget.liked ? widget.likedColor : widget.idleColor;
-
-    void handleTap() {
-      widget.onTap();
-    }
+    final bool hasCount = widget.count != null;
+    final double height = widget.size;
+    final double width = widget.circular
+        ? widget.size
+        : (hasCount ? widget.size + widget.horizontalPadding * 2 : widget.size);
+    final IconData icon = widget.iconOverride ??
+        (widget.liked ? Icons.favorite_rounded : Icons.favorite_border_rounded);
+    final Color iconColor = widget.liked ? widget.likedColor : widget.idleColor;
 
     return GestureDetector(
-      onTapDown: widget.enableTapAnimation ? (_) => setState(() => _pressed = true) : null,
-      onTapCancel: widget.enableTapAnimation ? () => setState(() => _pressed = false) : null,
-      onTapUp: widget.enableTapAnimation ? (_) {
-        setState(() => _pressed = false);
-        handleTap();
-      } : null,
-      onTap: widget.enableTapAnimation ? null : handleTap,
-      child: AnimatedScale(
-        scale: widget.enableTapAnimation && _pressed ? 0.92 : 1,
-        duration: const Duration(milliseconds: 110),
-        curve: Curves.easeOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: widget.circular ? widget.size : null,
-          height: widget.size,
-          padding: EdgeInsets.symmetric(horizontal: widget.circular ? 0 : widget.horizontalPadding),
+      onTap: _handleTap,
+      behavior: HitTestBehavior.translucent,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: widget.enableTapAnimation ? _scaleAnimation.value : 1.0,
+            child: child,
+          );
+        },
+        child: Container(
+          height: height,
+          width: width,
+          padding: widget.circular ? EdgeInsets.zero : EdgeInsets.symmetric(horizontal: widget.horizontalPadding),
           decoration: BoxDecoration(
             color: widget.backgroundColor,
-            shape: widget.circular ? BoxShape.circle : BoxShape.rectangle,
-            borderRadius: widget.circular ? null : borderRadius,
+            borderRadius: BorderRadius.circular(widget.circular ? 999 : 16),
             border: Border.all(color: widget.borderColor),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withOpacity(0.03),
                 blurRadius: 8,
                 offset: const Offset(0, 3),
               ),
             ],
           ),
-          child: widget.circular
-              ? Center(
-            child: Transform.translate(
-              offset: Offset(0, widget.iconTopOffset),
-              child: Icon(iconData, size: widget.iconSize, color: iconColor),
-            ),
-          )
-              : Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: widget.circular ? MainAxisSize.max : MainAxisSize.min,
             children: [
               Transform.translate(
                 offset: Offset(0, widget.iconTopOffset),
-                child: Icon(iconData, size: widget.iconSize, color: iconColor),
+                child: Icon(icon, size: widget.iconSize, color: iconColor),
               ),
-              if (widget.count != null) ...[
-                const SizedBox(width: 5),
+              if (!widget.circular && hasCount) ...[
+                const SizedBox(width: 6),
                 Text(
                   '${widget.count}',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 12.8,
                     fontWeight: FontWeight.w800,
-                    color: widget.countTextColor,
+                    color: widget.countTextColor ?? iconColor,
                   ),
                 ),
               ],
@@ -4074,6 +4340,394 @@ class _AnimatedCommunityLikeButtonState extends State<_AnimatedCommunityLikeButt
     );
   }
 }
+
+class CommunityUserProfileScreen extends StatefulWidget {
+  final String baseUrl;
+  final String? currentKakaoId;
+  final int? authorKakaoId;
+  final String authorName;
+  final String authorUid;
+  final String profileImageUrl;
+  final bool isMine;
+  final bool isInitiallyFollowing;
+
+  const CommunityUserProfileScreen({
+    super.key,
+    required this.baseUrl,
+    required this.currentKakaoId,
+    required this.authorKakaoId,
+    required this.authorName,
+    required this.authorUid,
+    required this.profileImageUrl,
+    required this.isMine,
+    required this.isInitiallyFollowing,
+  });
+
+  @override
+  State<CommunityUserProfileScreen> createState() => _CommunityUserProfileScreenState();
+}
+
+class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen> {
+  bool _loading = true;
+  bool _following = false;
+  List<CommunityPost> _recentPosts = const <CommunityPost>[];
+  List<CommunityFollowUserSummary> _followers = const <CommunityFollowUserSummary>[];
+  List<CommunityFollowUserSummary> _followingUsers = const <CommunityFollowUserSummary>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _following = widget.isInitiallyFollowing;
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      if (widget.authorKakaoId != null) {
+        final followersRes = await http.get(Uri.parse('${widget.baseUrl}/api/community/followers').replace(queryParameters: {'kakaoId': widget.authorKakaoId.toString()}));
+        final followingRes = await http.get(Uri.parse('${widget.baseUrl}/api/community/following').replace(queryParameters: {'kakaoId': widget.authorKakaoId.toString()}));
+        if (followersRes.statusCode >= 200 && followersRes.statusCode < 300) {
+          final decoded = jsonDecode(utf8.decode(followersRes.bodyBytes));
+          if (decoded is List) {
+            _followers = decoded.whereType<Map>().map((e) => CommunityFollowUserSummary.fromJson(Map<String, dynamic>.from(e))).toList();
+          }
+        }
+        if (followingRes.statusCode >= 200 && followingRes.statusCode < 300) {
+          final decoded = jsonDecode(utf8.decode(followingRes.bodyBytes));
+          if (decoded is List) {
+            _followingUsers = decoded.whereType<Map>().map((e) => CommunityFollowUserSummary.fromJson(Map<String, dynamic>.from(e))).toList();
+          }
+        }
+      }
+      final postsRes = await http.get(Uri.parse('${widget.baseUrl}/api/community/posts').replace(queryParameters: {
+        if ((widget.currentKakaoId ?? '').isNotEmpty) 'kakaoId': widget.currentKakaoId!,
+      }));
+      if (postsRes.statusCode >= 200 && postsRes.statusCode < 300) {
+        final decoded = jsonDecode(utf8.decode(postsRes.bodyBytes));
+        if (decoded is List) {
+          final posts = decoded.whereType<Map>().map((e) => CommunityPost.fromJson(Map<String, dynamic>.from(e))).toList();
+          _recentPosts = posts.where((e) {
+            if (widget.authorKakaoId != null && e.authorKakaoId != null) return e.authorKakaoId == widget.authorKakaoId;
+            return e.uid == widget.authorUid && e.author == widget.authorName;
+          }).take(6).toList();
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    if (widget.authorKakaoId == null || (widget.currentKakaoId ?? '').isEmpty || widget.isMine) return;
+    final uri = Uri.parse('${widget.baseUrl}/api/community/follow/${widget.authorKakaoId}').replace(queryParameters: {'kakaoId': widget.currentKakaoId!});
+    final response = _following ? await http.delete(uri) : await http.post(uri);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      setState(() => _following = !_following);
+      await _load();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFF9F8),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: const Color(0xFF2F3941),
+        elevation: 0,
+        title: Text(
+          widget.authorName,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+      ),
+      body: _loading
+          ? const Center(
+        child: CircularProgressIndicator(color: Color(0xFFFF8E7C)),
+      )
+          : SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          children: [
+            GestureDetector(
+              onTap: widget.profileImageUrl.isEmpty
+                  ? null
+                  : () => Navigator.of(context).push(
+                PageRouteBuilder(
+                  opaque: false,
+                  barrierColor: Colors.black.withOpacity(0.94),
+                  pageBuilder: (_, __, ___) => _ProfileImageViewerScreen(
+                    imageUrl: widget.profileImageUrl,
+                    author: widget.authorName,
+                  ),
+                ),
+              ),
+              child: Container(
+                height: 230,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  image: DecorationImage(
+                    image: widget.profileImageUrl.isNotEmpty
+                        ? NetworkImage(widget.profileImageUrl)
+                        : const AssetImage('assets/images/profile_header.png') as ImageProvider,
+                    fit: BoxFit.cover,
+                  ),
+                  borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(34),
+                  ),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(34),
+                    ),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.12),
+                        Colors.black.withOpacity(0.02),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Transform.translate(
+              offset: const Offset(0, -44),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Column(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(22, 62, 22, 22),
+                            child: Column(
+                              children: [
+                                Text(
+                                  widget.authorName,
+                                  style: const TextStyle(
+                                    fontSize: 21,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF2F3941),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF2EF),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(color: const Color(0xFFFFD8CF)),
+                                  ),
+                                  child: Text(
+                                    'UID . ${widget.authorUid}',
+                                    style: const TextStyle(
+                                      fontSize: 12.4,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFFFF8E7C),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                Row(
+                                  children: [
+                                    Expanded(child: _buildCountCard('팔로워', _followers.length.toString())),
+                                    const SizedBox(width: 10),
+                                    Expanded(child: _buildCountCard('팔로잉', _followingUsers.length.toString())),
+                                  ],
+                                ),
+                                if (!widget.isMine) ...[
+                                  const SizedBox(height: 14),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: _toggleFollow,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: _following
+                                            ? const Color(0xFFF3F4F6)
+                                            : const Color(0xFFFF8E7C),
+                                        foregroundColor: _following
+                                            ? const Color(0xFF6B7280)
+                                            : Colors.white,
+                                        elevation: 0,
+                                        minimumSize: const Size.fromHeight(48),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(18),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        _following ? '팔로잉' : '팔로우',
+                                        style: const TextStyle(fontWeight: FontWeight.w900),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Positioned(
+                            top: -46,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: GestureDetector(
+                                onTap: widget.profileImageUrl.isEmpty
+                                    ? null
+                                    : () => Navigator.of(context).push(
+                                  PageRouteBuilder(
+                                    opaque: false,
+                                    barrierColor: Colors.black.withOpacity(0.94),
+                                    pageBuilder: (_, __, ___) => _ProfileImageViewerScreen(
+                                      imageUrl: widget.profileImageUrl,
+                                      author: widget.authorName,
+                                    ),
+                                  ),
+                                ),
+                                child: Container(
+                                  width: 96,
+                                  height: 96,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 5),
+                                    image: DecorationImage(
+                                      image: widget.profileImageUrl.isNotEmpty
+                                          ? NetworkImage(widget.profileImageUrl)
+                                          : const AssetImage('assets/images/profile_image.png') as ImageProvider,
+                                      fit: BoxFit.cover,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.10),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Text(
+                          '최근 게시물',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF2F3941),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (_recentPosts.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: const Color(0xFFF0E3DC)),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '표시할 최근 게시물이 없어요.',
+                            style: TextStyle(
+                              fontSize: 12.8,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF98A2AE),
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _recentPosts.length,
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: 1,
+                        ),
+                        itemBuilder: (context, index) {
+                          final post = _recentPosts[index];
+                          final image = post.imageUrls.isNotEmpty ? post.imageUrls.first : '';
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: const Color(0xFFF0E3DC)),
+                              ),
+                              child: image.isEmpty
+                                  ? Container(
+                                color: const Color(0xFFFFFBFA),
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.image_outlined,
+                                  color: Color(0xFFE1B3A8),
+                                ),
+                              )
+                                  : Image.network(
+                                image.startsWith('http') ? image : '${widget.baseUrl}${image.startsWith('/') ? '' : '/'}$image',
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: const Color(0xFFFFFBFA),
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    Icons.image_outlined,
+                                    color: Color(0xFFE1B3A8),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCountCard(String title, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFF0E3DC))),
+      child: Column(children: [Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(title, style: const TextStyle(fontSize: 11.5, color: Color(0xFF97A3B1)))]),
+    );
+  }
+}
+
 
 class _ProfileImageViewerScreen extends StatefulWidget {
   final String imageUrl;
@@ -4095,7 +4749,6 @@ class _ProfileImageViewerScreenState extends State<_ProfileImageViewerScreen>
   late final AnimationController _zoomAnimationController;
   Animation<Matrix4>? _zoomAnimation;
   TapDownDetails? _doubleTapDetails;
-
   static const double _doubleTapScale = 2.2;
 
   @override
@@ -4137,27 +4790,23 @@ class _ProfileImageViewerScreenState extends State<_ProfileImageViewerScreen>
       ..forward();
   }
 
-  void _resetZoom() {
-    _animateZoom(Matrix4.identity());
-  }
-
   void _handleDoubleTap() {
     final details = _doubleTapDetails;
     if (details == null) return;
 
     final currentMatrix = _transformationController.value;
-    final currentScale = currentMatrix.getMaxScaleOnAxis();
+    final bool isZoomed = currentMatrix != Matrix4.identity();
 
-    if (currentScale > 1.01) {
-      _resetZoom();
+    if (isZoomed) {
+      _animateZoom(Matrix4.identity());
       return;
     }
 
-    final position = details.localPosition;
+    final tapPosition = details.localPosition;
     final Matrix4 zoomed = Matrix4.identity()
       ..translate(
-        -position.dx * (_doubleTapScale - 1),
-        -position.dy * (_doubleTapScale - 1),
+        -tapPosition.dx * (_doubleTapScale - 1),
+        -tapPosition.dy * (_doubleTapScale - 1),
       )
       ..scale(_doubleTapScale);
 
@@ -4167,48 +4816,50 @@ class _ProfileImageViewerScreenState extends State<_ProfileImageViewerScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.96),
+      backgroundColor: Colors.black,
       body: SafeArea(
         child: Stack(
           children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return ClipRect(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onDoubleTapDown: (details) {
-                      _doubleTapDetails = details;
-                    },
-                    onDoubleTap: _handleDoubleTap,
-                    child: InteractiveViewer(
-                      transformationController: _transformationController,
-                      minScale: 1.0,
-                      maxScale: 4.0,
-                      panEnabled: true,
-                      scaleEnabled: true,
-                      constrained: true,
-                      clipBehavior: Clip.hardEdge,
-                      boundaryMargin: EdgeInsets.zero,
-                      child: SizedBox(
-                        width: constraints.maxWidth,
-                        height: constraints.maxHeight,
-                        child: Center(
-                          child: Image.network(
-                            widget.imageUrl,
-                            fit: BoxFit.contain,
-                            filterQuality: FilterQuality.high,
-                            errorBuilder: (_, __, ___) => const Icon(
-                              Icons.broken_image_outlined,
-                              size: 42,
-                              color: Colors.white54,
+            Positioned.fill(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return ClipRect(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onDoubleTapDown: (details) {
+                        _doubleTapDetails = details;
+                      },
+                      onDoubleTap: _handleDoubleTap,
+                      child: InteractiveViewer(
+                        transformationController: _transformationController,
+                        minScale: 1.0,
+                        maxScale: 4.0,
+                        panEnabled: true,
+                        scaleEnabled: true,
+                        constrained: true,
+                        clipBehavior: Clip.hardEdge,
+                        boundaryMargin: EdgeInsets.zero,
+                        child: SizedBox(
+                          width: constraints.maxWidth,
+                          height: constraints.maxHeight,
+                          child: Center(
+                            child: Image.network(
+                              widget.imageUrl,
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.high,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.broken_image_outlined,
+                                size: 42,
+                                color: Colors.white54,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
             Positioned(
               top: 12,
@@ -4237,10 +4888,7 @@ class _ProfileImageViewerScreenState extends State<_ProfileImageViewerScreen>
               top: 14,
               right: 14,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.45),
                   borderRadius: BorderRadius.circular(999),
