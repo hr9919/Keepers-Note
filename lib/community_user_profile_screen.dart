@@ -1084,11 +1084,11 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
                     child: _buildImageChangeButton(
                       label: '배경 사진 변경',
                       icon: Icons.image_rounded,
-                        onTap: () async {
-                          Navigator.pop(dialogContext);
-                          await _pickAndUploadImage(true);
-                          if (mounted) _showProfileEditSheet();
-                        }
+                      onTap: () async {
+                        Navigator.pop(dialogContext);
+                        await _pickAndUploadImage(false);
+                        if (mounted) _showProfileEditSheet();
+                      },
                     ),
                   ),
                 ],

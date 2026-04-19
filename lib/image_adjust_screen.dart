@@ -55,6 +55,7 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
   static const double _handleTouchSize = 36;
   static const double _canvasHorizontalPadding = 24;
   static const double _canvasVerticalPadding = 26;
+  static const double _initialInsetRatio = 0.88;
 
   ui.Image? _decodedImage;
   Size? _rawImageSize;
@@ -71,6 +72,7 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
 
   Rect? _freeCropRect;
   Size? _lastCanvasSize;
+  Rect? _currentCropRect;
 
   bool get _isFreeformCrop =>
       widget.shape == ImageAdjustShape.roundedRect &&
@@ -224,8 +226,8 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
         bounds.height / imageH,
       );
 
-      final fittedWidth = imageW * fitScale;
-      final fittedHeight = imageH * fitScale;
+      final fittedWidth = imageW * fitScale * _initialInsetRatio;
+      final fittedHeight = imageH * fitScale * _initialInsetRatio;
 
       _freeCropRect = Rect.fromCenter(
         center: bounds.center,
@@ -460,6 +462,7 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
 
     setState(() {
       _freeCropRect = nextRect;
+      _currentCropRect = nextRect;
       _ensureImageCoversCropRect(nextRect);
     });
   }
@@ -610,20 +613,24 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
           ),
         ),
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final fullSize = Size(constraints.maxWidth, constraints.maxHeight);
-          final cropRect = _resolvedCropRect(fullSize);
+      body: Column(
+        children: [
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final canvasSize = Size(
+                  constraints.maxWidth,
+                  constraints.maxHeight,
+                );
+                final cropRect = _resolvedCropRect(canvasSize);
+                _currentCropRect = cropRect;
 
-          if (_rawImageSize != null) {
-            _initTransformIfNeeded(cropRect);
-            _ensureImageCoversCropRect(cropRect);
-          }
+                if (_rawImageSize != null) {
+                  _initTransformIfNeeded(cropRect);
+                  _ensureImageCoversCropRect(cropRect);
+                }
 
-          return Column(
-            children: [
-              Expanded(
-                child: Stack(
+                return Stack(
                   children: [
                     Positioned.fill(
                       child: GestureDetector(
@@ -646,8 +653,11 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                           );
                         },
                         onScaleUpdate: (details) {
-                          if (_rawImageSize == null) return;
+                          if (_rawImageSize == null || _currentCropRect == null) {
+                            return;
+                          }
 
+                          final cropRect = _currentCropRect!;
                           final focal = details.localFocalPoint;
 
                           final minScale = _isFreeformCrop ? 0.2 : 1.0;
@@ -663,8 +673,10 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                           final nextEffectiveScale = _baseScale * newScale;
 
                           final nextOffset = Offset(
-                            focal.dx - _gestureFocalImagePoint.dx * nextEffectiveScale,
-                            focal.dy - _gestureFocalImagePoint.dy * nextEffectiveScale,
+                            focal.dx -
+                                _gestureFocalImagePoint.dx * nextEffectiveScale,
+                            focal.dy -
+                                _gestureFocalImagePoint.dy * nextEffectiveScale,
                           );
 
                           setState(() {
@@ -672,11 +684,11 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
 
                             if (_isFreeformCrop) {
                               _offset = nextOffset;
-                              _syncNormalizedOffset(cropRect);
                             } else {
                               _offset = _clampOffset(nextOffset, cropRect);
-                              _syncNormalizedOffset(cropRect);
                             }
+
+                            _syncNormalizedOffset(cropRect);
                           });
                         },
                         child: Container(
@@ -727,188 +739,192 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                       _buildFreeCropHandle(
                         cropRect: cropRect,
                         handle: _CropHandle.topLeft,
-                        canvasSize: fullSize,
+                        canvasSize: canvasSize,
                       ),
                       _buildFreeCropHandle(
                         cropRect: cropRect,
                         handle: _CropHandle.topRight,
-                        canvasSize: fullSize,
+                        canvasSize: canvasSize,
                       ),
                       _buildFreeCropHandle(
                         cropRect: cropRect,
                         handle: _CropHandle.bottomLeft,
-                        canvasSize: fullSize,
+                        canvasSize: canvasSize,
                       ),
                       _buildFreeCropHandle(
                         cropRect: cropRect,
                         handle: _CropHandle.bottomRight,
-                        canvasSize: fullSize,
+                        canvasSize: canvasSize,
                       ),
                     ],
                   ],
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.96),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFFFE2DB),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.96),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: const Color(0xFFFFE2DB),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
                   ),
-                  child: Column(
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.zoom_out_rounded,
-                            color: Color(0xFF9AA4B2),
-                            size: 20,
-                          ),
-                          Expanded(
-                            child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                trackHeight: 4,
-                                thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 9,
-                                ),
-                                overlayShape: const RoundSliderOverlayShape(
-                                  overlayRadius: 18,
-                                ),
-                                activeTrackColor: accent,
-                                thumbColor: accent,
-                                overlayColor: accent.withOpacity(0.14),
-                                inactiveTrackColor: const Color(0xFFF3D8D1),
-                              ),
-                              child: Slider(
-                                min: _isFreeformCrop ? 0.2 : 1.0,
-                                max: 2.6,
-                                value: _scale.clamp(_isFreeformCrop ? 0.2 : 1.0, 2.6),
-                                onChanged: _rawImageSize == null
-                                    ? null
-                                    : (value) {
-                                  setState(() {
-                                    _scale = value;
-                                    _rebuildOffsetFromNormalized(cropRect);
-                                    if (!_isFreeformCrop) {
-                                      _ensureImageCoversCropRect(cropRect);
-                                    } else {
-                                      _syncNormalizedOffset(cropRect);
-                                    }
-                                  });
-                                },
-                              ),
-                            ),
-                          ),
-                          const Icon(
-                            Icons.zoom_in_rounded,
-                            color: Color(0xFF9AA4B2),
-                            size: 20,
-                          ),
-                        ],
+                      const Icon(
+                        Icons.zoom_out_rounded,
+                        color: Color(0xFF9AA4B2),
+                        size: 20,
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _rawImageSize == null
-                                  ? null
-                                  : () => _resetTransform(cropRect),
-                              icon: const Icon(
-                                Icons.refresh_rounded,
-                                size: 18,
-                              ),
-                              label: const Text('초기화'),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(48),
-                                side: const BorderSide(
-                                  color: Color(0xFFFFDDD4),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                foregroundColor: const Color(0xFF7B8794),
-                              ),
+                      Expanded(
+                        child: SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 4,
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 9,
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed:
-                              _isSaving ? null : () => Navigator.pop(context),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(48),
-                                side: const BorderSide(
-                                  color: Color(0xFFFFDDD4),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                foregroundColor: const Color(0xFF7B8794),
-                              ),
-                              child: const Text(
-                                '취소',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 18,
                             ),
+                            activeTrackColor: accent,
+                            thumbColor: accent,
+                            overlayColor: accent.withOpacity(0.14),
+                            inactiveTrackColor: const Color(0xFFF3D8D1),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: (_isSaving ||
-                                  _rawImageSize == null ||
-                                  _decodedImage == null)
-                                  ? null
-                                  : () => _save(cropRect),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: accent,
-                                foregroundColor: Colors.white,
-                                minimumSize: const Size.fromHeight(48),
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: _isSaving
-                                  ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                                  : const Text(
-                                '적용',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
+                          child: Slider(
+                            min: _isFreeformCrop ? 0.2 : 1.0,
+                            max: 2.6,
+                            value: _scale.clamp(
+                              _isFreeformCrop ? 0.2 : 1.0,
+                              2.6,
                             ),
+                            onChanged: _rawImageSize == null || _currentCropRect == null
+                                ? null
+                                : (value) {
+                              final cropRect = _currentCropRect!;
+                              setState(() {
+                                _scale = value;
+                                _rebuildOffsetFromNormalized(cropRect);
+                                if (!_isFreeformCrop) {
+                                  _ensureImageCoversCropRect(cropRect);
+                                } else {
+                                  _syncNormalizedOffset(cropRect);
+                                }
+                              });
+                            },
                           ),
-                        ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.zoom_in_rounded,
+                        color: Color(0xFF9AA4B2),
+                        size: 20,
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: (_rawImageSize == null || _currentCropRect == null)
+                              ? null
+                              : () => _resetTransform(_currentCropRect!),
+                          icon: const Icon(
+                            Icons.refresh_rounded,
+                            size: 18,
+                          ),
+                          label: const Text('초기화'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            side: const BorderSide(
+                              color: Color(0xFFFFDDD4),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            foregroundColor: const Color(0xFF7B8794),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _isSaving ? null : () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            side: const BorderSide(
+                              color: Color(0xFFFFDDD4),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            foregroundColor: const Color(0xFF7B8794),
+                          ),
+                          child: const Text(
+                            '취소',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: (_isSaving ||
+                              _rawImageSize == null ||
+                              _decodedImage == null ||
+                              _currentCropRect == null)
+                              ? null
+                              : () => _save(_currentCropRect!),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(48),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: _isSaving
+                              ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                              : const Text(
+                            '적용',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
