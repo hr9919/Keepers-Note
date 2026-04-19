@@ -112,27 +112,28 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
     final bounds = _cropBoundsFor(size);
 
     if (_isFreeformCrop) {
-      final width = bounds.width * 0.82;
+      final imageWidth = _rawImageSize?.width ?? 1.0;
+      final imageHeight = _rawImageSize?.height ?? 1.0;
+      final imageAspectRatio = imageWidth / imageHeight;
 
-      final imageRatio = _rawImageSize == null
-          ? 1.0
-          : _rawImageSize!.height / _rawImageSize!.width;
+      double cropWidth = bounds.width;
+      double cropHeight = cropWidth / imageAspectRatio;
 
-      double height = width * imageRatio;
+      if (cropHeight > bounds.height) {
+        cropHeight = bounds.height;
+        cropWidth = cropHeight * imageAspectRatio;
+      }
 
+      final minWidth = math.min(_minCropWidth, bounds.width);
       final minHeight = math.min(_minCropHeight, bounds.height);
-      final maxHeight = bounds.height * 0.76;
-      height = height.clamp(minHeight, maxHeight).toDouble();
 
-      final resolvedWidth = width.clamp(
-        math.min(_minCropWidth, bounds.width),
-        bounds.width,
-      ).toDouble();
+      cropWidth = cropWidth.clamp(minWidth, bounds.width).toDouble();
+      cropHeight = cropHeight.clamp(minHeight, bounds.height).toDouble();
 
       return Rect.fromCenter(
         center: bounds.center,
-        width: resolvedWidth,
-        height: height,
+        width: cropWidth,
+        height: cropHeight,
       );
     }
 
@@ -208,11 +209,31 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
       return _defaultCropRectFor(size);
     }
 
-    final defaultRect = _defaultCropRectFor(size);
+    final bounds = _cropBoundsFor(size);
+
+    if (_rawImageSize == null) {
+      return _defaultCropRectFor(size);
+    }
 
     if (_freeCropRect == null) {
-      _freeCropRect = defaultRect;
+      final imageW = _rawImageSize!.width;
+      final imageH = _rawImageSize!.height;
+
+      final fitScale = math.min(
+        bounds.width / imageW,
+        bounds.height / imageH,
+      );
+
+      final fittedWidth = imageW * fitScale;
+      final fittedHeight = imageH * fitScale;
+
+      _freeCropRect = Rect.fromCenter(
+        center: bounds.center,
+        width: fittedWidth,
+        height: fittedHeight,
+      );
       _lastCanvasSize = size;
+
       return _freeCropRect!;
     }
 
@@ -232,23 +253,42 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
     final imageW = _rawImageSize!.width;
     final imageH = _rawImageSize!.height;
 
-    final scaleX = cropRect.width / imageW;
-    final scaleY = cropRect.height / imageH;
-    final nextBaseScale = math.max(scaleX, scaleY);
-
     final bool needsInit =
         _baseScale == 1.0 &&
             _offset == Offset.zero &&
             _normalizedOffset == Offset.zero;
 
     if (!needsInit) {
-      // ✅ 자유 크롭에서는 cropRect가 작아질 때 baseScale를 다시 낮추지 않음
-      // ✅ cropRect가 커져서 현재 배율로 못 덮는 경우만 보정은
-      //    _ensureImageCoversCropRect()에서 처리
       _offset = _clampOffset(_offset, cropRect);
       _syncNormalizedOffset(cropRect);
       return;
     }
+
+    if (_isFreeformCrop) {
+      final nextBaseScale = math.min(
+        cropRect.width / imageW,
+        cropRect.height / imageH,
+      );
+
+      _baseScale = nextBaseScale;
+      _scale = 1.0;
+      _normalizedOffset = Offset.zero;
+
+      final displayW = imageW * _effectiveScale;
+      final displayH = imageH * _effectiveScale;
+
+      _offset = Offset(
+        cropRect.center.dx - displayW / 2,
+        cropRect.center.dy - displayH / 2,
+      );
+
+      _syncNormalizedOffset(cropRect);
+      return;
+    }
+
+    final scaleX = cropRect.width / imageW;
+    final scaleY = cropRect.height / imageH;
+    final nextBaseScale = math.max(scaleX, scaleY);
 
     _baseScale = nextBaseScale;
     _scale = 1.0;
@@ -290,6 +330,11 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
 
   void _ensureImageCoversCropRect(Rect cropRect) {
     if (_rawImageSize == null) return;
+
+    if (_isFreeformCrop) {
+      _syncNormalizedOffset(cropRect);
+      return;
+    }
 
     final minEffectiveScale = math.max(
       cropRect.width / _rawImageSize!.width,
@@ -605,24 +650,33 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
 
                           final focal = details.localFocalPoint;
 
+                          final minScale = _isFreeformCrop ? 0.2 : 1.0;
+                          const maxScale = 2.6;
+
                           final adjustedScaleDelta =
-                              1 + ((details.scale - 1) * 0.08);
+                              1 + ((details.scale - 1) * 0.35);
+
                           final newScale = (_gestureStartScale * adjustedScaleDelta)
-                              .clamp(1.0, 2.6)
+                              .clamp(minScale, maxScale)
                               .toDouble();
+
                           final nextEffectiveScale = _baseScale * newScale;
 
                           final nextOffset = Offset(
-                            focal.dx -
-                                _gestureFocalImagePoint.dx * nextEffectiveScale,
-                            focal.dy -
-                                _gestureFocalImagePoint.dy * nextEffectiveScale,
+                            focal.dx - _gestureFocalImagePoint.dx * nextEffectiveScale,
+                            focal.dy - _gestureFocalImagePoint.dy * nextEffectiveScale,
                           );
 
                           setState(() {
                             _scale = newScale;
-                            _offset = _clampOffset(nextOffset, cropRect);
-                            _syncNormalizedOffset(cropRect);
+
+                            if (_isFreeformCrop) {
+                              _offset = nextOffset;
+                              _syncNormalizedOffset(cropRect);
+                            } else {
+                              _offset = _clampOffset(nextOffset, cropRect);
+                              _syncNormalizedOffset(cropRect);
+                            }
                           });
                         },
                         child: Container(
@@ -737,16 +791,20 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
                                 inactiveTrackColor: const Color(0xFFF3D8D1),
                               ),
                               child: Slider(
-                                min: 1.0,
+                                min: _isFreeformCrop ? 0.2 : 1.0,
                                 max: 2.6,
-                                value: _scale.clamp(1.0, 2.6),
+                                value: _scale.clamp(_isFreeformCrop ? 0.2 : 1.0, 2.6),
                                 onChanged: _rawImageSize == null
                                     ? null
                                     : (value) {
                                   setState(() {
                                     _scale = value;
                                     _rebuildOffsetFromNormalized(cropRect);
-                                    _ensureImageCoversCropRect(cropRect);
+                                    if (!_isFreeformCrop) {
+                                      _ensureImageCoversCropRect(cropRect);
+                                    } else {
+                                      _syncNormalizedOffset(cropRect);
+                                    }
                                   });
                                 },
                               ),

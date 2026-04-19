@@ -9,7 +9,7 @@ import 'community_uid_verification_screen.dart';
 import 'community_uid_admin_screen.dart';
 import 'community_screen.dart';
 import 'community_write_screen.dart';
-import 'my_community_posts_screen.dart';
+import 'community_user_profile_screen.dart';
 import 'home_screen.dart';
 import 'weather_admin_screen.dart';
 import 'encyclopedia_screen.dart';
@@ -46,6 +46,8 @@ class _MainWrapperState extends State<MainWrapper> {
 
   int? _initialCommunityPostId;
 
+  int _communityOpenMyProfileSignal = 0;
+
   bool _isScrimPressed = false;
   bool _isDrawerOpen = false;
   bool _isEndDrawerOpen = false;
@@ -58,6 +60,8 @@ class _MainWrapperState extends State<MainWrapper> {
 
   String? _pendingCommunityAction;
   bool _isLaunchingCommunityAction = false;
+
+  int _communityRefreshSignal = 0;
 
   String _userName = "로그인 중...";
   String _userUid = "";
@@ -1012,6 +1016,8 @@ class _MainWrapperState extends State<MainWrapper> {
         kakaoId: _kakaoId,
         isAdmin: _isAdmin,
         initialPostId: _selectedIndex == 2 ? _initialCommunityPostId : null,
+        refreshSignal: _communityRefreshSignal,
+        openMyProfileSignal: _communityOpenMyProfileSignal,
       ),
       CookingScreen(
         openDrawer: _openDrawerSmooth,
@@ -1761,7 +1767,7 @@ class _MainWrapperState extends State<MainWrapper> {
                         _buildDrawerItem(
                           icon: Icons.collections_bookmark_rounded,
                           title: '업적 및 아이템 도감',
-                          subtitle: '기존 도감 화면으로 이동',
+                          subtitle: '도감 화면으로 이동',
                           isSelected: false,
                           accentColor: const Color(0xFFFF9F5A),
                           onTap: () async {
@@ -1894,100 +1900,135 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Future<void> _openCommunityWrite() async {
-    if (_isOpeningCommunityRoute) {
-      return;
-    }
-    _isOpeningCommunityRoute = true;
-
-    try {
-      FocusManager.instance.primaryFocus?.unfocus();
-
-      if (_isDrawerOpen) {
-        await _closeDrawerSmooth();
-      }
-      if (_isEndDrawerOpen) {
-        await _closeEndDrawerSmooth();
-      }
-
-      if (!mounted) return;
-
-      final ready = await _ensureKakaoIdReady();
-
-      if (!ready) {
-        return;
-      }
-
-      final status = await _fetchCommunityUidStatus();
-
-      if (!mounted) return;
-      if (status == null) {
-        return;
-      }
-
-      final communityStatus =
-          status['communityStatus']?.toString().toUpperCase() ?? 'NONE';
-      final hasPendingRequest = status['hasPendingRequest'] == true;
-
-      if (communityStatus == 'APPROVED') {
-        final tagItems = await CommunityTagApiService.fetchActiveTags();
-        final availableTags = tagItems.map((e) => e.tagName).toList();
-
-        final created = await Navigator.of(context, rootNavigator: true).push<bool>(
-          MaterialPageRoute(
-            builder: (_) => CommunityWriteScreen(
-              kakaoId: _kakaoId,
-              availableTags: availableTags,
-            ),
-          ),
-        );
-        return;
-      }
-
-      if (hasPendingRequest) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('UID 승인 대기 중이에요.')),
-        );
-        return;
-      }
-
-      await Navigator.of(context, rootNavigator: true).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => CommunityUidVerificationScreen(
-            kakaoId: _kakaoId,
-          ),
-        ),
-      );
-    } catch (e, st) {
-      debugPrint('$st');
-    } finally {
-      _isOpeningCommunityRoute = false;
-    }
-  }
-
-  Future<void> _openMyCommunityPosts() async {
-    setState(() {
-      _isCommunityMenuOpen = false;
-    });
-
-    final ready = await _ensureKakaoIdReady();
-    if (!ready) return null;
-
-    if (!mounted) return;
+    if (_isOpeningCommunityRoute) return;
 
     if (_kakaoId.isEmpty) {
+      await _fetchUserInfo();
+    }
+
+    if (_kakaoId.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.')),
       );
       return;
     }
 
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MyCommunityPostsScreen(kakaoId: _kakaoId),
-      ),
-    );
+    _isOpeningCommunityRoute = true;
+
+    try {
+      final status = await _fetchCommunityUidStatus();
+      final bool isLocked = status?['uidLocked'] == true;
+
+      if (!mounted) return;
+
+      if (!isLocked) {
+        final bool? requested = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CommunityUidVerificationScreen(
+              kakaoId: _kakaoId,
+            ),
+          ),
+        );
+
+        if (!mounted) return;
+
+        await _fetchUserInfo();
+
+        if (requested == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('UID 인증 요청이 접수되었어요. 승인 후 글쓰기를 이용할 수 있어요.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final availableTags = await CommunityTagApiService.fetchActiveTags();
+      final tagNames = availableTags
+          .map((e) => e.tagName)
+          .where((e) => e.trim().isNotEmpty)
+          .toList();
+
+      if (!mounted) return;
+
+      final bool? created = await CommunityScreen.openWrite(
+        context,
+        kakaoId: _kakaoId,
+        availableTags: tagNames.isEmpty ? const <String>['전체'] : tagNames,
+      );
+
+      if (!mounted) return;
+
+      if (created == true) {
+        setState(() {
+          _selectedIndex = 2;
+          _isCommunityMenuOpen = false;
+          _pendingSearchItem = null;
+          _initialCommunityPostId = null;
+          _communityRefreshSignal++;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('게시글이 등록되었어요.')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('글쓰기 화면을 여는 중 문제가 발생했어요. $e')),
+      );
+    } finally {
+      _isOpeningCommunityRoute = false;
+    }
+  }
+
+  Future<void> _openCommunityAdmin() async {
+    if (_isOpeningCommunityRoute) return;
+
+    if (_kakaoId.isEmpty) {
+      await _fetchUserInfo();
+    }
+
+    if (_kakaoId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.')),
+      );
+      return;
+    }
+
+    if (!_isAdmin) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('관리자만 접근할 수 있어요.')),
+      );
+      return;
+    }
+
+    _isOpeningCommunityRoute = true;
+
+    try {
+      if (!mounted) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CommunityUidAdminScreen(
+            kakaoId: _kakaoId,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _communityRefreshSignal++;
+      });
+    } finally {
+      _isOpeningCommunityRoute = false;
+    }
   }
 
   Widget _buildPrettyDrawerHeader() {
@@ -2092,7 +2133,10 @@ class _MainWrapperState extends State<MainWrapper> {
                             child: InkWell(
                               borderRadius: BorderRadius.circular(999),
                               onTap: () async {
-                                if (!hasUid) {
+                                final status = await _fetchCommunityUidStatus();
+                                final bool isLocked = status?['uidLocked'] == true;
+
+                                if (!isLocked) {
                                   await Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -2222,7 +2266,7 @@ class _MainWrapperState extends State<MainWrapper> {
                           Text(
                             hasUid
                                 ? '즐거운 타운생활 되세요!'
-                                : 'UID를 입력하면 커뮤니티를 이용할 수 있어요',
+                                : '프로필을 설정해보세요!',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
@@ -2521,10 +2565,10 @@ class _MainWrapperState extends State<MainWrapper> {
                         ),
                         const SizedBox(height: 12),
                         _buildCommunityMenuBubble(
-                          icon: Icons.article_rounded,
-                          label: '내 게시물 보기',
+                          icon: Icons.person_rounded,
+                          label: '내 프로필 보기',
                           onTap: () {
-                            _closeCommunityMenuAndRun('my_posts');
+                            _closeCommunityMenuAndRun('my_profile');
                           },
                         ),
                         if (_isAdmin) ...[
@@ -2562,7 +2606,6 @@ class _MainWrapperState extends State<MainWrapper> {
     _isLaunchingCommunityAction = true;
 
     try {
-      // 드롭업 닫힘 애니메이션이 완전히 끝날 때까지 대기
       await Future.delayed(const Duration(milliseconds: 420));
       await WidgetsBinding.instance.endOfFrame;
       await Future.delayed(const Duration(milliseconds: 80));
@@ -2573,8 +2616,17 @@ class _MainWrapperState extends State<MainWrapper> {
 
       if (action == 'write') {
         await _openCommunityWrite();
-      } else if (action == 'my_posts') {
-        await _openMyCommunityPosts();
+      } else if (action == 'my_profile') {
+        if (!mounted) return;
+        setState(() {
+          _selectedIndex = 2;
+          _isCommunityMenuOpen = false;
+          _pendingSearchItem = null;
+          _searchResetSignal++;
+          _communityOpenMyProfileSignal++;
+        });
+      } else if (action == 'uid_admin') {
+        await _openCommunityAdmin();
       }
     } finally {
       _isLaunchingCommunityAction = false;
@@ -2582,10 +2634,7 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Future<void> _closeCommunityMenuAndRun(String action) async {
-    if (_isOpeningCommunityRoute) {
-      return;
-    }
-
+    if (_isOpeningCommunityRoute) return;
 
     FocusManager.instance.primaryFocus?.unfocus();
 
@@ -2594,10 +2643,8 @@ class _MainWrapperState extends State<MainWrapper> {
       _isCommunityMenuOpen = false;
     });
 
-
     await Future.delayed(_kPanelDuration);
     await WidgetsBinding.instance.endOfFrame;
-
 
     if (!mounted) return;
 
@@ -2606,15 +2653,15 @@ class _MainWrapperState extends State<MainWrapper> {
 
     if (pending == 'write') {
       await _openCommunityWrite();
-    } else if (pending == 'my_posts') {
-      await _openMyCommunityPosts();
+    } else if (pending == 'my_profile') {
+      setState(() {
+        _selectedIndex = 2;
+        _pendingSearchItem = null;
+        _searchResetSignal++;
+        _communityOpenMyProfileSignal++;
+      });
     } else if (pending == 'uid_admin') {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CommunityUidAdminScreen(kakaoId: _kakaoId),
-        ),
-      );
+      await _openCommunityAdmin();
     }
   }
 

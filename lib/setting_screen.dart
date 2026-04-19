@@ -25,6 +25,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final Color snackBg = const Color(0xFFFFF9F8);
   final Color snackCard = Colors.white;
 
+  bool _uidLocked = false;
+
   bool _isPushEnabled = true;
   bool _isLoading = false;      // 이미지 업로드 등 액션 시 로딩
   bool _isDataStable = false;   // 데이터 준비 완료 여부 (애니메이션 트리거)
@@ -59,6 +61,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         body: jsonEncode({"kakaoId": user.id, "nickname": kakaoNickname}),
       ).timeout(const Duration(seconds: 3));
 
+      final uidStatusResponse = await http.get(
+        Uri.parse('http://161.33.30.40:8080/api/community/uid-verification/status')
+            .replace(queryParameters: {'kakaoId': user.id.toString()}),
+      ).timeout(const Duration(seconds: 3));
+
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         if (mounted) {
@@ -73,6 +80,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             }
             if (data['headerImageUrl'] != null) {
               _headerImageUrl = "http://161.33.30.40:8080${data['headerImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
+            }
+
+            _uidLocked = false;
+            if (uidStatusResponse.statusCode == 200) {
+              final uidStatusData = jsonDecode(utf8.decode(uidStatusResponse.bodyBytes));
+              if (uidStatusData is Map<String, dynamic>) {
+                _uidLocked = uidStatusData['uidLocked'] == true;
+              }
             }
             // 모든 정보가 셋팅된 후 스르륵 나타나게 함
             _isDataStable = true;
@@ -289,9 +304,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildUidCapsule(),
                 const SizedBox(height: 12),
                 Text(
-                  _displayUid != "UID를 입력해보세요"
+                  _uidLocked
+                      ? '커뮤니티 인증이 완료되어 UID가 잠겨 있어요'
+                      : _displayUid != "UID를 입력해보세요"
                       ? '멋진 타운키퍼가 되고 계신가요?'
-                      : '연필 버튼을 눌러 UID를 설정해보세요',
+                      : '프로필 사진과 UID를 등록해보세요.',
                   style: const TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
@@ -650,9 +667,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'UID',
                 uidController,
                 10,
-                '소문자와 숫자 조합',
+                _uidLocked ? '승인된 UID는 변경할 수 없어요' : '소문자와 숫자 조합',
                 icon: Icons.badge_rounded,
-                helperText: '예: abc123456',
+                helperText: _uidLocked
+                    ? '커뮤니티 인증이 완료되어 UID 변경이 잠겨 있어요.'
+                    : '예: abc123456',
+                enabled: !_uidLocked,
               ),
 
               const SizedBox(height: 22),
@@ -676,10 +696,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: snackAccent,
                     ),
                     const SizedBox(width: 8),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'UID는 비워두면 변경하지 않고, 입력하면 기존 UID를 새 값으로 바꿔요.',
-                        style: TextStyle(
+                        _uidLocked
+                            ? '커뮤니티 인증이 완료된 UID라서 지금은 변경할 수 없어요.'
+                            : 'UID는 비워두면 변경하지 않고, 입력하면 기존 UID를 새 값으로 바꿔요.',
+                        style: const TextStyle(
                           fontSize: 12,
                           height: 1.4,
                           fontWeight: FontWeight.w600,
@@ -726,14 +748,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         final name = nameController.text.trim();
                         final uid = uidController.text.trim();
 
-                        if (uid.isNotEmpty &&
+                        if (!_uidLocked &&
+                            uid.isNotEmpty &&
                             !RegExp(r'^[a-z0-9]{1,10}$').hasMatch(uid)) {
                           _showSnackBar("UID 형식을 확인해주세요.");
                           return;
                         }
 
                         Navigator.pop(dialogContext);
-                        _updateUserInfoOnServer(name, uid);
+                        _updateUserInfoOnServer(name, _uidLocked ? '' : uid);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: snackAccent,
@@ -769,6 +792,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       String hint, {
         IconData? icon,
         String? helperText,
+        bool enabled = true,
       }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -807,10 +831,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: TextField(
             controller: controller,
             maxLength: max,
-            style: const TextStyle(
+            enabled: enabled,
+            cursorColor: snackAccent,
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF2D3436),
+              color: enabled
+                  ? const Color(0xFF2D3436)
+                  : const Color(0xFF9AA4B2),
             ),
             decoration: InputDecoration(
               hintText: hint,
@@ -822,6 +850,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               fillColor: Colors.transparent,
               counterText: "",
               border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+              disabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
                 borderSide: BorderSide.none,
               ),
@@ -869,9 +901,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await http.put(Uri.parse('http://161.33.30.40:8080/api/user/update-nickname'),
             headers: {"Content-Type": "application/json"}, body: jsonEncode({"kakaoId": user.id, "nickname": name}));
       }
-      if (uid.isNotEmpty) {
-        await http.put(Uri.parse('http://161.33.30.40:8080/api/user/update-uid'),
-            headers: {"Content-Type": "application/json"}, body: jsonEncode({"kakaoId": user.id, "gameUid": uid}));
+      if (uid.isNotEmpty && !_uidLocked) {
+        await http.put(
+          Uri.parse('http://161.33.30.40:8080/api/user/update-uid'),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"kakaoId": user.id, "gameUid": uid}),
+        );
       }
       await _loadUserInfo();
       _didUserInfoChange = true;

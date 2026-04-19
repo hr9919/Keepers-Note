@@ -171,6 +171,13 @@ class _CommunityUidVerificationScreenState
       }
 
       if (!mounted) return;
+      if (!mounted) return;
+
+      _showMessage('UID 인증 요청이 접수되었어요.\n승인 후에는 UID를 변경할 수 없어요.');
+
+      await Future.delayed(const Duration(milliseconds: 900));
+
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       _showMessage('검증 신청 중 문제가 발생했어요.\n$e');
@@ -316,7 +323,9 @@ class _CommunityUidVerificationScreenState
                   children: [
                     _GuideLine('커뮤니티 글쓰기를 하려면 UID 인증이 필요해요.'),
                     SizedBox(height: 8),
-                    _GuideLine('중복 UID이거나 확인이 필요한 경우 스크린샷을 함께 올려주세요.'),
+                    _GuideLine('중복 UID이거나 확인이 필요한 경우 인게임 uid가 포함된 스크린샷을 함께 올려주세요.'),
+                    SizedBox(height: 8),
+                    _GuideLine('승인 완료 후에는 UID가 잠겨서 변경할 수 없어요.'), // ⭐ 추가
                     SizedBox(height: 8),
                     _GuideLine('승인되면 글쓰기 화면으로 바로 들어갈 수 있어요.'),
                   ],
