@@ -7,8 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
 import 'dart:io';
-import 'package:image_cropper/image_cropper.dart';
-import 'home_screen.dart';
+import 'main.dart';
 import 'package:path_provider/path_provider.dart';
 import 'image_adjust_screen.dart';
 
@@ -223,6 +222,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 _buildSnackRowItem('버그 리포트 보내기', isLink: true, onTap: _sendEmail),
                                 _buildSnackRowItem('저작권 및 법적 고지', isLink: true, onTap: _showCopyrightDialog),
                               ]),
+                              const SizedBox(height: 24),
+                              _buildWithdrawLink(),
                               const SizedBox(height: 100),
                             ],
                           ),
@@ -990,6 +991,237 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) _showSnackBar("링크 열기 실패");
   }
 
+  Widget _buildWithdrawLink() {
+    return Center(
+      child: GestureDetector(
+        onTap: _showWithdrawDialog,
+        child: const Text(
+          '회원탈퇴',
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFFB0B8C1),
+            decoration: TextDecoration.underline,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showWithdrawDialog() async {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4F2),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.person_remove_alt_1_rounded,
+                  color: Color(0xFFE88778),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '회원탈퇴',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF2D3436),
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                '탈퇴 전에 아래 내용을 꼭 확인해주세요.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF9AA4B2),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8F6),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: snackAccent.withOpacity(0.14),
+                  ),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _WithdrawGuideRow(
+                      text: '카카오 연결이 해제되고 현재 로그인 상태가 종료돼요.',
+                    ),
+                    SizedBox(height: 10),
+                    _WithdrawGuideRow(
+                      text: '계정 정보와 개인 설정, 반려동물, 할 일 목록이 함께 삭제돼요.',
+                    ),
+                    SizedBox(height: 10),
+                    _WithdrawGuideRow(
+                      text: '작성한 게시글, 댓글, 좋아요, 팔로우 등 커뮤니티 활동도 함께 삭제돼요.',
+                    ),
+                    SizedBox(height: 10),
+                    _WithdrawGuideRow(
+                      text: '탈퇴 후 다시 로그인하면 처음부터 새로 시작하게 돼요.',
+                    ),
+                    SizedBox(height: 10),
+                    _WithdrawGuideRow(
+                      text: '삭제된 정보는 복구할 수 없어요.',
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              const Text(
+                '정말 탈퇴하시겠어요?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF636E72),
+                ),
+              ),
+
+              const SizedBox(height: 22),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(
+                          color: Color(0xFFE2E8F0),
+                          width: 1.2,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        foregroundColor: const Color(0xFF636E72),
+                        backgroundColor: const Color(0xFFF8FAFC),
+                      ),
+                      child: const Text(
+                        '취소',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(dialogContext);
+                        await _withdrawAccount();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFE88778),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        '탈퇴하기',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _withdrawAccount() async {
+    try {
+      setState(() => _isLoading = true);
+
+      // 1. 카카오 사용자 정보 가져오기
+      final user = await UserApi.instance.me();
+      final kakaoId = user.id;
+
+      // 2. 서버 회원탈퇴 요청
+      final response = await http.delete(
+        Uri.parse('http://161.33.30.40:8080/api/user/withdraw/$kakaoId'),
+      );
+
+      if (response.statusCode == 200) {
+        // 3. 카카오 연결 끊기 (핵심)
+        try {
+          await UserApi.instance.unlink();
+        } catch (e) {
+          // unlink 실패하면 토큰 강제 삭제
+          await TokenManagerProvider.instance.manager.clear();
+        }
+
+        if (!mounted) return;
+
+        _showSnackBar('회원탈퇴가 완료되었어요.');
+
+        // 4. SplashScreen으로 이동 (자동 분기)
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SplashScreen()),
+              (route) => false,
+        );
+      } else {
+        if (!mounted) return;
+        _showSnackBar('회원탈퇴에 실패했어요.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('회원탈퇴 중 오류가 발생했어요.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   void _copyToClipboard(String text) {
     if (text == "UID를 입력해보세요") return;
     Clipboard.setData(ClipboardData(text: text)).then((_) => _showSnackBar("UID가 복사되었습니다."));
@@ -997,5 +1229,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showSnackBar(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2)));
+  }
+}
+
+class _WithdrawGuideRow extends StatelessWidget {
+  final String text;
+
+  const _WithdrawGuideRow({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            Icons.check_rounded,
+            size: 15,
+            color: Color(0xFFE88778),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12.5,
+              height: 1.55,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF7C8796),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
