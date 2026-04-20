@@ -388,7 +388,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   Image.asset('assets/images/kakao_logo.png', height: 24),
                   const SizedBox(width: 10),
                   const Text(
-                    '카카오로 시작하기',
+                    '카카오로 로그인',
                     style: TextStyle(
                       color: Colors.black,
                       fontSize: 16,
@@ -406,21 +406,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildAppleLoginButton() {
-    final Widget button = SignInWithAppleButton(
-      onPressed: _isLoggingIn ? () {} : _handleAppleLogin,
-      style: SignInWithAppleButtonStyle.black,
-      borderRadius: const BorderRadius.all(Radius.circular(27)),
-      height: 54,
-    );
-
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 180),
-      opacity: _isLoggingIn ? 0.72 : 1.0,
-      child: IgnorePointer(
-        ignoring: _isLoggingIn,
-        child: SizedBox(
-          width: double.infinity,
-          child: button,
+    return GestureDetector(
+      onTap: _handleAppleLogin,
+      child: Container(
+        height: 54,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(27),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.apple, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            const Text(
+              'Apple로 로그인',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );
