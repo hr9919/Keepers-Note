@@ -37,7 +37,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
   final Map<String, String> _editedDailyWeather = {};
 
   String? _error;
-  int? _kakaoId;
+  String? _serverUserId;
 
   List<dynamic> _hourlyItems = [];
   List<dynamic> _dailyItems = [];
@@ -61,7 +61,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
         _error = null;
       });
 
-      await _loadKakaoId();
+      await _loadUserId(); // ✅ 변경
       await _refreshAll(showLoading: false);
     } catch (e) {
       if (!mounted) return;
@@ -77,6 +77,11 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
   }
 
   Future<void> _refreshAll({bool showLoading = true}) async {
+    if (_serverUserId == null || _serverUserId!.isEmpty) {
+      debugPrint('❌ userId 없음 → 요청 차단');
+      return;
+    }
+    
     try {
       if (showLoading && mounted) {
         setState(() {
@@ -98,9 +103,31 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
     }
   }
 
-  Future<void> _loadKakaoId() async {
+  Future<void> _loadUserId() async {
     final user = await UserApi.instance.me();
-    _kakaoId = user.id?.toInt();
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/user/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'provider': 'KAKAO',
+        'providerUserId': user.id.toString(),
+        'nickname': user.kakaoAccount?.profile?.nickname ?? '타운키퍼',
+        'profileImageUrl': user.kakaoAccount?.profile?.profileImageUrl,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('userId 조회 실패');
+    }
+
+    final data = jsonDecode(utf8.decode(response.bodyBytes));
+
+    if (!mounted) return;
+
+    setState(() {
+      _serverUserId = data['id']?.toString();
+    });
   }
 
   Future<void> _loadHourlyWeather() async {
@@ -188,8 +215,8 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
   }
 
   Future<void> _saveHourlyWeather() async {
-    if (_kakaoId == null) {
-      _showSnack('카카오 ID를 불러오지 못했어요.');
+    if (_serverUserId == null || _serverUserId!.isEmpty) {
+      _showSnack('ID를 불러오지 못했어요.');
       return;
     }
     if (_nextHourlyTime == null || _nextHourlyTime!.isEmpty) {
@@ -229,8 +256,8 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
   }
 
   Future<void> _saveDailyForecast() async {
-    if (_kakaoId == null) {
-      _showSnack('카카오 ID를 불러오지 못했어요.');
+    if (_serverUserId == null || _serverUserId!.isEmpty) {
+      _showSnack('ID를 불러오지 못했어요.');
       return;
     }
     if (_nextDailyDate == null || _nextDailyDate!.isEmpty) {
@@ -272,8 +299,8 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
     required String forecastTime,
     required String weatherType,
   }) async {
-    if (_kakaoId == null) {
-      _showSnack('카카오 ID를 불러오지 못했어요.');
+    if (_serverUserId == null || _serverUserId!.isEmpty) {
+      _showSnack('ID를 불러오지 못했어요.');
       return;
     }
 
@@ -313,8 +340,8 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
     required String forecastDate,
     required String weatherType,
   }) async {
-    if (_kakaoId == null) {
-      _showSnack('카카오 ID를 불러오지 못했어요.');
+    if (_serverUserId == null || _serverUserId!.isEmpty) {
+      _showSnack('ID를 불러오지 못했어요.');
       return;
     }
 
@@ -352,7 +379,8 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
   Map<String, String> _adminHeaders({bool withJson = true}) {
     return {
       if (withJson) 'Content-Type': 'application/json',
-      if (_kakaoId != null) 'X-KAKAO-ID': _kakaoId.toString(),
+      if (_serverUserId != null && _serverUserId!.isNotEmpty)
+        'X-USER-ID': _serverUserId!,
     };
   }
 

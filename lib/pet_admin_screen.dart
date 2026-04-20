@@ -6,11 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 class PetAdminScreen extends StatefulWidget {
-  final String kakaoId;
+  final String userId;
 
   const PetAdminScreen({
     super.key,
-    required this.kakaoId,
+    required this.userId,
   });
 
   @override
@@ -877,7 +877,7 @@ class _PetAdminScreenState extends State<PetAdminScreen>
       final resolvedEyeId = _resolveEyeId(eyeTypeId, eyeColorId);
 
       final req = http.MultipartRequest('POST', uri)
-        ..fields['kakaoId'] = widget.kakaoId
+        ..fields['userId'] = widget.userId
         ..fields[isCatTab ? 'catTypeId' : 'dogTypeId'] = typeId
         ..fields['colorId'] = colorId
         ..fields['eyeTypeId'] = eyeTypeId
@@ -969,7 +969,7 @@ class _PetAdminScreenState extends State<PetAdminScreen>
 
     try {
       final query = <String, String>{
-        'kakaoId': widget.kakaoId,
+        'userId': widget.userId,
         isCatTab ? 'catTypeId' : 'dogTypeId': typeId,
         'colorId': colorId,
         'eyeTypeId': eyeTypeId,

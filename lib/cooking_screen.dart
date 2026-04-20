@@ -491,11 +491,16 @@ class CookingScreen extends StatefulWidget {
   final GlobalSearchItem? initialSearchItem;
   final int resetSearchSignal;
 
+  final String userId;   // 추가
+  final bool isAdmin;    // 추가
+
   const CookingScreen({
     super.key,
     this.openDrawer,
     this.initialSearchItem,
     this.resetSearchSignal = 0,
+    required this.userId,     // 추가
+    required this.isAdmin,    // 추가
   });
 
   @override
@@ -1268,6 +1273,8 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           initialEnabledResourceKeys: {resourceFilterKey},
           initialShowAllNpcs: false,
           initialShowAllAnimals: false,
+          userId: widget.userId,
+          isAdmin: widget.isAdmin,
         ),
       ),
     );

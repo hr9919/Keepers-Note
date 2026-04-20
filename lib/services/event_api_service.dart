@@ -27,8 +27,21 @@ class EventApiService {
     return data.map((e) => EventItem.fromJson(e)).toList();
   }
 
+  static Map<String, String> _jsonHeadersWithUserId(int userId) {
+    return {
+      'Content-Type': 'application/json',
+      'X-USER-ID': userId.toString(),
+    };
+  }
+
+  static Map<String, String> _headersWithUserId(int userId) {
+    return {
+      'X-USER-ID': userId.toString(),
+    };
+  }
+
   static Future<void> createEvent({
-    required int kakaoId,
+    required int userId,
     required String title,
     required String subtitle,
     required String imageUrl,
@@ -40,9 +53,8 @@ class EventApiService {
   }) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/admin/events'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _jsonHeadersWithUserId(userId),
       body: jsonEncode({
-        'kakaoId': kakaoId,
         'title': title.trim(),
         'subtitle': subtitle.trim().isEmpty ? null : subtitle.trim(),
         'imageUrl': imageUrl.trim().isEmpty ? null : imageUrl.trim(),
@@ -61,7 +73,7 @@ class EventApiService {
 
   static Future<void> updateEvent({
     required int eventId,
-    required int kakaoId,
+    required int userId,
     required String title,
     required String subtitle,
     required String imageUrl,
@@ -73,9 +85,8 @@ class EventApiService {
   }) async {
     final response = await http.put(
       Uri.parse('$_baseUrl/admin/events/$eventId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _jsonHeadersWithUserId(userId),
       body: jsonEncode({
-        'kakaoId': kakaoId,
         'title': title.trim(),
         'subtitle': subtitle.trim().isEmpty ? null : subtitle.trim(),
         'imageUrl': imageUrl.trim().isEmpty ? null : imageUrl.trim(),
@@ -94,10 +105,11 @@ class EventApiService {
 
   static Future<void> deleteEvent({
     required int eventId,
-    required int kakaoId,
+    required int userId,
   }) async {
     final response = await http.delete(
-      Uri.parse('$_baseUrl/admin/events/$eventId?kakaoId=$kakaoId'),
+      Uri.parse('$_baseUrl/admin/events/$eventId'),
+      headers: _headersWithUserId(userId),
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
@@ -107,10 +119,11 @@ class EventApiService {
 
   static Future<void> toggleEvent({
     required int eventId,
-    required int kakaoId,
+    required int userId,
   }) async {
     final response = await http.patch(
-      Uri.parse('$_baseUrl/admin/events/$eventId/toggle?kakaoId=$kakaoId'),
+      Uri.parse('$_baseUrl/admin/events/$eventId/toggle'),
+      headers: _headersWithUserId(userId),
     );
 
     if (response.statusCode != 200) {

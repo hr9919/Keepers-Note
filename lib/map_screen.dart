@@ -10,13 +10,14 @@ import 'models/map_data_response.dart';
 import 'models/spawn_point_model.dart';
 import 'models/spawn_resource_model.dart';
 import 'services/api_service.dart';
-import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
 class MapScreen extends StatefulWidget {
   final bool openFilterOnStart;
   final Set<String>? initialEnabledResourceKeys;
   final bool? initialShowAllNpcs;
   final bool? initialShowAllAnimals;
+  final String userId;   // 서버 user id
+  final bool isAdmin;    // 관리자 여부
 
   const MapScreen({
     super.key,
@@ -24,6 +25,8 @@ class MapScreen extends StatefulWidget {
     this.initialEnabledResourceKeys,
     this.initialShowAllNpcs,
     this.initialShowAllAnimals,
+    required this.userId,
+    required this.isAdmin,
   });
 
   @override
@@ -82,7 +85,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _initializeMap() async {
-    await _loadVoterId();
+    await _loadUserId();
     await _loadResources();
   }
 
@@ -102,7 +105,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Future<void> _loadResources() async {
     try {
       final MapDataResponse data =
-      await ApiService.getResources(voterId: _voterId);
+      await ApiService.getResources(userId: _voterId);
 
       if (!mounted) return;
 
@@ -218,18 +221,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _loadVoterId() async {
-    try {
-      final user = await UserApi.instance.me();
-      final voterId = user.id?.toString() ?? "";
-
-      if (!mounted) return;
-      setState(() {
-        _voterId = voterId;
-      });
-    } catch (e) {
-      debugPrint('유저 정보 불러오기 실패: $e');
-    }
+  Future<void> _loadUserId() async {
+    if (!mounted) return;
+    setState(() {
+      _voterId = widget.userId;
+    });
   }
 
   Future<void> _handleVote(SpawnResourceModel res) async {
@@ -256,7 +252,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     try {
       final response = await ApiService.voteResource(
         id: res.id,
-        voterId: _voterId,
+        userId: _voterId,
       );
 
       await _loadResources();
@@ -2495,12 +2491,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             final visibleSpawnPoints = _spawnPoints
                 .where((point) => _isSpawnPointVisible(point))
                 .toList();
-
-            debugPrint('map spawn total = ${_spawnPoints.length}');
-            debugPrint('map enabled = $_enabledResources');
-            debugPrint(
-              'map visible spawn count = ${visibleSpawnPoints.length}',
-            );
 
             visibleFixedResources.sort((a, b) {
               final int aPriority =

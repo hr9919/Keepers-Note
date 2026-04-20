@@ -6,11 +6,11 @@ import '../models/map_data_response.dart';
 class ApiService {
   static const String baseUrl = 'https://api.keepers-note.o-r.kr';
 
-  static Future<MapDataResponse> getResources({String voterId = ''}) async {
+  static Future<MapDataResponse> getResources({String userId = ''}) async {
     try {
-      final Uri uri = voterId.isEmpty
+      final Uri uri = userId.isEmpty
           ? Uri.parse('$baseUrl/api/map/resources')
-          : Uri.parse('$baseUrl/api/map/resources?voterId=$voterId');
+          : Uri.parse('$baseUrl/api/map/resources?userId=$userId');
 
       final response = await http.get(uri);
 
@@ -29,10 +29,10 @@ class ApiService {
 
   static Future<http.Response> voteResource({
     required int id,
-    required String voterId,
+    required String userId,
   }) async {
     try {
-      final Uri uri = Uri.parse('$baseUrl/api/map/vote/$id?voterId=$voterId');
+      final Uri uri = Uri.parse('$baseUrl/api/map/vote/$id?userId=$userId');
       return await http.post(uri);
     } catch (e) {
       print('투표 네트워크 에러: $e');

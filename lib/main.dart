@@ -218,7 +218,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     final Widget nextScreen = isLoggedIn
         ? MainWrapper(initialDeepLink: _pendingDeepLink)
-        : const OnboardingScreen();
+        : OnboardingScreen(initialDeepLink: _pendingDeepLink);
 
     Navigator.pushReplacement(
       context,
@@ -311,13 +311,19 @@ class _SplashScreenState extends State<SplashScreen>
     try {
       _log('서버 동기화 요청 시작');
 
+      final kakaoUser = await _safeGetKakaoUser();
+      final profileImageUrl =
+          kakaoUser?.kakaoAccount?.profile?.profileImageUrl;
+
       final response = await http
           .post(
         Uri.parse('$_baseUrl/api/user/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'kakaoId': kakaoId,
+          'provider': 'KAKAO',
+          'providerUserId': kakaoId.toString(),
           'nickname': nickname,
+          'profileImageUrl': profileImageUrl,
         }),
       )
           .timeout(const Duration(seconds: 8));
@@ -325,7 +331,15 @@ class _SplashScreenState extends State<SplashScreen>
       _log('서버 응답 코드 = ${response.statusCode}');
       _log('서버 응답 바디 = ${response.body}');
 
-      return response.statusCode == 200;
+      if (response.statusCode != 200) {
+        return false;
+      }
+
+      final Map<String, dynamic> data = jsonDecode(response.body);
+      _log('파싱된 user id = ${data['id']}');
+      _log('파싱된 nickname = ${data['nickname']}');
+
+      return true;
     } catch (e, s) {
       _log('서버 동기화 실패: $e');
       debugPrint('$s');

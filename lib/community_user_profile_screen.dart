@@ -53,13 +53,13 @@ class CommunityUserProfileResult {
 }
 
 class CommunityFollowUserSummary {
-  final int? kakaoId;
+  final int? userId;
   final String nickname;
   final String gameUid;
   final String profileImageUrl;
 
   const CommunityFollowUserSummary({
-    this.kakaoId,
+    this.userId,
     required this.nickname,
     required this.gameUid,
     required this.profileImageUrl,
@@ -72,7 +72,7 @@ class CommunityFollowUserSummary {
     String s(dynamic value) => value?.toString().trim() ?? '';
 
     return CommunityFollowUserSummary(
-      kakaoId: nullableInt(json['kakaoId'] ?? json['userKakaoId']),
+      userId: nullableInt(json['userId']),
       nickname: s(json['nickname'] ?? json['authorName']),
       gameUid: s(json['gameUid'] ?? json['authorUid']),
       profileImageUrl: s(json['profileImageUrl']),
@@ -82,8 +82,8 @@ class CommunityFollowUserSummary {
 
 class CommunityUserProfileScreen extends StatefulWidget {
   final String baseUrl;
-  final String? currentKakaoId;
-  final int? authorKakaoId;
+  final String? currentUserId;
+  final int? authorUserId;
   final String authorName;
   final String authorUid;
   final String profileImageUrl;
@@ -96,8 +96,8 @@ class CommunityUserProfileScreen extends StatefulWidget {
   const CommunityUserProfileScreen({
     super.key,
     required this.baseUrl,
-    required this.currentKakaoId,
-    required this.authorKakaoId,
+    required this.currentUserId,
+    required this.authorUserId,
     required this.authorName,
     required this.authorUid,
     required this.profileImageUrl,
@@ -148,13 +148,13 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
     _load();
   }
 
-  int? get _effectiveAuthorKakaoId {
-    if (widget.authorKakaoId != null) {
-      return widget.authorKakaoId;
+  int? get _effectiveAuthorUserId {
+    if (widget.authorUserId != null) {
+      return widget.authorUserId;
     }
 
     if (widget.isMine) {
-      return int.tryParse((widget.currentKakaoId ?? '').trim());
+      return int.tryParse((widget.currentUserId ?? '').trim());
     }
 
     return null;
@@ -162,8 +162,8 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
 
   bool get _canFollowTarget {
     return !widget.isMine &&
-        _effectiveAuthorKakaoId != null &&
-        (widget.currentKakaoId ?? '').trim().isNotEmpty;
+        _effectiveAuthorUserId != null &&
+        (widget.currentUserId ?? '').trim().isNotEmpty;
   }
 
   String _resolveUrl(String raw) {
@@ -300,27 +300,27 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
 
   Future<void> _load() async {
     try {
-      final int? authorKakaoId = _effectiveAuthorKakaoId;
+      final int? authorUserId = _effectiveAuthorUserId;
 
-      if (authorKakaoId != null) {
+      if (authorUserId != null) {
         final responses = await Future.wait([
           http.get(
-            Uri.parse('${widget.baseUrl}/api/user/$authorKakaoId'),
+            Uri.parse('${widget.baseUrl}/api/user/$authorUserId'),
           ),
           http.get(
             Uri.parse('${widget.baseUrl}/api/community/followers').replace(
-              queryParameters: {'kakaoId': authorKakaoId.toString()},
+              queryParameters: {'userId': authorUserId.toString()},
             ),
           ),
           http.get(
             Uri.parse('${widget.baseUrl}/api/community/following').replace(
-              queryParameters: {'kakaoId': authorKakaoId.toString()},
+              queryParameters: {'userId': authorUserId.toString()},
             ),
           ),
           http.get(
             Uri.parse('${widget.baseUrl}/api/community/uid-verification/status')
                 .replace(
-              queryParameters: {'kakaoId': authorKakaoId.toString()},
+              queryParameters: {'userId': authorUserId.toString()},
             ),
           ),
         ]);
@@ -525,8 +525,8 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
     try {
       if (mounted) setState(() => _isLoading = true);
 
-      final currentKakaoId = widget.currentKakaoId;
-      if ((currentKakaoId ?? '').isEmpty) {
+      final currentUserId = widget.currentUserId;
+      if ((currentUserId ?? '').isEmpty) {
         _showSnackBar("로그인 정보를 찾을 수 없어요.");
         return;
       }
@@ -536,7 +536,7 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
           Uri.parse('${widget.baseUrl}/api/user/update-nickname'),
           headers: {"Content-Type": "application/json"},
           body: jsonEncode({
-            "kakaoId": int.tryParse(currentKakaoId!),
+            "id": int.tryParse(currentUserId!),
             "nickname": name,
           }),
         );
@@ -547,7 +547,7 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
           Uri.parse('${widget.baseUrl}/api/user/update-uid'),
           headers: {"Content-Type": "application/json"},
           body: jsonEncode({
-            "kakaoId": int.tryParse(currentKakaoId!),
+            "id": int.tryParse(currentUserId!),
             "gameUid": uid,
           }),
         );
@@ -577,20 +577,20 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
   Future<void> _toggleFollow() async {
     if (_followSubmitting) return;
 
-    final int? targetKakaoId = _effectiveAuthorKakaoId;
-    final String currentKakaoId = (widget.currentKakaoId ?? '').trim();
+    final int? targetUserId = _effectiveAuthorUserId;
+    final String currentUserId = (widget.currentUserId ?? '').trim();
 
     if (widget.isMine) {
       _showSnackBar('내 프로필은 팔로우할 수 없어요.');
       return;
     }
 
-    if (targetKakaoId == null) {
+    if (targetUserId == null) {
       _showSnackBar('상대 사용자 정보를 불러오지 못했어요.');
       return;
     }
 
-    if (currentKakaoId.isEmpty) {
+    if (currentUserId.isEmpty) {
       _showSnackBar('로그인 정보를 먼저 확인해주세요.');
       return;
     }
@@ -599,9 +599,9 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
       setState(() => _followSubmitting = true);
 
       final uri = Uri.parse(
-        '${widget.baseUrl}/api/community/follow/$targetKakaoId',
+        '${widget.baseUrl}/api/community/follow/$targetUserId',
       ).replace(
-        queryParameters: {'kakaoId': currentKakaoId},
+        queryParameters: {'userId': currentUserId},
       );
 
       final response = _following ? await http.delete(uri) : await http.post(uri);
@@ -1312,7 +1312,7 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
         Uri.parse('${widget.baseUrl}/api/user/upload-image'),
       );
 
-      request.fields['kakaoId'] = widget.currentKakaoId!;
+      request.fields['userId'] = widget.currentUserId!;
       request.fields['type'] = isProfile ? "PROFILE" : "HEADER";
 
       request.files.add(

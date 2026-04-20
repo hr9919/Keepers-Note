@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class CommunityUidAdminScreen extends StatefulWidget {
-  final String kakaoId;
+  final String userId;
 
   const CommunityUidAdminScreen({
     super.key,
-    required this.kakaoId,
+    required this.userId,
   });
 
   @override
@@ -24,23 +24,25 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
 
   @override
   void initState() {
+    debugPrint('[CommunityUidAdminScreen] serverUserId=${widget.userId}');
     super.initState();
     _fetchAdminData();
   }
 
   Future<void> _fetchAdminData() async {
+    debugPrint('[CommunityUidAdminScreen] serverUserId=${widget.userId}');
     setState(() => _isLoading = true);
 
     try {
       final uidUri = Uri.parse(
           '$_baseUrl/api/community/uid-verification/requests')
           .replace(queryParameters: {
-        'kakaoId': widget.kakaoId,
+        'userId': widget.userId,
       });
 
       final reportUri = Uri.parse('$_baseUrl/api/community/reports')
           .replace(queryParameters: {
-        'kakaoId': widget.kakaoId,
+        'userId': widget.userId,
       });
 
       final uidResponse = await http.get(uidUri);
@@ -77,7 +79,7 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
     );
 
     final Map<String, dynamic> body = <String, dynamic>{
-      'kakaoId': int.tryParse(widget.kakaoId) ?? 0,
+      'userId': int.tryParse(widget.userId) ?? 0,
       'action': action,
     };
 
@@ -235,7 +237,7 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
     final uri = Uri.parse(
       '$_baseUrl/api/community/uid-verification/requests/$requestId/$action',
     ).replace(
-      queryParameters: {'kakaoId': widget.kakaoId},
+      queryParameters: {'userId': widget.userId},
     );
 
     final response = await http.post(uri);  // 서버에 요청 보내기

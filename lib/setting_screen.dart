@@ -10,6 +10,7 @@ import 'dart:io';
 import 'main.dart';
 import 'package:path_provider/path_provider.dart';
 import 'image_adjust_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,6 +25,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final Color snackBg = const Color(0xFFFFF9F8);
   final Color snackCard = Colors.white;
 
+  String _serverUserId = "";
+
   bool _uidLocked = false;
 
   bool _isPushEnabled = true;
@@ -31,7 +34,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isDataStable = false;   // 데이터 준비 완료 여부 (애니메이션 트리거)
   bool _didUserInfoChange = false;
 
-  String _userUid = "";
   String _displayUid = "UID를 입력해보세요";
   String _nickname = "";
   String? _profileImageUrl;
@@ -49,53 +51,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // 1. 데이터 로딩 로직 (깜빡임 방지 핵심)
   Future<void> _loadUserInfo() async {
     try {
-      // (1) 카카오 SDK에서 기본 정보 로드
-      User user = await UserApi.instance.me();
-      String kakaoNickname = user.kakaoAccount?.profile?.nickname ?? "여행자";
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('userId');
 
-      // (2) 서버 데이터 요청
-      final response = await http.post(
-        Uri.parse('https://api.keepers-note.o-r.kr/api/user/login'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"kakaoId": user.id, "nickname": kakaoNickname}),
-      ).timeout(const Duration(seconds: 3));
+      if (userId == null || userId.isEmpty) {
+        throw Exception('userId 없음');
+      }
 
-      final uidStatusResponse = await http.get(
-        Uri.parse('https://api.keepers-note.o-r.kr/api/community/uid-verification/status')
-            .replace(queryParameters: {'kakaoId': user.id.toString()}),
-      ).timeout(const Duration(seconds: 3));
+      final response = await http.get(
+        Uri.parse('https://api.keepers-note.o-r.kr/api/user/$userId'),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
-        if (mounted) {
-          setState(() {
-            _nickname = data['nickname']?.toString() ?? kakaoNickname;
-            _userUid = user.id.toString();
-            if (data['gameUid'] != null && data['gameUid'].toString().isNotEmpty) {
-              _displayUid = data['gameUid'].toString();
-            }
-            if (data['profileImageUrl'] != null) {
-              _profileImageUrl = "https://api.keepers-note.o-r.kr${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
-            }
-            if (data['headerImageUrl'] != null) {
-              _headerImageUrl = "https://api.keepers-note.o-r.kr${data['headerImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
-            }
 
-            _uidLocked = false;
-            if (uidStatusResponse.statusCode == 200) {
-              final uidStatusData = jsonDecode(utf8.decode(uidStatusResponse.bodyBytes));
-              if (uidStatusData is Map<String, dynamic>) {
-                _uidLocked = uidStatusData['uidLocked'] == true;
-              }
-            }
-            // 모든 정보가 셋팅된 후 스르륵 나타나게 함
-            _isDataStable = true;
-          });
-        }
+        setState(() {
+          _serverUserId = userId;
+          _nickname = data['nickname'] ?? '';
+          _displayUid = data['gameUid'] ?? "UID를 입력해보세요";
+          _profileImageUrl = data['profileImageUrl'];
+          _headerImageUrl = data['headerImageUrl'];
+          _isDataStable = true;
+        });
       }
     } catch (e) {
-      debugPrint("Info Load Error: $e");
-      if (mounted) setState(() => _isDataStable = true);
+      debugPrint("User load error: $e");
+      setState(() => _isDataStable = true);
     }
   }
 
@@ -137,7 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Uri.parse('https://api.keepers-note.o-r.kr/api/user/upload-image'),
       );
 
-      request.fields['kakaoId'] = _userUid;
+      request.fields['userId'] = _serverUserId;
       request.fields['type'] = isProfile ? "PROFILE" : "HEADER";
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -167,6 +148,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> saveUserId(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('userId', userId);
+  }
+
+  Future<String?> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('userId');
   }
 
   Future<void> _recoverLostData() async {
@@ -897,18 +888,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _updateUserInfoOnServer(String name, String uid) async {
     try {
       setState(() => _isLoading = true);
-      User user = await UserApi.instance.me();
+
       if (name.isNotEmpty) {
-        await http.put(Uri.parse('https://api.keepers-note.o-r.kr/api/user/update-nickname'),
-            headers: {"Content-Type": "application/json"}, body: jsonEncode({"kakaoId": user.id, "nickname": name}));
+        await http.put(
+          Uri.parse('https://api.keepers-note.o-r.kr/api/user/update-nickname'),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "id": int.tryParse(_serverUserId),
+            "nickname": name,
+          }),
+        );
       }
+
       if (uid.isNotEmpty && !_uidLocked) {
         await http.put(
           Uri.parse('https://api.keepers-note.o-r.kr/api/user/update-uid'),
           headers: {"Content-Type": "application/json"},
-          body: jsonEncode({"kakaoId": user.id, "gameUid": uid}),
+          body: jsonEncode({
+            "id": int.tryParse(_serverUserId),
+            "gameUid": uid,
+          }),
         );
       }
+
       await _loadUserInfo();
       _didUserInfoChange = true;
       _showSnackBar("성공적으로 수정되었습니다! ✨");
@@ -1016,9 +1018,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? _displayUid.trim()
         : '미설정';
 
-    final String kakaoIdText =
-    _userUid.trim().isNotEmpty ? _userUid.trim() : '-';
-
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -1115,7 +1114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _WithdrawGuideRow(
-                      text: '카카오 연결이 해제되고 현재 로그인 상태가 종료돼요.',
+                      text: '로그인 연결이 해제되고 현재 로그인 상태가 종료돼요.',
                     ),
                     SizedBox(height: 10),
                     _WithdrawGuideRow(
@@ -1253,30 +1252,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       setState(() => _isLoading = true);
 
-      final user = await UserApi.instance.me();
-      final String kakaoId = (user.id ?? '').toString();
-
-      if (kakaoId.isEmpty) {
-        if (!mounted) return;
-        _showSnackBar('로그인 정보를 확인할 수 없어요.');
+      if (_serverUserId.isEmpty) {
+        _showSnackBar('사용자 정보를 아직 불러오지 못했어요.');
         return;
       }
 
-      debugPrint('[WITHDRAW] request kakaoId=$kakaoId');
-
       final response = await http.delete(
-        Uri.parse('https://api.keepers-note.o-r.kr/api/user/withdraw'),
-        headers: {
-          'kakaoId': kakaoId,
-        },
+        Uri.parse('https://api.keepers-note.o-r.kr/api/user/withdraw')
+            .replace(queryParameters: {'userId': _serverUserId}),
       );
 
       if (response.statusCode == 200) {
+        // ✅ userId 삭제
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('userId');
+
+        // ✅ 소셜 토큰 정리 (공통)
         try {
-          await UserApi.instance.unlink();
-        } catch (e) {
           await TokenManagerProvider.instance.manager.clear();
-        }
+        } catch (_) {}
 
         if (!mounted) return;
 
@@ -1287,16 +1281,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               (route) => false,
         );
       } else {
-        if (!mounted) return;
         _showSnackBar('회원탈퇴에 실패했어요.');
       }
     } catch (e) {
-      if (!mounted) return;
       _showSnackBar('회원탈퇴 중 오류가 발생했어요.');
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

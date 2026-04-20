@@ -34,7 +34,7 @@ class _DraftImageItem {
 }
 
 class CommunityWriteScreen extends StatefulWidget {
-  final String kakaoId;
+  final String userId;
   final List<String> availableTags;
 
   final bool isEditMode;
@@ -49,7 +49,7 @@ class CommunityWriteScreen extends StatefulWidget {
 
   const CommunityWriteScreen({
     super.key,
-    required this.kakaoId,
+    required this.userId,
     required this.availableTags,
     this.isEditMode = false,
     this.editingPostId,
@@ -145,7 +145,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       '$_baseUrl/api/community/images/upload',
     ).replace(
       queryParameters: <String, String>{
-        'kakaoId': widget.kakaoId,
+        'userId': widget.userId,
       },
     );
 
@@ -427,7 +427,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
 
-    if (widget.kakaoId.isEmpty) {
+    if (widget.userId.isEmpty) {
       _showMessage('로그인 정보가 아직 없어요. 잠시 후 다시 시도해주세요.');
       return;
     }
@@ -458,7 +458,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       final finalImageUrls = await _buildFinalImageUrls();
 
       final requestBody = <String, dynamic>{
-        'kakaoId': widget.kakaoId,
+        'userId': widget.userId,
         'title': title,
         'content': body,
         'tags': _selectedTags.toList(),

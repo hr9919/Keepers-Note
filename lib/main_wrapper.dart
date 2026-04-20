@@ -25,6 +25,8 @@ import 'event_screen.dart';
 import 'models/event_item.dart';
 import 'services/event_api_service.dart';
 import 'services/community_tag_api_service.dart';
+import 'dart:async';
+import 'package:app_links/app_links.dart';
 
 
 class MainWrapper extends StatefulWidget {
@@ -43,6 +45,12 @@ class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
   int _searchResetSignal = 0;
   final TextEditingController _todoController = TextEditingController();
+
+  final AppLinks _appLinks = AppLinks();
+  StreamSubscription<Uri>? _deepLinkSub;
+  StreamSubscription<String?>? _kakaoSchemeSub;
+
+  String _serverUserId = "";
 
   int? _initialCommunityPostId;
 
@@ -106,25 +114,31 @@ class _MainWrapperState extends State<MainWrapper> {
         _handleDeepLink(uri);
       }
     });
+
+    _bindDeepLinks();
   }
 
   @override
   void dispose() {
+    _deepLinkSub?.cancel();
+    _kakaoSchemeSub?.cancel();
     _todoController.dispose();
     super.dispose();
   }
 
   Future<Map<String, dynamic>?> _fetchCommunityUidStatus() async {
+    if (_serverUserId.isEmpty) {
+      await _fetchUserInfo();
+    }
 
-    final ready = await _ensureKakaoIdReady();
-    if (!ready) {
+    if (_serverUserId.isEmpty) {
       return null;
     }
 
     final uri = Uri.parse(
       'https://api.keepers-note.o-r.kr/api/community/uid-verification/status',
     ).replace(
-      queryParameters: {'kakaoId': _kakaoId},
+      queryParameters: {'userId': _serverUserId},
     );
 
     try {
@@ -155,6 +169,46 @@ class _MainWrapperState extends State<MainWrapper> {
     } catch (e) {
       debugPrint('이벤트 불러오기 실패: $e');
     }
+  }
+
+  void _bindDeepLinks() {
+    _deepLinkSub?.cancel();
+    _kakaoSchemeSub?.cancel();
+
+    _deepLinkSub = _appLinks.uriLinkStream.listen(
+          (Uri uri) {
+        debugPrint('MainWrapper 실시간 딥링크 수신: $uri');
+        _handleDeepLink(uri);
+      },
+      onError: (Object error) {
+        debugPrint('MainWrapper 실시간 딥링크 오류: $error');
+      },
+    );
+
+    _kakaoSchemeSub = kakaoSchemeStream.listen((String? url) {
+      if (url == null || url.isEmpty) return;
+
+      try {
+        final Uri uri = Uri.parse(url);
+        debugPrint('MainWrapper 카카오 스킴 수신: $uri');
+
+        final String? target = uri.queryParameters['target'];
+        final String? postId = uri.queryParameters['postId'];
+
+        if (target == 'community_post' && postId != null) {
+          final converted = Uri.parse(
+            'https://keepersnote.app/community/post/$postId',
+          );
+          debugPrint('MainWrapper 카카오 공유 링크 변환: $converted');
+          _handleDeepLink(converted);
+          return;
+        }
+
+        _handleDeepLink(uri);
+      } catch (e) {
+        debugPrint('MainWrapper 카카오 스킴 처리 실패: $e');
+      }
+    });
   }
 
   void _handleDeepLink(Uri uri) {
@@ -212,18 +266,22 @@ class _MainWrapperState extends State<MainWrapper> {
       debugPrint('게시글 이동: $postId');
 
       if (!mounted) return;
+
+      // ⭐ 1. 먼저 null로 초기화
       setState(() {
         _selectedIndex = 2;
-        _isCommunityMenuOpen = false;
-        _pendingSearchItem = null;
-        _searchResetSignal++;
-        _initialCommunityPostId = postId;
+        _initialCommunityPostId = null;
       });
-      return;
-    }
 
-    if (eventId != null) {
-      debugPrint('이벤트 이동: $eventId');
+      // ⭐ 2. 다음 프레임에서 다시 넣기
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        setState(() {
+          _initialCommunityPostId = postId;
+        });
+      });
+
       return;
     }
   }
@@ -470,8 +528,10 @@ class _MainWrapperState extends State<MainWrapper> {
         Uri.parse('https://api.keepers-note.o-r.kr/api/user/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "kakaoId": user.id,
+          "provider": "KAKAO",
+          "providerUserId": user.id.toString(),
           "nickname": user.kakaoAccount?.profile?.nickname ?? "사용자",
+          "profileImageUrl": user.kakaoAccount?.profile?.profileImageUrl,
         }),
       );
 
@@ -479,6 +539,7 @@ class _MainWrapperState extends State<MainWrapper> {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
           final gameUid = data['gameUid']?.toString().trim() ?? '';
+          _serverUserId = data['id']?.toString() ?? "";
           _userUid = gameUid.isNotEmpty ? gameUid : 'UID를 입력해보세요';
           _userName = data['nickname'] ?? "사용자";
           _isAdmin = data['isAdmin'] ?? false;
@@ -545,7 +606,7 @@ class _MainWrapperState extends State<MainWrapper> {
             Uri.parse('https://api.keepers-note.o-r.kr/api/todo/add'),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
-              "kakaoId": targetUid,
+              "userId": _serverUserId,
               "taskName": taskName,
             }),
           );
@@ -677,12 +738,15 @@ class _MainWrapperState extends State<MainWrapper> {
 
     if (taskName.isEmpty) return;
 
-    if (_kakaoId.isEmpty) {
+    if (_serverUserId.isEmpty) {
       await _fetchUserInfo();
     }
 
-    if (_kakaoId.isEmpty) {
-      debugPrint("할 일 추가 실패: _kakaoId 비어 있음");
+    if (_serverUserId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.')),
+      );
       return;
     }
 
@@ -1004,6 +1068,8 @@ class _MainWrapperState extends State<MainWrapper> {
         },
         onSearchItemSelected: _handleGlobalSearchSelection,
         eventList: _eventList,
+        userId: _serverUserId,
+        isAdmin: _isAdmin,
       ),
       GatheringScreen(
         openDrawer: _openDrawerSmooth,
@@ -1013,7 +1079,7 @@ class _MainWrapperState extends State<MainWrapper> {
       CommunityScreen(
         key: ValueKey('community_${_initialCommunityPostId ?? 'none'}'),
         openDrawer: _openDrawerSmooth,
-        kakaoId: _kakaoId,
+        userId: _serverUserId,
         isAdmin: _isAdmin,
         initialPostId: _selectedIndex == 2 ? _initialCommunityPostId : null,
         refreshSignal: _communityRefreshSignal,
@@ -1023,6 +1089,8 @@ class _MainWrapperState extends State<MainWrapper> {
         openDrawer: _openDrawerSmooth,
         initialSearchItem: _pendingSearchItem,
         resetSearchSignal: _searchResetSignal,
+        userId: _serverUserId,
+        isAdmin: _isAdmin,
       ),
       PetScreen(
         openDrawer: _openDrawerSmooth,
@@ -1858,7 +1926,7 @@ class _MainWrapperState extends State<MainWrapper> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => PetAdminScreen(
-                                    kakaoId: _kakaoId,
+                                    userId: _serverUserId,
                                   ),
                                 ),
                               );
@@ -1927,7 +1995,7 @@ class _MainWrapperState extends State<MainWrapper> {
           context,
           MaterialPageRoute(
             builder: (_) => CommunityUidVerificationScreen(
-              kakaoId: _kakaoId,
+              userId: _serverUserId,
             ),
           ),
         );
@@ -1956,7 +2024,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
       final bool? created = await CommunityScreen.openWrite(
         context,
-        kakaoId: _kakaoId,
+        userId: _serverUserId,
         availableTags: tagNames.isEmpty ? const <String>['전체'] : tagNames,
       );
 
@@ -2016,7 +2084,7 @@ class _MainWrapperState extends State<MainWrapper> {
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => CommunityUidAdminScreen(
-            kakaoId: _kakaoId,
+            userId: _serverUserId,
           ),
         ),
       );
@@ -2141,7 +2209,7 @@ class _MainWrapperState extends State<MainWrapper> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => CommunityUidVerificationScreen(
-                                        kakaoId: _kakaoId,
+                                        userId: _serverUserId,
                                       ),
                                     ),
                                   );

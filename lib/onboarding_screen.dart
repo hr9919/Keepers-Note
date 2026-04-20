@@ -8,7 +8,12 @@ import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'main_wrapper.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  final Uri? initialDeepLink;
+
+  const OnboardingScreen({
+    super.key,
+    this.initialDeepLink,
+  });
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -111,7 +116,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       debugPrint('--- [Log] 메인 화면으로 이동 ---');
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const MainWrapper()),
+        MaterialPageRoute(
+          builder: (context) => MainWrapper(
+            initialDeepLink: widget.initialDeepLink,
+          ),
+        ),
             (route) => false,
       );
     } catch (error, stack) {
@@ -127,13 +136,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<bool> _syncWithBackend(int kakaoId, String nickname) async {
     try {
+      final User kakaoUser = await UserApi.instance.me();
+      final String? profileImageUrl =
+          kakaoUser.kakaoAccount?.profile?.profileImageUrl;
+
       final response = await http
           .post(
         Uri.parse('$_baseUrl/api/user/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'kakaoId': kakaoId,
+          'provider': 'KAKAO',
+          'providerUserId': kakaoId.toString(),
           'nickname': nickname,
+          'profileImageUrl': profileImageUrl,
         }),
       )
           .timeout(const Duration(seconds: 5));

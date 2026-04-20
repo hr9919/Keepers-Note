@@ -8,11 +8,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 
 class CommunityUidVerificationScreen extends StatefulWidget {
-  final String kakaoId;
+  final String userId;
 
   const CommunityUidVerificationScreen({
     super.key,
-    required this.kakaoId,
+    required this.userId,
   });
 
   @override
@@ -54,7 +54,7 @@ class _CommunityUidVerificationScreenState
   Future<String?> _uploadScreenshot(XFile file) async {
     final uri = Uri.parse('$_baseUrl/api/community/images/upload').replace(
       queryParameters: <String, String>{
-        'kakaoId': widget.kakaoId,
+        'userId': widget.userId,
       },
     );
 
@@ -114,7 +114,7 @@ class _CommunityUidVerificationScreenState
 
     final uid = _uidController.text.trim();
 
-    if (widget.kakaoId.isEmpty) {
+    if (widget.userId.isEmpty) {
       _showMessage('로그인 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요.');
       return;
     }
@@ -158,7 +158,7 @@ class _CommunityUidVerificationScreenState
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'kakaoId': int.tryParse(widget.kakaoId),
+          'userId': int.tryParse(widget.userId),
           'submittedUid': uid,
           'screenshotUrl': screenshotUrl,
         }),

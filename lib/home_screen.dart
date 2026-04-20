@@ -49,6 +49,8 @@ class HomeScreen extends StatefulWidget {
   final Future<void> Function()? onRefresh;
   final List<EventItem> eventList;
   final void Function(GlobalSearchItem item)? onSearchItemSelected;
+  final String userId;
+  final bool isAdmin;
 
   const HomeScreen({
     super.key,
@@ -61,6 +63,8 @@ class HomeScreen extends StatefulWidget {
     this.onRefresh,
     this.onSearchItemSelected,
     this.eventList = const [],
+    required this.userId,
+    required this.isAdmin,
   });
 
   @override
@@ -77,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isWeatherCardPressed = false;
   bool _isPreviewFilterPanelOpen = false;
   int _currentEventIndex = 0;
+  String _userId = "";
 
   static const Set<String> _previewDefaultResourceKeys = {
     'roaming_oak',
@@ -107,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final response = await ApiService.voteResource(
         id: res.id,
-        voterId: _voterId,
+        userId: _voterId,
       );
 
       await _loadMapPreviewResources();
@@ -491,7 +496,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _loadMapPreviewResources() async {
     try {
-      final data = await ApiService.getResources(voterId: _voterId);
+      final data = await ApiService.getResources(userId: _userId);
       if (!mounted) return;
 
       final allFixed = data.fixedResources;
@@ -575,7 +580,7 @@ class _HomeScreenState extends State<HomeScreen>
       updatedAt: updatedAt,
       oakVerified: oakPoint != null,
       fluoriteVerified: fluoritePoint != null,
-      voterId: _voterId,
+      voterId: _userId,
       hourlyWeather: nextThree,
     );
   }
@@ -640,6 +645,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    _userId = widget.userId;
 
     _weatherController = AnimationController(
       vsync: this,
@@ -706,7 +712,7 @@ class _HomeScreenState extends State<HomeScreen>
       Navigator.pop(context);
     }
 
-    if (_voterId.isEmpty) {
+    if (_userId.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다.')),
@@ -725,7 +731,7 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final response = await ApiService.voteResource(
         id: res.id,
-        voterId: _voterId,
+        userId: _userId,
       );
 
       await _loadMapPreviewResources();
@@ -1945,7 +1951,12 @@ class _HomeScreenState extends State<HomeScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MapScreen(openFilterOnStart: openFilter),
+        builder: (context) => MapScreen(
+          openFilterOnStart: true,
+          initialEnabledResourceKeys: _previewEnabledResources,
+          userId: widget.userId,
+          isAdmin: widget.isAdmin,
+        )
       ),
     );
   }

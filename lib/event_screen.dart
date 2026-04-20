@@ -1,8 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import 'models/event_item.dart';
 import 'services/event_api_service.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 String formatGameDate(DateTime date) {
   final adjusted =
@@ -54,7 +58,7 @@ class _EventScreenState extends State<EventScreen> {
   List<EventItem> _events = [];
   bool _isLoading = true;
   String? _error;
-  int? _kakaoId;
+  String? _serverUserId;
 
   @override
   void initState() {
@@ -63,17 +67,49 @@ class _EventScreenState extends State<EventScreen> {
   }
 
   Future<void> _init() async {
-    await _loadKakaoId();
-    await _loadEvents();
+    try {
+      await _loadUserId();
+      await _loadEvents();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
-  Future<void> _loadKakaoId() async {
-    try {
-      final user = await UserApi.instance.me();
-      _kakaoId = user.id?.toInt();
-    } catch (e) {
-      debugPrint('카카오 ID 불러오기 실패: $e');
+  Future<void> _loadUserId() async {
+    final user = await UserApi.instance.me();
+
+    final response = await http.post(
+      Uri.parse('https://api.keepers-note.o-r.kr/api/user/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'provider': 'KAKAO',
+        'providerUserId': user.id.toString(),
+        'nickname': user.kakaoAccount?.profile?.nickname ?? '여행자',
+        'profileImageUrl': user.kakaoAccount?.profile?.profileImageUrl,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('userId 조회 실패: ${response.statusCode}');
     }
+
+    final data = jsonDecode(utf8.decode(response.bodyBytes));
+    final id = data['id']?.toString();
+
+    if (id == null || id.isEmpty) {
+      throw Exception('서버 userId가 비어 있어요.');
+    }
+
+    _serverUserId = id;
+  }
+
+  int? get _userIdAsInt {
+    if (_serverUserId == null || _serverUserId!.isEmpty) return null;
+    return int.tryParse(_serverUserId!);
   }
 
   Future<void> _loadEvents() async {
@@ -115,39 +151,54 @@ class _EventScreenState extends State<EventScreen> {
   }
 
   void _openCreateSheet() {
+    final userId = _userIdAsInt;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('userId를 불러오지 못했어요.')),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) =>
-          EventEditSheet(
-            kakaoId: _kakaoId,
-            onSaved: _loadEvents,
-          ),
+      builder: (_) => EventEditSheet(
+        userId: userId,
+        onSaved: _loadEvents,
+      ),
     );
   }
 
   void _openEditSheet(EventItem event) {
+    final userId = _userIdAsInt;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('userId를 불러오지 못했어요.')),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) =>
-          EventEditSheet(
-            kakaoId: _kakaoId,
-            event: event,
-            onSaved: _loadEvents,
-          ),
+      builder: (_) => EventEditSheet(
+        userId: userId,
+        event: event,
+        onSaved: _loadEvents,
+      ),
     );
   }
 
   Future<void> _deleteEvent(EventItem event) async {
-    if (_kakaoId == null) return;
+    final userId = _userIdAsInt;
+    if (userId == null) return;
 
     try {
       await EventApiService.deleteEvent(
         eventId: event.id,
-        kakaoId: _kakaoId!,
+        userId: userId,
       );
       await _loadEvents();
     } catch (e) {
@@ -159,12 +210,13 @@ class _EventScreenState extends State<EventScreen> {
   }
 
   Future<void> _toggleEvent(EventItem event) async {
-    if (_kakaoId == null) return;
+    final userId = _userIdAsInt;
+    if (userId == null) return;
 
     try {
       await EventApiService.toggleEvent(
         eventId: event.id,
-        kakaoId: _kakaoId!,
+        userId: userId,
       );
       await _loadEvents();
     } catch (e) {
@@ -230,11 +282,10 @@ class _EventScreenState extends State<EventScreen> {
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          EventScreen(
-                            isAdmin: true,
-                            canManage: true,
-                          ),
+                      builder: (_) => const EventScreen(
+                        isAdmin: true,
+                        canManage: true,
+                      ),
                     ),
                   );
                   if (!mounted) return;
@@ -332,15 +383,14 @@ class _EventScreenState extends State<EventScreen> {
                       event.imageUrl,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          Container(
-                            color: const Color(0xFFFFF1EE),
-                            alignment: Alignment.center,
-                            child: const Icon(
-                              Icons.image_not_supported_outlined,
-                              size: 34,
-                            ),
-                          ),
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFFFFF1EE),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.image_not_supported_outlined,
+                          size: 34,
+                        ),
+                      ),
                     ),
                   ),
                   Positioned(
@@ -368,7 +418,6 @@ class _EventScreenState extends State<EventScreen> {
                 ],
               ),
             ),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
             child: Column(
@@ -415,7 +464,6 @@ class _EventScreenState extends State<EventScreen> {
                     ],
                   ],
                 ),
-
                 if (event.subtitle.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(
@@ -427,9 +475,7 @@ class _EventScreenState extends State<EventScreen> {
                     ),
                   ),
                 ],
-
                 const SizedBox(height: 12),
-
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -449,8 +495,7 @@ class _EventScreenState extends State<EventScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '${formatGameDate(event.startAt)} ~ ${formatGameDate(
-                              event.endAt)}',
+                          '${formatGameDate(event.startAt)} ~ ${formatGameDate(event.endAt)}',
                           style: const TextStyle(
                             fontSize: 12.5,
                             color: Color(0xFF64748B),
@@ -461,10 +506,7 @@ class _EventScreenState extends State<EventScreen> {
                     ],
                   ),
                 ),
-
-                if (event.linkUrl
-                    .trim()
-                    .isNotEmpty && !widget.isAdmin) ...[
+                if (event.linkUrl.trim().isNotEmpty && !widget.isAdmin) ...[
                   const SizedBox(height: 12),
                   GestureDetector(
                     onTap: () => _openEventLink(event.linkUrl),
@@ -503,7 +545,6 @@ class _EventScreenState extends State<EventScreen> {
                     ),
                   ),
                 ],
-
                 if (widget.isAdmin) ...[
                   const SizedBox(height: 14),
                   Row(
@@ -545,13 +586,13 @@ class _EventScreenState extends State<EventScreen> {
 }
 
 class EventEditSheet extends StatefulWidget {
-  final int? kakaoId;
+  final int userId;
   final EventItem? event;
   final Future<void> Function() onSaved;
 
   const EventEditSheet({
     super.key,
-    required this.kakaoId,
+    required this.userId,
     required this.onSaved,
     this.event,
   });
@@ -583,8 +624,7 @@ class _EventEditSheetState extends State<EventEditSheet> {
     _subtitleController = TextEditingController(text: e?.subtitle ?? '');
     _imageUrlController = TextEditingController(text: e?.imageUrl ?? '');
     _linkUrlController = TextEditingController(text: e?.linkUrl ?? '');
-    _sortOrderController =
-        TextEditingController(text: '${e?.sortOrder ?? 0}');
+    _sortOrderController = TextEditingController(text: '${e?.sortOrder ?? 0}');
     _startAt = e?.startAt ?? DateTime.now();
     _endAt = e?.endAt ?? DateTime.now().add(const Duration(days: 7));
     _isActive = e?.isActive ?? true;
@@ -601,7 +641,6 @@ class _EventEditSheetState extends State<EventEditSheet> {
   }
 
   Future<void> _save() async {
-    if (widget.kakaoId == null) return;
     if (_titleController.text.trim().isEmpty) return;
 
     setState(() => _isSubmitting = true);
@@ -610,7 +649,7 @@ class _EventEditSheetState extends State<EventEditSheet> {
       if (_isEdit) {
         await EventApiService.updateEvent(
           eventId: widget.event!.id,
-          kakaoId: widget.kakaoId!,
+          userId: widget.userId,
           title: _titleController.text.trim(),
           subtitle: _subtitleController.text.trim(),
           imageUrl: _imageUrlController.text.trim(),
@@ -622,7 +661,7 @@ class _EventEditSheetState extends State<EventEditSheet> {
         );
       } else {
         await EventApiService.createEvent(
-          kakaoId: widget.kakaoId!,
+          userId: widget.userId,
           title: _titleController.text.trim(),
           subtitle: _subtitleController.text.trim(),
           imageUrl: _imageUrlController.text.trim(),
@@ -660,12 +699,10 @@ class _EventEditSheetState extends State<EventEditSheet> {
     if (date == null || !mounted) return;
 
     final picked = isStart
-    // 🔥 시작: 해당 날짜 06:00
         ? DateTime(date.year, date.month, date.day, 6, 0)
-    // 🔥 종료: 다음날 05:59
         : DateTime(date.year, date.month, date.day)
         .add(const Duration(days: 1))
-        .subtract(const Duration(minutes: 1)); // 05:59
+        .subtract(const Duration(minutes: 1));
 
     setState(() {
       if (isStart) {
@@ -732,7 +769,6 @@ class _EventEditSheetState extends State<EventEditSheet> {
               trailing: const Icon(Icons.calendar_today),
               onTap: () => _pickDate(true),
             ),
-
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('종료일'),

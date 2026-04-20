@@ -7,11 +7,11 @@ import 'community_write_screen.dart';
 import 'services/community_tag_api_service.dart';
 
 class MyCommunityPostsScreen extends StatefulWidget {
-  final String kakaoId;
+  final String userId;
 
   const MyCommunityPostsScreen({
     super.key,
-    required this.kakaoId,
+    required this.userId,
   });
 
   @override
@@ -45,7 +45,7 @@ class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
     try {
       final uri = Uri.parse('$_baseUrl/api/community/posts/me').replace(
         queryParameters: <String, String>{
-          'kakaoId': widget.kakaoId,
+          'userId': widget.userId,
         },
       );
 
@@ -240,7 +240,7 @@ class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
       final bool? updated = await Navigator.of(context, rootNavigator: true).push<bool>(
         MaterialPageRoute(
           builder: (_) => CommunityWriteScreen(
-            kakaoId: widget.kakaoId,
+            userId: widget.userId,
             availableTags: availableTags,
             isEditMode: true,
             editingPostId: post.id,
@@ -423,7 +423,7 @@ class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
     try {
       final uri = Uri.parse('$_baseUrl/api/community/posts/$postId').replace(
         queryParameters: <String, String>{
-          'kakaoId': widget.kakaoId,
+          'userId': widget.userId,
         },
       );
 
@@ -469,7 +469,7 @@ class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
       for (final id in ids) {
         final uri = Uri.parse('$_baseUrl/api/community/posts/$id').replace(
           queryParameters: <String, String>{
-            'kakaoId': widget.kakaoId,
+            'userId': widget.userId,
           },
         );
 

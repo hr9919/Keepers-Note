@@ -13,11 +13,10 @@ import 'models/community_tag_item.dart';
 import 'community_user_profile_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'community_uid_verification_screen.dart';
-import 'services/community_tag_api_service.dart';
 
 class CommunityScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
-  final String? kakaoId;
+  final String? userId;
   final bool isAdmin;
   final int? initialPostId;
   final int refreshSignal;
@@ -25,14 +24,14 @@ class CommunityScreen extends StatefulWidget {
 
   static Future<bool?> openWrite(
       BuildContext context, {
-        required String kakaoId,
+        required String userId,
         required List<String> availableTags,
       }) {
     return Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => CommunityWriteScreen(
-          kakaoId: kakaoId,
+          userId: userId,
           availableTags: availableTags,
         ),
       ),
@@ -41,12 +40,12 @@ class CommunityScreen extends StatefulWidget {
 
   static Future<void> openMyPosts(
       BuildContext context, {
-        required String kakaoId,
+        required String userId,
       }) {
     return Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) => MyCommunityPostsScreen(kakaoId: kakaoId),
+        builder: (_) => MyCommunityPostsScreen(userId: userId),
       ),
     );
   }
@@ -54,7 +53,7 @@ class CommunityScreen extends StatefulWidget {
   const CommunityScreen({
     super.key,
     this.openDrawer,
-    this.kakaoId,
+    this.userId,
     this.isAdmin = false,
     this.initialPostId,
     this.refreshSignal = 0,
@@ -69,7 +68,7 @@ enum CommunitySortType { latest, popular }
 
 class CommunityPost {
   final int id;
-  final int? authorKakaoId;
+  final int? authorUserId;
   final String author;
   final String uid;
   final String title;
@@ -92,7 +91,7 @@ class CommunityPost {
 
   const CommunityPost({
     required this.id,
-    this.authorKakaoId,
+    this.authorUserId,
     required this.author,
     required this.uid,
     required this.title,
@@ -177,12 +176,8 @@ class CommunityPost {
 
     return CommunityPost(
       id: readInt(const ['id']),
-      authorKakaoId: readNullableInt(const [
-        'authorKakaoId',
-        'author_kakao_id',
-        'userKakaoId',
-        'user_kakao_id',
-        'kakaoId',
+      authorUserId: readNullableInt(const [
+        'authorUserId',
         'authorId',
         'userId',
       ]),
@@ -215,7 +210,7 @@ class CommunityPost {
   }) {
     return CommunityPost(
       id: id,
-      authorKakaoId: authorKakaoId,
+      authorUserId: authorUserId,
       author: author,
       uid: uid,
       title: title,
@@ -242,7 +237,7 @@ class CommunityPost {
 class CommunityComment {
   final int id;
   final int postId;
-  final int? authorKakaoId;
+  final int? authorUserId;
   final String authorName;
   final String authorUid;
   final String profileImageUrl;
@@ -254,7 +249,7 @@ class CommunityComment {
   const CommunityComment({
     required this.id,
     required this.postId,
-    this.authorKakaoId,
+    this.authorUserId,
     required this.authorName,
     required this.authorUid,
     required this.profileImageUrl,
@@ -300,7 +295,7 @@ class CommunityComment {
     return CommunityComment(
       id: readInt(json['id']),
       postId: readInt(json['postId']),
-      authorKakaoId: readNullableInt(json['authorKakaoId']),
+      authorUserId: readNullableInt(json['authorUserId']),
       authorName: readString(json['authorName'], fallback: '사용자'),
       authorUid: readString(json['authorUid'], fallback: 'UID'),
       profileImageUrl: readString(json['profileImageUrl']),
@@ -313,14 +308,14 @@ class CommunityComment {
 }
 
 class CommunityFollowUserSummary {
-  final int? kakaoId;
+  final int? userId;
   final String nickname;
   final String uid;
   final String profileImageUrl;
   final bool followingByMe;
 
   const CommunityFollowUserSummary({
-    this.kakaoId,
+    this.userId,
     required this.nickname,
     required this.uid,
     required this.profileImageUrl,
@@ -361,7 +356,7 @@ class CommunityFollowUserSummary {
     }
 
     return CommunityFollowUserSummary(
-      kakaoId: readNullableInt(json['kakaoId']),
+      userId: readNullableInt(json['userId']),
       nickname: readString(const ['nickname', 'authorName'], fallback: '사용자'),
       uid: readString(const ['gameUid', 'uid', 'authorUid'], fallback: 'UID'),
       profileImageUrl: readString(const ['profileImageUrl', 'authorProfileImageUrl']),
@@ -371,17 +366,11 @@ class CommunityFollowUserSummary {
 }
 
 class _TagChipStyle {
-  final Color background;
-  final Color border;
-  final Color text;
   final Color selectedBackground;
   final Color selectedBorder;
   final Color selectedText;
 
   const _TagChipStyle({
-    required this.background,
-    required this.border,
-    required this.text,
     required this.selectedBackground,
     required this.selectedBorder,
     required this.selectedText,
@@ -445,7 +434,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   void didUpdateWidget(covariant CommunityScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (widget.kakaoId != oldWidget.kakaoId) {
+    if (widget.userId != oldWidget.userId) {
       _fetchPosts();
     }
 
@@ -480,63 +469,42 @@ class _CommunityScreenState extends State<CommunityScreen> {
     switch (text) {
       case '인테리어':
         return const _TagChipStyle(
-          background: Color(0xFFFFF4EF),
-          border: Color(0xFFF7D8CC),
-          text: Color(0xFFD97A5D),
           selectedBackground: Color(0xFFFFE8DF),
           selectedBorder: Color(0xFFF1BEAA),
           selectedText: Color(0xFFC96547),
         );
       case '익스테리어':
         return const _TagChipStyle(
-          background: Color(0xFFF3FAF6),
-          border: Color(0xFFD8EEDD),
-          text: Color(0xFF5E9D74),
           selectedBackground: Color(0xFFE5F5EB),
           selectedBorder: Color(0xFFBFE2CB),
           selectedText: Color(0xFF43885B),
         );
       case '코디':
         return const _TagChipStyle(
-          background: Color(0xFFFFF4FA),
-          border: Color(0xFFF1D7E8),
-          text: Color(0xFFC56C9D),
           selectedBackground: Color(0xFFFFE8F4),
           selectedBorder: Color(0xFFEAB8D6),
           selectedText: Color(0xFFB75689),
         );
       case '반려동물':
         return const _TagChipStyle(
-          background: Color(0xFFF8F3FF),
-          border: Color(0xFFE2D8F5),
-          text: Color(0xFF8B73C7),
           selectedBackground: Color(0xFFEEE7FF),
           selectedBorder: Color(0xFFD1C2F0),
           selectedText: Color(0xFF775BB8),
         );
       case '도트 도안':
         return const _TagChipStyle(
-          background: Color(0xFFFFF9EE),
-          border: Color(0xFFF2E4BE),
-          text: Color(0xFFC59A34),
           selectedBackground: Color(0xFFFFF2D9),
           selectedBorder: Color(0xFFEBCF8D),
           selectedText: Color(0xFFB78718),
         );
       case '꿀팁 영상':
         return const _TagChipStyle(
-          background: Color(0xFFEFF8FF),
-          border: Color(0xFFD2E8F8),
-          text: Color(0xFF5B95BA),
           selectedBackground: Color(0xFFE1F1FC),
           selectedBorder: Color(0xFFB6DBF2),
           selectedText: Color(0xFF427FA7),
         );
       case '공략':
         return const _TagChipStyle(
-          background: Color(0xFFEFF6FF),
-          border: Color(0xFFD6E4FF),
-          text: Color(0xFF4A7BD0),
           selectedBackground: Color(0xFFE3EDFF),
           selectedBorder: Color(0xFFBFD4FF),
           selectedText: Color(0xFF2F5FBF),
@@ -544,22 +512,18 @@ class _CommunityScreenState extends State<CommunityScreen> {
       case '전체':
       default:
         return const _TagChipStyle(
-          background: Color(0xFFFBF8F6),
-          border: Color(0xFFECE3DD),
-          text: Color(0xFF9A8C82),
-          selectedBackground: Color(0xFFF4EEEA),
-          selectedBorder: Color(0xFFE2D5CC),
-          selectedText: Color(0xFF7B6D64),
+          selectedBackground: Color(0xFFFFEDE7),
+          selectedBorder: Color(0xFFFFD8CF),
+          selectedText: Color(0xFFFF8E7C),
         );
-
     }
   }
 
   Future<void> _openMyProfileFromCommunity() async {
-    final String kakaoIdText = (widget.kakaoId ?? '').trim();
-    final int? myKakaoId = int.tryParse(kakaoIdText);
+    final String userIdText = (widget.userId ?? '').trim();
+    final int? myUserId = int.tryParse(userIdText);
 
-    if (kakaoIdText.isEmpty || myKakaoId == null) {
+    if (userIdText.isEmpty || myUserId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그인 정보를 먼저 확인해주세요.')),
@@ -569,7 +533,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     CommunityPost? myRepresentativePost;
     for (final item in _posts) {
-      if (item.authorKakaoId == myKakaoId || item.mine) {
+      if (item.authorUserId == myUserId || item.mine) {
         myRepresentativePost = item;
         break;
       }
@@ -588,7 +552,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
 
     final resolved = await _buildResolvedProfilePayload(
-      authorKakaoId: myKakaoId,
+      authorUserId: myUserId,
       fallbackAuthorName: myAuthorName,
       fallbackAuthorUid: myAuthorUid,
       fallbackProfileImageUrl: myProfileImageUrl,
@@ -600,7 +564,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     myHeaderImageUrl = resolved['headerImageUrl'] ?? '';
 
     final List<CommunityPost> myPosts = _posts.where((item) {
-      return item.authorKakaoId == myKakaoId || item.mine;
+      return item.authorUserId == myUserId || item.mine;
     }).toList();
 
     myPosts.sort((a, b) {
@@ -649,8 +613,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
       MaterialPageRoute(
         builder: (_) => CommunityUserProfileScreen(
           baseUrl: _baseUrl,
-          currentKakaoId: widget.kakaoId,
-          authorKakaoId: myKakaoId,
+          currentUserId: widget.userId,
+          authorUserId: myUserId,
           authorName: myAuthorName,
           authorUid: myAuthorUid,
           profileImageUrl: myProfileImageUrl,
@@ -690,13 +654,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<Map<String, dynamic>?> _fetchCommunityUidStatus() async {
-    final kakaoId = (widget.kakaoId ?? '').trim();
-    if (kakaoId.isEmpty) return null;
+    final userId = (widget.userId ?? '').trim();
+    if (userId.isEmpty) return null;
 
     final uri = Uri.parse(
       '$_baseUrl/api/community/uid-verification/status',
     ).replace(
-      queryParameters: {'kakaoId': kakaoId},
+      queryParameters: {'userId': userId},
     );
 
     try {
@@ -717,9 +681,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<void> _handleWriteEntry() async {
-    final kakaoId = (widget.kakaoId ?? '').trim();
+    final userId = (widget.userId ?? '').trim();
 
-    if (kakaoId.isEmpty) {
+    if (userId.isEmpty) {
       _showSnackBar('로그인 정보가 필요해요.');
       return;
     }
@@ -734,9 +698,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
       }
 
       final String communityStatus =
-          status['communityStatus']?.toString() ?? 'NONE';
+          status['communityStatus']?.toString().toUpperCase() ?? 'NONE';
+      final bool uidLocked = status['uidLocked'] == true;
 
-      if (communityStatus == 'APPROVED') {
+      if (communityStatus == 'APPROVED' || uidLocked) {
         final availableTags = await CommunityTagApiService.fetchActiveTags();
         if (!mounted) return;
 
@@ -747,7 +712,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
         final bool? created = await CommunityScreen.openWrite(
           context,
-          kakaoId: kakaoId,
+          userId: userId,
           availableTags: tagNames.isEmpty ? const <String>['전체'] : tagNames,
         );
 
@@ -764,7 +729,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => CommunityUidVerificationScreen(
-            kakaoId: kakaoId,
+            userId: userId,
           ),
         ),
       );
@@ -868,7 +833,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             'tag': _selectedTags.join(','),
           if (_showLikedOnly) 'likedOnly': 'true',
           if (_showFollowingOnly) 'followingOnly': 'true',
-          if ((widget.kakaoId ?? '').isNotEmpty) 'kakaoId': widget.kakaoId!,
+          if ((widget.userId ?? '').isNotEmpty) 'userId': widget.userId!,
         },
       );
 
@@ -906,20 +871,20 @@ class _CommunityScreenState extends State<CommunityScreen> {
       final Map<String, int> authorIdMap = <String, int>{};
 
       for (final post in fetchedPosts) {
-        if (post.authorKakaoId != null) {
-          authorIdMap[_authorKey(post.author, post.uid)] = post.authorKakaoId!;
+        if (post.authorUserId != null) {
+          authorIdMap[_authorKey(post.author, post.uid)] = post.authorUserId!;
         }
       }
 
       final List<CommunityPost> posts = fetchedPosts.map((post) {
-        if (post.authorKakaoId != null) return post;
+        if (post.authorUserId != null) return post;
 
         final int? resolved = authorIdMap[_authorKey(post.author, post.uid)];
         if (resolved == null) return post;
 
         return CommunityPost(
           id: post.id,
-          authorKakaoId: resolved,
+          authorUserId: resolved,
           author: post.author,
           uid: post.uid,
           title: post.title,
@@ -1058,7 +1023,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     try {
       final uri = Uri.parse('$_baseUrl/api/community/posts/$postId').replace(
         queryParameters: <String, String>{
-          if ((widget.kakaoId ?? '').isNotEmpty) 'kakaoId': widget.kakaoId!,
+          if ((widget.userId ?? '').isNotEmpty) 'userId': widget.userId!,
         },
       );
 
@@ -1244,7 +1209,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<void> _openEditPost(CommunityPost post) async {
-    if ((widget.kakaoId ?? '').isEmpty) {
+    if ((widget.userId ?? '').isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그인 정보가 필요해요.')),
@@ -1259,7 +1224,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final bool? updated = await Navigator.of(context, rootNavigator: true).push<bool>(
       MaterialPageRoute(
         builder: (_) => CommunityWriteScreen(
-          kakaoId: widget.kakaoId!,
+          userId: widget.userId!,
           availableTags: availableTags,
           isEditMode: true,
           editingPostId: post.id,
@@ -1321,7 +1286,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   // void -> bool로 변경합니다.
   Future<bool> _deletePost(CommunityPost post) async {
-    if ((widget.kakaoId ?? '').isEmpty) {
+    if ((widget.userId ?? '').isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그인 정보가 필요해요.')),
       );
@@ -1331,7 +1296,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     try {
       final uri = Uri.parse('$_baseUrl/api/community/posts/${post.id}').replace(
         queryParameters: <String, String>{
-          'kakaoId': widget.kakaoId!,
+          'userId': widget.userId!,
         },
       );
 
@@ -1533,7 +1498,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<void> _submitReport(CommunityPost post, String reason) async {
-    if ((widget.kakaoId ?? '').isEmpty) {
+    if ((widget.userId ?? '').isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그인 정보가 필요해요.')),
@@ -1550,7 +1515,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
         },
         body: jsonEncode({
           'postId': post.id,
-          'kakaoId': int.tryParse(widget.kakaoId ?? ''),
+          'userId': int.tryParse(widget.userId ?? ''),
           'reasonCode': reason,
           'detailText': null,
         }),
@@ -1630,7 +1595,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     try {
       final uri = Uri.parse('$_baseUrl/api/community/posts/$postId/like').replace(
         queryParameters: <String, String>{
-          if ((widget.kakaoId ?? '').isNotEmpty) 'kakaoId': widget.kakaoId!,
+          if ((widget.userId ?? '').isNotEmpty) 'userId': widget.userId!,
         },
       );
       final response = await http.post(uri);
@@ -1671,6 +1636,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
         _selectedTags
           ..clear()
           ..add('전체');
+        _showLikedOnly = false;
+        _showFollowingOnly = false;
         return;
       }
 
@@ -1682,7 +1649,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
         _selectedTags.add(tag);
       }
 
-      if (_selectedTags.isEmpty) {
+      final bool noTagSelected =
+          _selectedTags.isEmpty && !_showLikedOnly && !_showFollowingOnly;
+
+      if (noTagSelected) {
         _selectedTags.add('전체');
       }
     });
@@ -1787,32 +1757,54 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final label = isHashTag && text != '전체' ? '#$text' : text;
     final style = _tagChipStyle(text);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-          decoration: BoxDecoration(
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(
+          horizontal: 13,
+          vertical: 11,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? style.selectedBackground : Colors.white,
+          borderRadius: BorderRadius.circular(19),
+          border: Border.all(
             color: selected
-                ? style.selectedBackground.withOpacity(1.0)
-                : style.background,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected
-                  ? style.selectedText.withOpacity(0.55)
-                  : style.border,
-              width: selected ? 1.4 : 1.0,
-            ),
+                ? style.selectedBorder
+                : const Color(0xFFD8DDE5),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11.6,
-              fontWeight: selected ? FontWeight.w900 : FontWeight.w800,
-              color: selected ? style.selectedText : style.text,
+          boxShadow: selected
+              ? [
+            BoxShadow(
+              color: style.selectedBorder.withOpacity(0.16),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
+          ]
+              : [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.018),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.2,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            color: selected
+                ? style.selectedText
+                : const Color(0xFF8E98A7),
+          ),
+          strutStyle: const StrutStyle(
+            fontSize: 12.2,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            forceStrutHeight: true,
           ),
         ),
       ),
@@ -1970,14 +1962,30 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Widget _buildFilterSidePanel(double topPadding) {
-    final List<String> filterTags =
-    _availableTagNames.where((tag) => tag != '전체').toList();
+    const List<String> preferredOrder = <String>[
+      '인테리어',
+      '익스테리어',
+      '코디',
+      '반려동물',
+      '도트 도안',
+      '공략',
+      '꿀팁 영상',
+    ];
+
+    final Set<String> available = _availableTagNames.toSet();
+
+    final List<String> filterTags = <String>[
+      for (final tag in preferredOrder)
+        if (available.contains(tag)) tag,
+      for (final tag in _availableTagNames)
+        if (tag != '전체' && !preferredOrder.contains(tag)) tag,
+    ];
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 380),
       curve: _isFilterPanelOpen ? Curves.easeOutQuad : Curves.easeInCubic,
       top: topPadding + 118,
-      right: _isFilterPanelOpen ? 12 : -340,
+      right: _isFilterPanelOpen ? 12 : -420,
       child: IgnorePointer(
         ignoring: !_isFilterPanelOpen,
         child: AnimatedOpacity(
@@ -1987,7 +1995,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           child: Material(
             color: Colors.transparent,
             child: SizedBox(
-              width: 272,
+              width: 300,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
                 decoration: BoxDecoration(
@@ -2148,53 +2156,81 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Widget _buildLikedFilterChip() {
     final selected = _showLikedOnly;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          setState(() => _showLikedOnly = !_showLikedOnly);
-          _fetchPosts();
-        },
-        borderRadius: BorderRadius.circular(999),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-          decoration: BoxDecoration(
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _showLikedOnly = !_showLikedOnly;
+
+          if (_showLikedOnly) {
+            _selectedTags.remove('전체');
+          }
+
+          if (_selectedTags.isEmpty && !_showLikedOnly && !_showFollowingOnly) {
+            _selectedTags.add('전체');
+          }
+        });
+        _fetchPosts();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFFF1F4) : Colors.white,
+          borderRadius: BorderRadius.circular(19),
+          border: Border.all(
             color: selected
-                ? const Color(0xFFFFEEF1)
-                : const Color(0xFFFFF7F8),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFFE25476).withOpacity(0.55)
-                  : const Color(0xFFF3D8DE),
-              width: selected ? 1.4 : 1.0,
+                ? const Color(0xFFE6BAC6)
+                : const Color(0xFFD8DDE5),
+          ),
+          boxShadow: selected
+              ? [
+            BoxShadow(
+              color: const Color(0xFFE6BAC6).withOpacity(0.16),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(
-                selected
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
-                size: 13,
+          ]
+              : [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.018),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              selected
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              size: 14,
+              color: selected
+                  ? const Color(0xFFD97C95)
+                  : const Color(0xFF8E98A7),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              '좋아요',
+              style: TextStyle(
+                fontSize: 12.2,
+                fontWeight: FontWeight.w900,
+                height: 1.0,
                 color: selected
-                    ? const Color(0xFFE25476)
-                    : const Color(0xFFD98A9D),
+                    ? const Color(0xFFD97C95)
+                    : const Color(0xFF8E98A7),
               ),
-              const SizedBox(width: 5),
-              Text(
-                '좋아요',
-                style: TextStyle(
-                  fontSize: 11.6,
-                  fontWeight: selected ? FontWeight.w900 : FontWeight.w800,
-                  color: selected
-                      ? const Color(0xFFE25476)
-                      : const Color(0xFFBF7A8E),
-                ),
+              strutStyle: const StrutStyle(
+                fontSize: 12.2,
+                fontWeight: FontWeight.w900,
+                height: 1.0,
+                forceStrutHeight: true,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -2203,76 +2239,130 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Widget _buildFollowingFilterChip() {
     final selected = _showFollowingOnly;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          setState(() => _showFollowingOnly = !_showFollowingOnly);
-          _fetchPosts();
-        },
-        borderRadius: BorderRadius.circular(999),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-          decoration: BoxDecoration(
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _showFollowingOnly = !_showFollowingOnly;
+
+          if (_showFollowingOnly) {
+            _selectedTags.remove('전체');
+          }
+
+          if (_selectedTags.isEmpty && !_showLikedOnly && !_showFollowingOnly) {
+            _selectedTags.add('전체');
+          }
+        });
+        _fetchPosts();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFFF7E8) : Colors.white,
+          borderRadius: BorderRadius.circular(19),
+          border: Border.all(
             color: selected
-                ? const Color(0xFFFFF7D8)
-                : const Color(0xFFFFFBF2),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFFE5C86E)
-                  : const Color(0xFFF1E4BF),
-              width: selected ? 1.4 : 1.0,
+                ? const Color(0xFFE8D4A6)
+                : const Color(0xFFD8DDE5),
+          ),
+          boxShadow: selected
+              ? [
+            BoxShadow(
+              color: const Color(0xFFE8D4A6).withOpacity(0.16),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const <Widget>[
-              Icon(
-                Icons.people_alt_rounded,
-                size: 13,
-                color: Color(0xFFB08A3C),
+          ]
+              : [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.018),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.people_alt_rounded,
+              size: 14,
+              color: selected
+                  ? const Color(0xFFB89A52)
+                  : const Color(0xFF8E98A7),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              '팔로우',
+              style: TextStyle(
+                fontSize: 12.2,
+                fontWeight: FontWeight.w900,
+                height: 1.0,
+                color: selected
+                    ? const Color(0xFFB89A52)
+                    : const Color(0xFF8E98A7),
               ),
-              SizedBox(width: 5),
-              Text(
-                '팔로우',
-                style: TextStyle(
-                  fontSize: 11.6,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFFB08A3C),
-                ),
+              strutStyle: const StrutStyle(
+                fontSize: 12.2,
+                fontWeight: FontWeight.w900,
+                height: 1.0,
+                forceStrutHeight: true,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildSortChip(String text, bool selected, VoidCallback onTap) {
-    final bg = selected ? const Color(0xFFFFF1CC) : const Color(0xFFFFFBF2);
-    final border = selected ? const Color(0xFFF2D48B) : const Color(0xFFF1E4BF);
-    final textColor = selected ? const Color(0xFF9C6B00) : const Color(0xFFB08A3C);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: border),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFFF3D9) : Colors.white,
+          borderRadius: BorderRadius.circular(19),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFFEBCF8D)
+                : const Color(0xFFD8DDE5),
           ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 11.6,
-              fontWeight: FontWeight.w800,
-              color: textColor,
+          boxShadow: selected
+              ? [
+            BoxShadow(
+              color: const Color(0xFFEBCF8D).withOpacity(0.16),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
+          ]
+              : [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.018),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 12.2,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            color: selected
+                ? const Color(0xFFB78718)
+                : const Color(0xFF8E98A7),
+          ),
+          strutStyle: const StrutStyle(
+            fontSize: 12.2,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            forceStrutHeight: true,
           ),
         ),
       ),
@@ -2882,7 +2972,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Future<List<CommunityComment>> _fetchComments(int postId) async {
     final uri = Uri.parse('$_baseUrl/api/community/posts/$postId/comments').replace(
       queryParameters: <String, String>{
-        if ((widget.kakaoId ?? '').isNotEmpty) 'kakaoId': widget.kakaoId!,
+        if ((widget.userId ?? '').isNotEmpty) 'userId': widget.userId!,
       },
     );
     final response = await http.get(uri).timeout(const Duration(seconds: 10));
@@ -2901,8 +2991,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   List<CommunityProfilePostSeed> _recentSeedsForComment(CommunityComment comment) {
     final List<CommunityPost> matched = _posts.where((item) {
-      if (comment.authorKakaoId != null && item.authorKakaoId != null) {
-        return item.authorKakaoId == comment.authorKakaoId;
+      if (comment.authorUserId != null && item.authorUserId != null) {
+        return item.authorUserId == comment.authorUserId;
       }
       return item.author == comment.authorName && item.uid == comment.authorUid;
     }).take(18).toList();
@@ -2952,33 +3042,33 @@ class _CommunityScreenState extends State<CommunityScreen> {
         .toList();
   }
 
-  int? _resolveAuthorKakaoId({
-    required int? directKakaoId,
+  int? _resolveAuthorUserId({
+    required int? directUserId,
     required String authorName,
     required String authorUid,
     bool isMine = false,
   }) {
-    if (directKakaoId != null) return directKakaoId;
+    if (directUserId != null) return directUserId;
 
-    if (isMine && (widget.kakaoId ?? '').isNotEmpty) {
-      final mineId = int.tryParse(widget.kakaoId!);
+    if (isMine && (widget.userId ?? '').isNotEmpty) {
+      final mineId = int.tryParse(widget.userId!);
       if (mineId != null) return mineId;
     }
 
     final String key = _authorKey(authorName, authorUid);
 
     for (final item in _posts) {
-      if (item.authorKakaoId == null) continue;
+      if (item.authorUserId == null) continue;
       if (_authorKey(item.author, item.uid) == key) {
-        return item.authorKakaoId;
+        return item.authorUserId;
       }
     }
 
     for (final comments in _commentsByPostId.values) {
       for (final comment in comments) {
-        if (comment.authorKakaoId == null) continue;
+        if (comment.authorUserId == null) continue;
         if (_authorKey(comment.authorName, comment.authorUid) == key) {
-          return comment.authorKakaoId;
+          return comment.authorUserId;
         }
       }
     }
@@ -2986,10 +3076,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
     return null;
   }
 
-  Future<Map<String, dynamic>?> _fetchUserSummaryByKakaoId(int kakaoId) async {
+  Future<Map<String, dynamic>?> _fetchUserSummaryByUserId(int userId) async {
     try {
       final response = await http
-          .get(Uri.parse('$_baseUrl/api/user/$kakaoId'))
+          .get(Uri.parse('$_baseUrl/api/user/$userId'))
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -3006,7 +3096,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<Map<String, String>> _buildResolvedProfilePayload({
-    required int? authorKakaoId,
+    required int? authorUserId,
     required String fallbackAuthorName,
     required String fallbackAuthorUid,
     required String fallbackProfileImageUrl,
@@ -3016,8 +3106,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
     String profileImageUrl = fallbackProfileImageUrl;
     String headerImageUrl = '';
 
-    if (authorKakaoId != null) {
-      final userData = await _fetchUserSummaryByKakaoId(authorKakaoId);
+    if (authorUserId != null) {
+      final userData = await _fetchUserSummaryByUserId(authorUserId);
 
       if (userData != null) {
         final String fetchedName =
@@ -3053,21 +3143,21 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<void> _openUserProfileFromComment(CommunityComment comment) async {
-    final int? resolvedAuthorKakaoId = _resolveAuthorKakaoId(
-      directKakaoId: comment.authorKakaoId,
+    final int? resolvedAuthorUserId = _resolveAuthorUserId(
+      directUserId: comment.authorUserId,
       authorName: comment.authorName,
       authorUid: comment.authorUid,
       isMine: comment.mine,
     );
 
-    final bool isMine = resolvedAuthorKakaoId != null &&
-        widget.kakaoId != null &&
-        int.tryParse(widget.kakaoId!) == resolvedAuthorKakaoId;
+    final bool isMine = resolvedAuthorUserId != null &&
+        widget.userId != null &&
+        int.tryParse(widget.userId!) == resolvedAuthorUserId;
 
     final bool isInitiallyFollowing = !isMine &&
         _posts.any((item) {
-          if (resolvedAuthorKakaoId != null && item.authorKakaoId != null) {
-            return item.authorKakaoId == resolvedAuthorKakaoId &&
+          if (resolvedAuthorUserId != null && item.authorUserId != null) {
+            return item.authorUserId == resolvedAuthorUserId &&
                 item.isFollowingAuthor;
           }
           return _authorKey(item.author, item.uid) ==
@@ -3076,7 +3166,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
         });
 
     final resolved = await _buildResolvedProfilePayload(
-      authorKakaoId: resolvedAuthorKakaoId,
+      authorUserId: resolvedAuthorUserId,
       fallbackAuthorName: comment.authorName,
       fallbackAuthorUid: comment.authorUid,
       fallbackProfileImageUrl: _resolveProfileImagePath(comment.profileImageUrl),
@@ -3086,8 +3176,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
       MaterialPageRoute(
         builder: (_) => CommunityUserProfileScreen(
           baseUrl: _baseUrl,
-          currentKakaoId: widget.kakaoId,
-          authorKakaoId: resolvedAuthorKakaoId,
+          currentUserId: widget.userId,
+          authorUserId: resolvedAuthorUserId,
           authorName: resolved['authorName'] ?? comment.authorName,
           authorUid: resolved['authorUid'] ?? comment.authorUid,
           profileImageUrl: resolved['profileImageUrl'] ??
@@ -3137,21 +3227,21 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<void> _openUserProfile(CommunityPost post) async {
-    final int? resolvedAuthorKakaoId = _resolveAuthorKakaoId(
-      directKakaoId: post.authorKakaoId,
+    final int? resolvedAuthorUserId = _resolveAuthorUserId(
+      directUserId: post.authorUserId,
       authorName: post.author,
       authorUid: post.uid,
       isMine: post.mine,
     );
 
-    final bool resolvedIsMine = resolvedAuthorKakaoId != null &&
-        widget.kakaoId != null &&
-        int.tryParse(widget.kakaoId!) == resolvedAuthorKakaoId;
+    final bool resolvedIsMine = resolvedAuthorUserId != null &&
+        widget.userId != null &&
+        int.tryParse(widget.userId!) == resolvedAuthorUserId;
 
     final bool isInitiallyFollowing = !resolvedIsMine &&
         _posts.any((item) {
-          if (resolvedAuthorKakaoId != null && item.authorKakaoId != null) {
-            return item.authorKakaoId == resolvedAuthorKakaoId &&
+          if (resolvedAuthorUserId != null && item.authorUserId != null) {
+            return item.authorUserId == resolvedAuthorUserId &&
                 item.isFollowingAuthor;
           }
           return _authorKey(item.author, item.uid) ==
@@ -3160,7 +3250,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
         });
 
     final resolved = await _buildResolvedProfilePayload(
-      authorKakaoId: resolvedAuthorKakaoId,
+      authorUserId: resolvedAuthorUserId,
       fallbackAuthorName: post.author,
       fallbackAuthorUid: post.uid,
       fallbackProfileImageUrl: _resolveProfileImagePath(post.profileImageUrl),
@@ -3170,8 +3260,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
       MaterialPageRoute(
         builder: (_) => CommunityUserProfileScreen(
           baseUrl: _baseUrl,
-          currentKakaoId: widget.kakaoId,
-          authorKakaoId: resolvedAuthorKakaoId,
+          currentUserId: widget.userId,
+          authorUserId: resolvedAuthorUserId,
           authorName: resolved['authorName'] ?? post.author,
           authorUid: resolved['authorUid'] ?? post.uid,
           profileImageUrl: resolved['profileImageUrl'] ??
@@ -3189,8 +3279,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   List<CommunityProfilePostSeed> _recentSeedsForAuthor(CommunityPost post) {
     final List<CommunityPost> matched = _posts.where((item) {
-      if (post.authorKakaoId != null && item.authorKakaoId != null) {
-        return item.authorKakaoId == post.authorKakaoId;
+      if (post.authorUserId != null && item.authorUserId != null) {
+        return item.authorUserId == post.authorUserId;
       }
       return item.author == post.author && item.uid == post.uid;
     }).take(18).toList();
@@ -3603,7 +3693,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             final double bottomSafe = media.padding.bottom;
 
             Future<void> toggleDetailLike() async {
-              if ((widget.kakaoId ?? '').isEmpty) {
+              if ((widget.userId ?? '').isEmpty) {
                 _showSnackBar('로그인 정보가 필요해요.');
                 return;
               }
@@ -3634,7 +3724,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   '$_baseUrl/api/community/posts/${detailPost.id}/like',
                 ).replace(
                   queryParameters: <String, String>{
-                    'kakaoId': widget.kakaoId!,
+                    'userId': widget.userId!,
                   },
                 );
 
@@ -3750,7 +3840,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 _showSnackBar('댓글 내용을 입력해주세요.');
                 return;
               }
-              if ((widget.kakaoId ?? '').isEmpty) {
+              if ((widget.userId ?? '').isEmpty) {
                 _showSnackBar('로그인 정보가 필요해요.');
                 return;
               }
@@ -3771,7 +3861,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   ),
                   headers: const {'Content-Type': 'application/json'},
                   body: jsonEncode({
-                    'kakaoId': int.tryParse(widget.kakaoId ?? ''),
+                    'userId': int.tryParse(widget.userId ?? ''),
                     'content': text,
                     'parentCommentId': replyTarget?.id,
                   }),
@@ -3801,14 +3891,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
             }
 
             Future<void> deleteComment(CommunityComment comment) async {
-              if ((widget.kakaoId ?? '').isEmpty) return;
+              if ((widget.userId ?? '').isEmpty) return;
 
               final response = await http
                   .delete(
                 Uri.parse(
                   '$_baseUrl/api/community/posts/${detailPost.id}/comments/${comment.id}',
                 ).replace(
-                  queryParameters: {'kakaoId': widget.kakaoId!},
+                  queryParameters: {'userId': widget.userId!},
                 ),
               )
                   .timeout(const Duration(seconds: 10));
@@ -3931,7 +4021,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 headers: const {'Content-Type': 'application/json'},
                 body: jsonEncode({
                   'postId': detailPost.id,
-                  'kakaoId': int.tryParse(widget.kakaoId ?? ''),
+                  'userId': int.tryParse(widget.userId ?? ''),
                   'reasonCode': reason,
                   'detailText': 'comment:${comment.id}:${comment.content}',
                 }),
@@ -4323,7 +4413,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                                       crossAxisAlignment: CrossAxisAlignment.start,
                                                       children: [
                                                         GestureDetector(
-                                                          onTap: comment.authorKakaoId == null
+                                                          onTap: comment.authorUserId == null
                                                               ? null
                                                               : () => _openUserProfileFromComment(comment),
                                                           child: _buildCommentAvatar(comment, radius: 16),
