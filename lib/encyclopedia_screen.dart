@@ -104,7 +104,7 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
 
   final Color snackAccent = const Color(0xFFFF8E7C);
 
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
   static const String _achievementEndpoint = '$_baseUrl/api/achievements';
 
   bool _isAchievementLoading = false;
@@ -893,44 +893,208 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
   }
 
   Widget _buildFurnitureContent() {
-    return _buildComingSoonContent(
+    return _buildSequentialUpdateContent(
       controller: _furnitureScrollController,
-      title: '가구 도감은 준비중이에요!',
-      subtitle: '지금 보이는 항목은 테스트를 위한 샘플 데이터예요.',
+      title: '가구 도감',
+      subtitle: '콘텐츠는 순차적으로 업데이트될 예정이에요.',
       emoji: '🪑',
-      previewTitle: '가구 샘플 데이터',
-      sampleItems: const [
-        '주방 가구 샘플',
-        '침실 가구 샘플',
-        '거실 가구 샘플',
-        '야외 장식 샘플',
-        '테마 가구 샘플',
-      ],
-      onRefresh: () async {},
-    );
-  }
-
-  Widget _buildOutfitContent() {
-    return _buildComingSoonContent(
-      controller: _outfitScrollController,
-      title: '옷 도감은 준비중이에요!',
-      subtitle: '지금 보이는 항목은 테스트를 위한 샘플 데이터예요.',
-      emoji: '👗',
-      previewTitle: '옷 샘플 데이터',
-      sampleItems: const [
-        '몰린 옷가게 샘플',
-        '금토리 전시회 샘플',
-        '축제 패키지 샘플',
-        '한정 상품 샘플',
-        '이벤트 아이템 샘플',
-      ],
+      description:
+      '가구 도감은 정보가 더 모이면 데이트 예정이에요.',
       onRefresh: () async {
         setState(() => _isRefreshing = true);
-        await Future.delayed(const Duration(seconds: 1));
+        await Future.delayed(const Duration(milliseconds: 700));
         if (mounted) {
           setState(() => _isRefreshing = false);
         }
       },
+    );
+  }
+
+  Widget _buildOutfitContent() {
+    return _buildSequentialUpdateContent(
+      controller: _outfitScrollController,
+      title: '옷 도감',
+      subtitle: '콘텐츠는 순차적으로 업데이트될 예정이에요.',
+      emoji: '👗',
+      description:
+      '옷 도감은 정보가 더 모이면 업데이트 예정이에요.',
+      onRefresh: () async {
+        setState(() => _isRefreshing = true);
+        await Future.delayed(const Duration(milliseconds: 700));
+        if (mounted) {
+          setState(() => _isRefreshing = false);
+        }
+      },
+    );
+  }
+
+  Widget _buildSequentialUpdateContent({
+    required ScrollController controller,
+    required String title,
+    required String subtitle,
+    required String emoji,
+    required String description,
+    required Future<void> Function() onRefresh,
+  }) {
+    return NotificationListener<ScrollUpdateNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.axis != Axis.vertical) return false;
+
+        _dismissSearchFocus();
+
+        final double delta = notification.scrollDelta ?? 0;
+
+        if (notification.metrics.pixels <= 8) {
+          if (!_isFilterVisible) {
+            setState(() => _isFilterVisible = true);
+          }
+          return false;
+        }
+
+        if (delta > 2 && _isFilterVisible) {
+          setState(() => _isFilterVisible = false);
+        } else if (delta < -2 && !_isFilterVisible) {
+          setState(() => _isFilterVisible = true);
+        }
+
+        return false;
+      },
+      child: RefreshIndicator(
+        onRefresh: onRefresh,
+        color: snackAccent,
+        child: ListView(
+          controller: controller,
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 28, 16, 180),
+          children: [
+            const SizedBox(height: 36),
+            _buildSequentialUpdateCard(
+              title: title,
+              subtitle: subtitle,
+              emoji: emoji,
+              description: description,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSequentialUpdateCard({
+    required String title,
+    required String subtitle,
+    required String emoji,
+    required String description,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.93),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: const Color(0xFFFFDDD4),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF4F1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFFFFE2DB),
+              ),
+            ),
+            child: Text(
+              emoji,
+              style: const TextStyle(fontSize: 30),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF2D3436),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13.5,
+              height: 1.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF7B8794),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFAF8),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFFFFE7E0),
+              ),
+            ),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 28,
+                  color: Color(0xFFFF8E7C),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  description,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.55,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6E7683),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              _buildInfoPill(
+                icon: Icons.update_rounded,
+                label: '순차 업데이트 예정',
+              ),
+              _buildInfoPill(
+                icon: Icons.inventory_2_outlined,
+                label: '콘텐츠 확장 예정',
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

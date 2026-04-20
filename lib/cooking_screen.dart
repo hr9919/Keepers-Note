@@ -563,9 +563,9 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   Set<String> _favoriteIds = {};
   final Color snackAccent = const Color(0xFFFF8E7C);
-  final String _recipeApiUrl = 'http://161.33.30.40:8080/api/gourmet';
-  final String _materialApiUrl = 'http://161.33.30.40:8080/api/cooking/materials';
-  final String _cookingApiBaseUrl = 'http://161.33.30.40:8080/api/cooking';
+  final String _recipeApiUrl = 'https://api.keepers-note.o-r.kr/api/gourmet';
+  final String _materialApiUrl = 'https://api.keepers-note.o-r.kr/api/cooking/materials';
+  final String _cookingApiBaseUrl = 'https://api.keepers-note.o-r.kr/api/cooking';
 
   @override
   void initState() {

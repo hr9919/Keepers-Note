@@ -15,7 +15,7 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   int _currentPage = 0;
   final PageController _pageController = PageController();

@@ -122,7 +122,7 @@ class _MainWrapperState extends State<MainWrapper> {
     }
 
     final uri = Uri.parse(
-      'http://161.33.30.40:8080/api/community/uid-verification/status',
+      'https://api.keepers-note.o-r.kr/api/community/uid-verification/status',
     ).replace(
       queryParameters: {'kakaoId': _kakaoId},
     );
@@ -467,7 +467,7 @@ class _MainWrapperState extends State<MainWrapper> {
       });
 
       final response = await http.post(
-        Uri.parse('http://161.33.30.40:8080/api/user/login'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/user/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "kakaoId": user.id,
@@ -485,14 +485,14 @@ class _MainWrapperState extends State<MainWrapper> {
 
           if (data['profileImageUrl'] != null) {
             _profileImageUrl =
-            "http://161.33.30.40:8080${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
+            "https://api.keepers-note.o-r.kr${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
           } else {
             _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
           }
 
           if (data['headerImageUrl'] != null) {
             _headerImageUrl =
-            "http://161.33.30.40:8080${data['headerImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
+            "https://api.keepers-note.o-r.kr${data['headerImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
           } else {
             _headerImageUrl = null;
           }
@@ -516,7 +516,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
     try {
       final response = await http.get(
-        Uri.parse('http://161.33.30.40:8080/api/todo/$targetUid'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/todo/$targetUid'),
       );
 
       if (response.statusCode != 200) return;
@@ -542,7 +542,7 @@ class _MainWrapperState extends State<MainWrapper> {
       if (mapped.isEmpty) {
         for (final taskName in _defaultSystemTasks) {
           await http.post(
-            Uri.parse('http://161.33.30.40:8080/api/todo/add'),
+            Uri.parse('https://api.keepers-note.o-r.kr/api/todo/add'),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
               "kakaoId": targetUid,
@@ -563,7 +563,7 @@ class _MainWrapperState extends State<MainWrapper> {
         if (!existingNames.contains(_normalizeTaskName(taskName))) {
           addedMissingDefault = true;
           await http.post(
-            Uri.parse('http://161.33.30.40:8080/api/todo/add'),
+            Uri.parse('https://api.keepers-note.o-r.kr/api/todo/add'),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
               "kakaoId": targetUid,
@@ -651,7 +651,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
     try {
       final response = await http.put(
-        Uri.parse('http://161.33.30.40:8080/api/todo/toggle/$taskId'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/todo/toggle/$taskId'),
       );
 
       if (response.statusCode != 200 && mounted) {
@@ -688,7 +688,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://161.33.30.40:8080/api/todo/add'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/todo/add'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "kakaoId": _kakaoId,
@@ -714,7 +714,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
     try {
       final response = await http.delete(
-        Uri.parse('http://161.33.30.40:8080/api/todo/$taskId'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/todo/$taskId'),
       );
 
       if (response.statusCode == 200 && mounted) {

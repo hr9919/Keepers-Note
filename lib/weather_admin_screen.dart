@@ -14,7 +14,7 @@ class WeatherAdminScreen extends StatefulWidget {
 }
 
 class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   static const List<_WeatherOption> _weatherOptions = [
     _WeatherOption(label: '맑음', value: 'SUNNY', icon: Icons.wb_sunny_rounded),

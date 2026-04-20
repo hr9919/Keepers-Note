@@ -12,6 +12,8 @@ import 'services/community_tag_api_service.dart';
 import 'models/community_tag_item.dart';
 import 'community_user_profile_screen.dart';
 import 'package:flutter/foundation.dart';
+import 'community_uid_verification_screen.dart';
+import 'services/community_tag_api_service.dart';
 
 class CommunityScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
@@ -387,7 +389,7 @@ class _TagChipStyle {
 }
 
 class _CommunityScreenState extends State<CommunityScreen> {
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   final ScrollController _scrollController = ScrollController();
   late final PageController _feedModePageController;
@@ -576,12 +578,26 @@ class _CommunityScreenState extends State<CommunityScreen> {
     String myAuthorName = '사용자';
     String myAuthorUid = '';
     String myProfileImageUrl = '';
+    String myHeaderImageUrl = '';
 
     if (myRepresentativePost != null) {
       myAuthorName = myRepresentativePost.author;
       myAuthorUid = myRepresentativePost.uid;
-      myProfileImageUrl = _resolveProfileImagePath(myRepresentativePost.profileImageUrl);
+      myProfileImageUrl =
+          _resolveProfileImagePath(myRepresentativePost.profileImageUrl);
     }
+
+    final resolved = await _buildResolvedProfilePayload(
+      authorKakaoId: myKakaoId,
+      fallbackAuthorName: myAuthorName,
+      fallbackAuthorUid: myAuthorUid,
+      fallbackProfileImageUrl: myProfileImageUrl,
+    );
+
+    myAuthorName = resolved['authorName'] ?? myAuthorName;
+    myAuthorUid = resolved['authorUid'] ?? myAuthorUid;
+    myProfileImageUrl = resolved['profileImageUrl'] ?? myProfileImageUrl;
+    myHeaderImageUrl = resolved['headerImageUrl'] ?? '';
 
     final List<CommunityPost> myPosts = _posts.where((item) {
       return item.authorKakaoId == myKakaoId || item.mine;
@@ -638,6 +654,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           authorName: myAuthorName,
           authorUid: myAuthorUid,
           profileImageUrl: myProfileImageUrl,
+          headerImageUrl: myHeaderImageUrl,
           isMine: true,
           isInitiallyFollowing: false,
           recentSeeds: seeds,
@@ -670,6 +687,97 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
 
     await _handleProfileResult(result);
+  }
+
+  Future<Map<String, dynamic>?> _fetchCommunityUidStatus() async {
+    final kakaoId = (widget.kakaoId ?? '').trim();
+    if (kakaoId.isEmpty) return null;
+
+    final uri = Uri.parse(
+      '$_baseUrl/api/community/uid-verification/status',
+    ).replace(
+      queryParameters: {'kakaoId': kakaoId},
+    );
+
+    try {
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _handleWriteEntry() async {
+    final kakaoId = (widget.kakaoId ?? '').trim();
+
+    if (kakaoId.isEmpty) {
+      _showSnackBar('로그인 정보가 필요해요.');
+      return;
+    }
+
+    try {
+      final status = await _fetchCommunityUidStatus();
+      if (!mounted) return;
+
+      if (status == null) {
+        _showSnackBar('UID 상태를 확인하지 못했어요. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+
+      final String communityStatus =
+          status['communityStatus']?.toString() ?? 'NONE';
+
+      if (communityStatus == 'APPROVED') {
+        final availableTags = await CommunityTagApiService.fetchActiveTags();
+        if (!mounted) return;
+
+        final tagNames = availableTags
+            .map((e) => e.tagName)
+            .where((e) => e.trim().isNotEmpty)
+            .toList();
+
+        final bool? created = await CommunityScreen.openWrite(
+          context,
+          kakaoId: kakaoId,
+          availableTags: tagNames.isEmpty ? const <String>['전체'] : tagNames,
+        );
+
+        if (!mounted) return;
+
+        if (created == true) {
+          await _fetchPosts();
+          _showSnackBar('게시글이 등록되었어요.');
+        }
+        return;
+      }
+
+      final bool? requested = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CommunityUidVerificationScreen(
+            kakaoId: kakaoId,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (requested == true) {
+        _showSnackBar('UID 인증 요청이 접수되었어요. 승인 후 글쓰기를 이용할 수 있어요.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('글쓰기 화면을 여는 중 문제가 발생했어요. $e');
+    }
   }
 
   List<String> get _availableTagNames =>
@@ -2878,6 +2986,72 @@ class _CommunityScreenState extends State<CommunityScreen> {
     return null;
   }
 
+  Future<Map<String, dynamic>?> _fetchUserSummaryByKakaoId(int kakaoId) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/api/user/$kakaoId'))
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  Future<Map<String, String>> _buildResolvedProfilePayload({
+    required int? authorKakaoId,
+    required String fallbackAuthorName,
+    required String fallbackAuthorUid,
+    required String fallbackProfileImageUrl,
+  }) async {
+    String authorName = fallbackAuthorName;
+    String authorUid = fallbackAuthorUid;
+    String profileImageUrl = fallbackProfileImageUrl;
+    String headerImageUrl = '';
+
+    if (authorKakaoId != null) {
+      final userData = await _fetchUserSummaryByKakaoId(authorKakaoId);
+
+      if (userData != null) {
+        final String fetchedName =
+        (userData['nickname']?.toString().trim() ?? '');
+        final String fetchedUid =
+        (userData['gameUid']?.toString().trim() ?? '');
+        final String fetchedProfile =
+        (userData['profileImageUrl']?.toString().trim() ?? '');
+        final String fetchedHeader =
+        (userData['headerImageUrl']?.toString().trim() ?? '');
+
+        if (fetchedName.isNotEmpty) {
+          authorName = fetchedName;
+        }
+        if (fetchedUid.isNotEmpty) {
+          authorUid = fetchedUid;
+        }
+        if (fetchedProfile.isNotEmpty) {
+          profileImageUrl = _resolveProfileImagePath(fetchedProfile);
+        }
+        if (fetchedHeader.isNotEmpty) {
+          headerImageUrl = _resolveProfileImagePath(fetchedHeader);
+        }
+      }
+    }
+
+    return <String, String>{
+      'authorName': authorName,
+      'authorUid': authorUid,
+      'profileImageUrl': profileImageUrl,
+      'headerImageUrl': headerImageUrl,
+    };
+  }
+
   Future<void> _openUserProfileFromComment(CommunityComment comment) async {
     final int? resolvedAuthorKakaoId = _resolveAuthorKakaoId(
       directKakaoId: comment.authorKakaoId,
@@ -2901,16 +3075,24 @@ class _CommunityScreenState extends State<CommunityScreen> {
               item.isFollowingAuthor;
         });
 
+    final resolved = await _buildResolvedProfilePayload(
+      authorKakaoId: resolvedAuthorKakaoId,
+      fallbackAuthorName: comment.authorName,
+      fallbackAuthorUid: comment.authorUid,
+      fallbackProfileImageUrl: _resolveProfileImagePath(comment.profileImageUrl),
+    );
+
     final result = await Navigator.of(context).push<CommunityUserProfileResult>(
       MaterialPageRoute(
         builder: (_) => CommunityUserProfileScreen(
           baseUrl: _baseUrl,
           currentKakaoId: widget.kakaoId,
           authorKakaoId: resolvedAuthorKakaoId,
-          authorName: comment.authorName,
-          authorUid: comment.authorUid,
-          profileImageUrl: _resolveProfileImagePath(comment.profileImageUrl),
-          headerImageUrl: '',
+          authorName: resolved['authorName'] ?? comment.authorName,
+          authorUid: resolved['authorUid'] ?? comment.authorUid,
+          profileImageUrl: resolved['profileImageUrl'] ??
+              _resolveProfileImagePath(comment.profileImageUrl),
+          headerImageUrl: resolved['headerImageUrl'] ?? '',
           isMine: isMine,
           isInitiallyFollowing: isInitiallyFollowing,
           recentSeeds: _recentSeedsForComment(comment),
@@ -2977,16 +3159,24 @@ class _CommunityScreenState extends State<CommunityScreen> {
               item.isFollowingAuthor;
         });
 
+    final resolved = await _buildResolvedProfilePayload(
+      authorKakaoId: resolvedAuthorKakaoId,
+      fallbackAuthorName: post.author,
+      fallbackAuthorUid: post.uid,
+      fallbackProfileImageUrl: _resolveProfileImagePath(post.profileImageUrl),
+    );
+
     final result = await Navigator.of(context).push<CommunityUserProfileResult>(
       MaterialPageRoute(
         builder: (_) => CommunityUserProfileScreen(
           baseUrl: _baseUrl,
           currentKakaoId: widget.kakaoId,
           authorKakaoId: resolvedAuthorKakaoId,
-          authorName: post.author,
-          authorUid: post.uid,
-          profileImageUrl: _resolveProfileImagePath(post.profileImageUrl),
-          headerImageUrl: '',
+          authorName: resolved['authorName'] ?? post.author,
+          authorUid: resolved['authorUid'] ?? post.uid,
+          profileImageUrl: resolved['profileImageUrl'] ??
+              _resolveProfileImagePath(post.profileImageUrl),
+          headerImageUrl: resolved['headerImageUrl'] ?? '',
           isMine: resolvedIsMine || post.mine,
           isInitiallyFollowing: isInitiallyFollowing,
           recentSeeds: _recentSeedsForAuthor(post),
@@ -4632,19 +4822,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ),
           const SizedBox(height: 20),
           OutlinedButton(
-            onPressed: () {
-              if ((widget.kakaoId ?? '').isEmpty) {
-                _showSnackBar('로그인 정보가 필요해요.');
-                return;
-              }
-              CommunityScreen.openWrite(
-                context,
-                kakaoId: widget.kakaoId!,
-                availableTags: _availableTagNames,
-              ).then((updated) {
-                if (updated == true) _fetchPosts();
-              });
-            },
+              onPressed: () async {
+                await _handleWriteEntry();
+              },
             style: OutlinedButton.styleFrom(
               backgroundColor: const Color(0xFFFFF9F7),
               // 텍스트를 너무 쨍하지 않은 부드러운 코랄/브라운 톤으로 완화했습니다.

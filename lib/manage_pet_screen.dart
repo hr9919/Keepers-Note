@@ -27,7 +27,7 @@ class _ManagePetsScreenState extends State<ManagePetsScreen> {
   final Set<int> _selectedIds = {};
   bool _isChanged = false;
 
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   @override
   void initState() {

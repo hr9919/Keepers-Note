@@ -18,7 +18,7 @@ import java.util.Locale
 object WidgetUpdateRepository {
 
     private const val TAG = "WidgetUpdateRepository"
-    private const val BASE_URL = "http://161.33.30.40:8080"
+    private const val BASE_URL = "https://api.keepers-note.o-r.kr"
 
     fun refreshTodayInfo(context: Context) {
         val prefs = HomeWidgetPlugin.getData(context)

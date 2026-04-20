@@ -416,10 +416,10 @@ class _GatheringScreenState extends State<GatheringScreen>
   List<InsectItem> _visibleInsectList = [];
   Set<String> _favoriteIds = {};
 
-  final String _fishApiUrl = 'http://161.33.30.40:8080/api/fish';
-  final String _insectApiUrl = 'http://161.33.30.40:8080/api/insects';
-  final String _birdApiUrl = 'http://161.33.30.40:8080/api/birds';
-  final String _plantApiUrl = 'http://161.33.30.40:8080/api/gardening';
+  final String _fishApiUrl = 'https://api.keepers-note.o-r.kr/api/fish';
+  final String _insectApiUrl = 'https://api.keepers-note.o-r.kr/api/insects';
+  final String _birdApiUrl = 'https://api.keepers-note.o-r.kr/api/birds';
+  final String _plantApiUrl = 'https://api.keepers-note.o-r.kr/api/gardening';
 
   ScrollController _getCurrentController() {
     final index = _tabController.index.clamp(0, 3);
@@ -1009,7 +1009,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   Future<void> _openFlowerDetail(PlantItem plant) async {
     try {
       final response = await http.get(
-        Uri.parse('http://161.33.30.40:8080/api/gardening/${plant.id}'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/gardening/${plant.id}'),
       );
 
       if (response.statusCode != 200) {

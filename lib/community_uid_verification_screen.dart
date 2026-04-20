@@ -22,7 +22,7 @@ class CommunityUidVerificationScreen extends StatefulWidget {
 
 class _CommunityUidVerificationScreenState
     extends State<CommunityUidVerificationScreen> {
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   static const Color _bgColor = Color(0xFFFFFCFB);
   static const Color _surfaceColor = Colors.white;

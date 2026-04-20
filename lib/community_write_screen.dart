@@ -67,7 +67,7 @@ class CommunityWriteScreen extends StatefulWidget {
 }
 
 class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
   static const int _maxImages = 5;
   static const int _maxTags = 2;
 

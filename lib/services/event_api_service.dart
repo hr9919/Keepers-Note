@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/event_item.dart';
 
 class EventApiService {
-  static const String _baseUrl = 'http://161.33.30.40:8080/api';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr/api';
 
   static Future<List<EventItem>> fetchActiveEvents() async {
     final response = await http.get(Uri.parse('$_baseUrl/events/active'));

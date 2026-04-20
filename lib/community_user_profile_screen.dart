@@ -148,6 +148,24 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
     _load();
   }
 
+  int? get _effectiveAuthorKakaoId {
+    if (widget.authorKakaoId != null) {
+      return widget.authorKakaoId;
+    }
+
+    if (widget.isMine) {
+      return int.tryParse((widget.currentKakaoId ?? '').trim());
+    }
+
+    return null;
+  }
+
+  bool get _canFollowTarget {
+    return !widget.isMine &&
+        _effectiveAuthorKakaoId != null &&
+        (widget.currentKakaoId ?? '').trim().isNotEmpty;
+  }
+
   String _resolveUrl(String raw) {
     final value = raw.trim();
     if (value.isEmpty) return '';
@@ -282,24 +300,27 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
 
   Future<void> _load() async {
     try {
-      if (widget.authorKakaoId != null) {
+      final int? authorKakaoId = _effectiveAuthorKakaoId;
+
+      if (authorKakaoId != null) {
         final responses = await Future.wait([
           http.get(
-            Uri.parse('${widget.baseUrl}/api/user/${widget.authorKakaoId}'),
+            Uri.parse('${widget.baseUrl}/api/user/$authorKakaoId'),
           ),
           http.get(
             Uri.parse('${widget.baseUrl}/api/community/followers').replace(
-              queryParameters: {'kakaoId': widget.authorKakaoId.toString()},
+              queryParameters: {'kakaoId': authorKakaoId.toString()},
             ),
           ),
           http.get(
             Uri.parse('${widget.baseUrl}/api/community/following').replace(
-              queryParameters: {'kakaoId': widget.authorKakaoId.toString()},
+              queryParameters: {'kakaoId': authorKakaoId.toString()},
             ),
           ),
           http.get(
-            Uri.parse('${widget.baseUrl}/api/community/uid-verification/status').replace(
-              queryParameters: {'kakaoId': widget.authorKakaoId.toString()},
+            Uri.parse('${widget.baseUrl}/api/community/uid-verification/status')
+                .replace(
+              queryParameters: {'kakaoId': authorKakaoId.toString()},
             ),
           ),
         ]);
@@ -313,7 +334,6 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
           final decoded = jsonDecode(utf8.decode(userRes.bodyBytes));
 
           if (decoded is Map<String, dynamic>) {
-
             _nickname =
             (decoded['nickname']?.toString().trim().isNotEmpty ?? false)
                 ? decoded['nickname'].toString().trim()
@@ -388,7 +408,7 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
     Navigator.of(context).pop(
       CommunityUserProfileResult(
         selectedPostId: selectedPostId,
-        didChangeFollow: _following != widget.isInitiallyFollowing,
+        didChangeFollow: _following != widget.isInitiallyFollowing || _didUserInfoChange,
       ),
     );
   }
@@ -557,18 +577,21 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
   Future<void> _toggleFollow() async {
     if (_followSubmitting) return;
 
-    if (widget.authorKakaoId == null) {
+    final int? targetKakaoId = _effectiveAuthorKakaoId;
+    final String currentKakaoId = (widget.currentKakaoId ?? '').trim();
+
+    if (widget.isMine) {
+      _showSnackBar('내 프로필은 팔로우할 수 없어요.');
+      return;
+    }
+
+    if (targetKakaoId == null) {
       _showSnackBar('상대 사용자 정보를 불러오지 못했어요.');
       return;
     }
 
-    if ((widget.currentKakaoId ?? '').isEmpty) {
+    if (currentKakaoId.isEmpty) {
       _showSnackBar('로그인 정보를 먼저 확인해주세요.');
-      return;
-    }
-
-    if (widget.isMine) {
-      _showSnackBar('내 프로필은 팔로우할 수 없어요.');
       return;
     }
 
@@ -576,9 +599,9 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
       setState(() => _followSubmitting = true);
 
       final uri = Uri.parse(
-        '${widget.baseUrl}/api/community/follow/${widget.authorKakaoId}',
+        '${widget.baseUrl}/api/community/follow/$targetKakaoId',
       ).replace(
-        queryParameters: {'kakaoId': widget.currentKakaoId!},
+        queryParameters: {'kakaoId': currentKakaoId},
       );
 
       final response = _following ? await http.delete(uri) : await http.post(uri);

@@ -55,13 +55,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // (2) 서버 데이터 요청
       final response = await http.post(
-        Uri.parse('http://161.33.30.40:8080/api/user/login'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/user/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"kakaoId": user.id, "nickname": kakaoNickname}),
       ).timeout(const Duration(seconds: 3));
 
       final uidStatusResponse = await http.get(
-        Uri.parse('http://161.33.30.40:8080/api/community/uid-verification/status')
+        Uri.parse('https://api.keepers-note.o-r.kr/api/community/uid-verification/status')
             .replace(queryParameters: {'kakaoId': user.id.toString()}),
       ).timeout(const Duration(seconds: 3));
 
@@ -75,10 +75,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _displayUid = data['gameUid'].toString();
             }
             if (data['profileImageUrl'] != null) {
-              _profileImageUrl = "http://161.33.30.40:8080${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
+              _profileImageUrl = "https://api.keepers-note.o-r.kr${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
             }
             if (data['headerImageUrl'] != null) {
-              _headerImageUrl = "http://161.33.30.40:8080${data['headerImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
+              _headerImageUrl = "https://api.keepers-note.o-r.kr${data['headerImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
             }
 
             _uidLocked = false;
@@ -134,7 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://161.33.30.40:8080/api/user/upload-image'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/user/upload-image'),
       );
 
       request.fields['kakaoId'] = _userUid;
@@ -152,7 +152,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final data = jsonDecode(response.body);
         setState(() {
           final newUrl =
-              "http://161.33.30.40:8080${data['url']}?t=${DateTime.now().millisecondsSinceEpoch}";
+              "https://api.keepers-note.o-r.kr${data['url']}?t=${DateTime.now().millisecondsSinceEpoch}";
           if (isProfile) {
             _profileImageUrl = newUrl;
           } else {
@@ -899,12 +899,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _isLoading = true);
       User user = await UserApi.instance.me();
       if (name.isNotEmpty) {
-        await http.put(Uri.parse('http://161.33.30.40:8080/api/user/update-nickname'),
+        await http.put(Uri.parse('https://api.keepers-note.o-r.kr/api/user/update-nickname'),
             headers: {"Content-Type": "application/json"}, body: jsonEncode({"kakaoId": user.id, "nickname": name}));
       }
       if (uid.isNotEmpty && !_uidLocked) {
         await http.put(
-          Uri.parse('http://161.33.30.40:8080/api/user/update-uid'),
+          Uri.parse('https://api.keepers-note.o-r.kr/api/user/update-uid'),
           headers: {"Content-Type": "application/json"},
           body: jsonEncode({"kakaoId": user.id, "gameUid": uid}),
         );
@@ -1008,6 +1008,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _showWithdrawDialog() async {
+    final String nicknameText =
+    _nickname.trim().isNotEmpty ? _nickname.trim() : '이 계정';
+
+    final String uidText =
+    (_displayUid.trim().isNotEmpty && _displayUid != 'UID를 입력해보세요')
+        ? _displayUid.trim()
+        : '미설정';
+
+    final String kakaoIdText =
+    _userUid.trim().isNotEmpty ? _userUid.trim() : '-';
+
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -1021,7 +1032,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             borderRadius: BorderRadius.circular(32),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.10),
+                color: Colors.black.withValues(alpha: 0.10),
                 blurRadius: 28,
                 offset: const Offset(0, 10),
               ),
@@ -1055,7 +1066,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 10),
               const Text(
-                '탈퇴 전에 아래 내용을 꼭 확인해주세요.',
+                '현재 로그인된 계정을 탈퇴합니다.\n아래 계정 정보를 꼭 확인해주세요.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -1064,8 +1075,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   height: 1.5,
                 ),
               ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBFA),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: snackAccent.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    _buildWithdrawAccountInfoRow(
+                      label: '닉네임',
+                      value: nicknameText,
+                    ),
+                    const SizedBox(height: 10),
+                    _buildWithdrawAccountInfoRow(
+                      label: '게임 UID',
+                      value: uidText,
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 18),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -1073,7 +1108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: const Color(0xFFFFF8F6),
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(
-                    color: snackAccent.withOpacity(0.14),
+                    color: snackAccent.withValues(alpha: 0.14),
                   ),
                 ),
                 child: const Column(
@@ -1088,7 +1123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     SizedBox(height: 10),
                     _WithdrawGuideRow(
-                      text: '작성한 게시글, 댓글, 좋아요, 팔로우 등 커뮤니티 활동도 함께 삭제돼요.',
+                      text: '작성한 게시글, 댓글, 좋아요, 팔로우 등 커뮤니티 활동도 함께 정리돼요.',
                     ),
                     SizedBox(height: 10),
                     _WithdrawGuideRow(
@@ -1101,11 +1136,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 14),
-
               const Text(
-                '정말 탈퇴하시겠어요?',
+                '위 계정이 맞다면 탈퇴를 진행해주세요.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13.5,
@@ -1114,9 +1147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: Color(0xFF636E72),
                 ),
               ),
-
               const SizedBox(height: 22),
-
               Row(
                 children: [
                   Expanded(
@@ -1177,25 +1208,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildWithdrawAccountInfoRow({
+    required String label,
+    required String value,
+    TextStyle? valueStyle,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF3F0),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFE88778),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: valueStyle ??
+                const TextStyle(
+                  fontSize: 13.2,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF2D3436),
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _withdrawAccount() async {
     try {
       setState(() => _isLoading = true);
 
-      // 1. 카카오 사용자 정보 가져오기
       final user = await UserApi.instance.me();
-      final kakaoId = user.id;
+      final String kakaoId = (user.id ?? '').toString();
 
-      // 2. 서버 회원탈퇴 요청
+      if (kakaoId.isEmpty) {
+        if (!mounted) return;
+        _showSnackBar('로그인 정보를 확인할 수 없어요.');
+        return;
+      }
+
+      debugPrint('[WITHDRAW] request kakaoId=$kakaoId');
+
       final response = await http.delete(
-        Uri.parse('http://161.33.30.40:8080/api/user/withdraw/$kakaoId'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/user/withdraw'),
+        headers: {
+          'kakaoId': kakaoId,
+        },
       );
 
       if (response.statusCode == 200) {
-        // 3. 카카오 연결 끊기 (핵심)
         try {
           await UserApi.instance.unlink();
         } catch (e) {
-          // unlink 실패하면 토큰 강제 삭제
           await TokenManagerProvider.instance.manager.clear();
         }
 
@@ -1203,7 +1282,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         _showSnackBar('회원탈퇴가 완료되었어요.');
 
-        // 4. SplashScreen으로 이동 (자동 분기)
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const SplashScreen()),
               (route) => false,

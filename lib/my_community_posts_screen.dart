@@ -19,7 +19,7 @@ class MyCommunityPostsScreen extends StatefulWidget {
 }
 
 class _MyCommunityPostsScreenState extends State<MyCommunityPostsScreen> {
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   bool _isLoading = false;
   bool _isDeleting = false;

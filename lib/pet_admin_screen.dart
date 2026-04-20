@@ -19,7 +19,7 @@ class PetAdminScreen extends StatefulWidget {
 
 class _PetAdminScreenState extends State<PetAdminScreen>
     with TickerProviderStateMixin {
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   TabController? _animalTabController;
   TabController? _statusTabController;

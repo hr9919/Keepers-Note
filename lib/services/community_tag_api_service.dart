@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/community_tag_item.dart';
 
 class CommunityTagApiService {
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   static Future<List<CommunityTagItem>> fetchActiveTags() async {
     final uri = Uri.parse('$_baseUrl/api/community/tags');

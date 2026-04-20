@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/map_data_response.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://161.33.30.40:8080';
+  static const String baseUrl = 'https://api.keepers-note.o-r.kr';
 
   static Future<MapDataResponse> getResources({String voterId = ''}) async {
     try {
@@ -46,7 +46,7 @@ class ApiService {
     required String resourceType,
   }) async {
     final response = await http.post(
-      Uri.parse('http://161.33.30.40:8080/api/map/spawn-point'),
+      Uri.parse('https://api.keepers-note.o-r.kr/api/map/spawn-point'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'lng': lng,

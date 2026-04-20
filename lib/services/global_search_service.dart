@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/global_search_item.dart';
 
 class GlobalSearchService {
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   static Future<List<GlobalSearchItem>> loadAllItems() async {
     final List<GlobalSearchItem> results = [];

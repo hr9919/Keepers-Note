@@ -182,10 +182,10 @@ class _PetScreenState extends State<PetScreen>
   bool _showTopBtn = false;
 
   final String _catVariantApiUrl =
-      'http://161.33.30.40:8080/api/cat-variants?uploadedOnly=true';
+      'https://api.keepers-note.o-r.kr/api/cat-variants?uploadedOnly=true';
   final String _dogVariantApiUrl =
-      'http://161.33.30.40:8080/api/dog-variants?uploadedOnly=true';
-  final String _baseUrl = 'http://161.33.30.40:8080';
+      'https://api.keepers-note.o-r.kr/api/dog-variants?uploadedOnly=true';
+  final String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   List<PetCatalogVariant> _catVariants = [];
   List<PetCatalogVariant> _dogVariants = [];
@@ -221,14 +221,14 @@ class _PetScreenState extends State<PetScreen>
   Pet? _draggingPet;
   bool _showDeleteDropZone = false;
 
-  final String _petApiUrl = 'http://161.33.30.40:8080/api/pets';
-  final String _fishApiUrl = 'http://161.33.30.40:8080/api/fish';
-  final String _petLikeApiUrl = 'http://161.33.30.40:8080/api/pet-likes';
+  final String _petApiUrl = 'https://api.keepers-note.o-r.kr/api/pets';
+  final String _fishApiUrl = 'https://api.keepers-note.o-r.kr/api/fish';
+  final String _petLikeApiUrl = 'https://api.keepers-note.o-r.kr/api/pet-likes';
 
   final String _catSnackOptionsApiUrl =
-      'http://161.33.30.40:8080/api/pets/cat-snack-options';
+      'https://api.keepers-note.o-r.kr/api/pets/cat-snack-options';
   final String _dogSnackOptionsApiUrl =
-      'http://161.33.30.40:8080/api/pets/dog-snack-options';
+      'https://api.keepers-note.o-r.kr/api/pets/dog-snack-options';
 
   List<PetSnackOption> _catSnackOptions = [];
   List<PetSnackOption> _dogSnackOptions = [];

@@ -268,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   final Color snackAccent = const Color(0xFFFF8E7C);
 
-  static const String _baseUrl = 'http://161.33.30.40:8080';
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   String _currentWeather = '맑음';
   bool _isWeatherLoading = false;
@@ -486,7 +486,7 @@ class _HomeScreenState extends State<HomeScreen>
       return raw;
     }
 
-    return 'http://161.33.30.40:8080$raw';
+    return 'https://api.keepers-note.o-r.kr$raw';
   }
 
   Future<void> _loadMapPreviewResources() async {
