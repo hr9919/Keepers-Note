@@ -165,6 +165,21 @@ String _ingredientFallbackAssetPath(String ingredientName) {
   return map[normalized] ?? 'assets/images/default.png';
 }
 
+class CookingSearchController extends ChangeNotifier {
+  GlobalSearchItem? _pendingItem;
+
+  GlobalSearchItem? consume() {
+    final item = _pendingItem;
+    _pendingItem = null;
+    return item;
+  }
+
+  void open(GlobalSearchItem item) {
+    _pendingItem = item;
+    notifyListeners();
+  }
+}
+
 String _resolveIngredientImagePath(String? imagePath) {
   if (imagePath == null || imagePath.trim().isEmpty) return '';
 
@@ -488,19 +503,19 @@ class CookingMaterialItem {
 
 class CookingScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
-  final GlobalSearchItem? initialSearchItem;
+  final CookingSearchController? searchController;
   final int resetSearchSignal;
 
-  final String userId;   // 추가
-  final bool isAdmin;    // 추가
+  final String userId;
+  final bool isAdmin;
 
   const CookingScreen({
     super.key,
     this.openDrawer,
-    this.initialSearchItem,
+    this.searchController,
     this.resetSearchSignal = 0,
-    required this.userId,     // 추가
-    required this.isAdmin,    // 추가
+    required this.userId,
+    required this.isAdmin,
   });
 
   @override
@@ -616,41 +631,28 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _fetchRecipeData();
     _fetchMaterialData();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (widget.initialSearchItem != null) {
-        _pendingSearchItem = widget.initialSearchItem;
-        _applySearchItem(widget.initialSearchItem!);
-      }
-    });
+    widget.searchController?.addListener(_handleExternalSearch);
   }
 
   @override
   void didUpdateWidget(covariant CookingScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
-      _clearSearchState();
+    if (oldWidget.searchController != widget.searchController) {
+      oldWidget.searchController?.removeListener(_handleExternalSearch);
+      widget.searchController?.addListener(_handleExternalSearch);
     }
 
-    if (widget.initialSearchItem != null &&
-        widget.initialSearchItem != oldWidget.initialSearchItem) {
-      _pendingSearchItem = widget.initialSearchItem;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || widget.initialSearchItem == null) return;
-        _applySearchItem(widget.initialSearchItem!);
-      });
+    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
+      _clearSearchState();
     }
   }
 
   @override
   void dispose() {
-    _recipeRequestToken++;
-    _materialRequestToken++;
+    widget.searchController?.removeListener(_handleExternalSearch);
 
     _tabController.dispose();
-    _searchFocusNode.dispose();
     _searchController.dispose();
     _recipeScrollController.dispose();
     _materialScrollController.dispose();
@@ -719,6 +721,12 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   ScrollController _getCurrentController() {
     if (_tabController.index == 0) return _recipeScrollController;
     return _materialScrollController;
+  }
+
+  void _handleExternalSearch() {
+    final item = widget.searchController?.consume();
+    if (item == null) return;
+    _applySearchItem(item);
   }
 
   // --- 통합 UI 함수 (도감 디자인) ---

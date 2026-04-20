@@ -51,6 +51,11 @@ class _MainWrapperState extends State<MainWrapper> {
   StreamSubscription<Uri>? _deepLinkSub;
   StreamSubscription<String?>? _kakaoSchemeSub;
 
+  final GatheringSearchController _gatheringSearchController =
+  GatheringSearchController();
+  final CookingSearchController _cookingSearchController =
+  CookingSearchController();
+
   String _serverUserId = "";
 
   int? _initialCommunityPostId;
@@ -807,50 +812,54 @@ class _MainWrapperState extends State<MainWrapper> {
     });
   }
 
-  void _handleGlobalSearchSelection(GlobalSearchItem item) {
+  Future<void> _handleGlobalSearchSelection(GlobalSearchItem item) async {
     FocusManager.instance.primaryFocus?.unfocus();
+
+    int targetIndex = 0;
+
+    switch (item.screen) {
+      case SearchTargetScreen.gathering:
+        targetIndex = 1;
+        break;
+      case SearchTargetScreen.cooking:
+        targetIndex = 3;
+        break;
+      case SearchTargetScreen.pet:
+        targetIndex = 4;
+        break;
+      case SearchTargetScreen.encyclopedia:
+        targetIndex = 1;
+        break;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedIndex = targetIndex;
+      _isCommunityMenuOpen = false;
+      _pendingSearchItem = null;
+    });
+
+    await WidgetsBinding.instance.endOfFrame;
+    await Future.delayed(const Duration(milliseconds: 10));
 
     if (!mounted) return;
 
     switch (item.screen) {
-      case SearchTargetScreen.encyclopedia:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                EncyclopediaScreen(
-                  openDrawer: _openDrawerSmooth,
-                ),
-          ),
-        );
-        return;
-
       case SearchTargetScreen.gathering:
-        setState(() {
-          _selectedIndex = 1;
-          _pendingSearchItem = item;
-          _isCommunityMenuOpen = false;
-          _searchResetSignal++;
-        });
-        return;
-
+        _gatheringSearchController.open(item);
+        break;
       case SearchTargetScreen.cooking:
-        setState(() {
-          _selectedIndex = 3;
-          _pendingSearchItem = item;
-          _isCommunityMenuOpen = false;
-          _searchResetSignal++;
-        });
-        return;
-
+        _cookingSearchController.open(item);
+        break;
       case SearchTargetScreen.pet:
         setState(() {
-          _selectedIndex = 4;
           _pendingSearchItem = item;
-          _isCommunityMenuOpen = false;
-          _searchResetSignal++;
         });
-        return;
+        break;
+      case SearchTargetScreen.encyclopedia:
+        _gatheringSearchController.open(item);
+        break;
     }
   }
 
@@ -1080,9 +1089,8 @@ class _MainWrapperState extends State<MainWrapper> {
         isAdmin: _isAdmin,
       ),
       GatheringScreen(
-        key: const ValueKey('gathering_tab'),
         openDrawer: _openDrawerSmooth,
-        initialSearchItem: _pendingSearchItem,
+        searchController: _gatheringSearchController,
         resetSearchSignal: _searchResetSignal,
       ),
       CommunityScreen(
@@ -1095,9 +1103,8 @@ class _MainWrapperState extends State<MainWrapper> {
         openMyProfileSignal: _communityOpenMyProfileSignal,
       ),
       CookingScreen(
-        key: const ValueKey('cooking_tab'),
         openDrawer: _openDrawerSmooth,
-        initialSearchItem: _pendingSearchItem,
+        searchController: _cookingSearchController,
         resetSearchSignal: _searchResetSignal,
         userId: _serverUserId,
         isAdmin: _isAdmin,

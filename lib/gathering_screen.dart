@@ -9,6 +9,21 @@ import 'setting_screen.dart';
 
 import 'models/global_search_item.dart';
 
+class GatheringSearchController extends ChangeNotifier {
+  GlobalSearchItem? _pendingItem;
+
+  GlobalSearchItem? consume() {
+    final item = _pendingItem;
+    _pendingItem = null;
+    return item;
+  }
+
+  void open(GlobalSearchItem item) {
+    _pendingItem = item;
+    notifyListeners();
+  }
+}
+
 class FlowerColorDetail {
   final String colorNameKo;
   final String image;
@@ -363,13 +378,13 @@ class FishItem {
 
 class GatheringScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
-  final GlobalSearchItem? initialSearchItem;
+  final GatheringSearchController? searchController;
   final int resetSearchSignal;
 
   const GatheringScreen({
     super.key,
     this.openDrawer,
-    this.initialSearchItem,
+    this.searchController,
     this.resetSearchSignal = 0,
   });
 
@@ -880,28 +895,16 @@ class _GatheringScreenState extends State<GatheringScreen>
     _loadFavorites();
     _fetchAllData();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (widget.initialSearchItem != null) {
-        _pendingSearchItem = widget.initialSearchItem;
-        _applySearchItem(widget.initialSearchItem!);
-      }
-    });
+    widget.searchController?.addListener(_handleExternalSearch);
   }
 
   @override
   void didUpdateWidget(covariant GatheringScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (widget.initialSearchItem != null &&
-        widget.initialSearchItem != oldWidget.initialSearchItem) {
-      _pendingSearchItem = widget.initialSearchItem;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || widget.initialSearchItem == null) return;
-        _applySearchItem(widget.initialSearchItem!);
-      });
-      return;
+    if (oldWidget.searchController != widget.searchController) {
+      oldWidget.searchController?.removeListener(_handleExternalSearch);
+      widget.searchController?.addListener(_handleExternalSearch);
     }
 
     if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
@@ -911,6 +914,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   @override
   void dispose() {
+    widget.searchController?.removeListener(_handleExternalSearch);
     _tabController.dispose();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
@@ -1282,6 +1286,12 @@ class _GatheringScreenState extends State<GatheringScreen>
       default:
         return true;
     }
+  }
+
+  void _handleExternalSearch() {
+    final item = widget.searchController?.consume();
+    if (item == null) return;
+    _applySearchItem(item);
   }
 
   bool _matchesBirdFilter(BirdItem bird, String filter) {
