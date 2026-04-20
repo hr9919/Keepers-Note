@@ -275,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
-  String _currentWeather = '맑음';
+  String _currentWeather = '불러오는 중';
   bool _isWeatherLoading = false;
 
   List<Map<String, String>> _hourlyWeather = [];
@@ -809,7 +809,7 @@ class _HomeScreenState extends State<HomeScreen>
       case '무지개':
         return '무지개';
       default:
-        return value.isEmpty ? '맑음' : value;
+        return value.isEmpty ? '수집중' : value;
     }
   }
 
@@ -1951,12 +1951,12 @@ class _HomeScreenState extends State<HomeScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MapScreen(
-          openFilterOnStart: true,
-          initialEnabledResourceKeys: _previewEnabledResources,
-          userId: widget.userId,
-          isAdmin: widget.isAdmin,
-        )
+          builder: (context) => MapScreen(
+            openFilterOnStart: true,
+            initialEnabledResourceKeys: _previewEnabledResources,
+            userId: widget.userId,
+            isAdmin: widget.isAdmin,
+          )
       ),
     );
   }
@@ -2248,27 +2248,6 @@ class _HomeScreenState extends State<HomeScreen>
 
             _buildHomePreviewFilterPanel(),
 
-            if (_searchSuggestions.isNotEmpty)
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () {
-                    _searchFocusNode.unfocus();
-                    setState(() {
-                      _searchSuggestions = [];
-                    });
-                  },
-                  child: const SizedBox.expand(),
-                ),
-              ),
-
-            if (_searchSuggestions.isNotEmpty)
-              Positioned(
-                top: topPadding + 140,
-                left: 0,
-                right: 0,
-                child: _buildSearchSuggestionsOverlay(),
-              ),
           ],
         ),
       ),
@@ -2775,112 +2754,123 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildSearchSuggestionsOverlay() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.10),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
+  void _clearSearchInput() {
+    _searchController.clear();
+    _searchFocusNode.unfocus();
+    if (!mounted) return;
+    setState(() {
+      _searchSuggestions = [];
+    });
+  }
+
+  void _selectSearchSuggestion(GlobalSearchItem item) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    widget.onSearchItemSelected?.call(item);
+    _clearSearchInput();
+  }
+
+  Widget _buildSearchSuggestionsOverlay(
+      List<GlobalSearchItem> suggestions,
+      void Function(GlobalSearchItem item) onSelected,
+      ) {
+    if (suggestions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.10),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.4,
-            ),
-            child: ListView.separated(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: _searchSuggestions.length,
-              separatorBuilder: (_, __) => const Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-                color: Color(0xFFF1F5F9),
-              ),
-              itemBuilder: (context, index) {
-                final item = _searchSuggestions[index];
+        ],
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.34,
+        ),
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          shrinkWrap: true,
+          itemCount: suggestions.length,
+          separatorBuilder: (_, __) => const Divider(
+            height: 1,
+            indent: 16,
+            endIndent: 16,
+            color: Color(0xFFF1F5F9),
+          ),
+          itemBuilder: (context, index) {
+            final item = suggestions[index];
 
-                return InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () {
-                    _searchFocusNode.unfocus();
-                    _searchController.clear();
-
-                    setState(() {
-                      _searchSuggestions = [];
-                    });
-
-                    widget.onSearchItemSelected?.call(item);
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF7F4),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: _buildSuggestionLeading(item),
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => onSelected(item),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7F4),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                        clipBehavior: Clip.antiAlias,
+                        child: _buildSuggestionLeading(item),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            if ((item.subtitle ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 3),
                               Text(
-                                item.title,
+                                item.subtitle!,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF0F172A),
+                                  fontSize: 12.5,
+                                  color: Color(0xFF64748B),
                                 ),
                               ),
-                              if ((item.subtitle ?? '').isNotEmpty) ...[
-                                const SizedBox(height: 3),
-                                Text(
-                                  item.subtitle!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    color: Color(0xFF64748B),
-                                  ),
-                                ),
-                              ],
                             ],
-                          ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        const Icon(
-                          Icons.north_west_rounded,
-                          size: 18,
-                          color: Color(0xFFCBD5E1),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.north_west_rounded,
+                        size: 18,
+                        color: Color(0xFFCBD5E1),
+                      ),
+                    ],
                   ),
-                );
-              },
-            ),
-          ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -3740,16 +3730,21 @@ class _HomeScreenState extends State<HomeScreen>
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  item['time'] ?? '',
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 8.4,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.05,
-                                    color: chipTextColor,
+                                SizedBox(
+                                  height: 12, // 높이 살짝 고정
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      item['time'] ?? '',
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1, // 👈 줄바꿈 금지
+                                      style: TextStyle(
+                                        fontSize: 8.4,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1.05,
+                                        color: chipTextColor,
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 3),
@@ -3757,7 +3752,15 @@ class _HomeScreenState extends State<HomeScreen>
                                   width: 15,
                                   height: 15,
                                   child: Center(
-                                    child: _buildWeatherIcon(weather, size: 12.5),
+                                    child: weather == '수집중'
+                                        ? const SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                        : _buildWeatherIcon(weather, size: 12.5),
                                   ),
                                 ),
                               ],
@@ -5565,74 +5568,119 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildIntegratedSearchBar() {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.78),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: const Color(0xFFF1DED8),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.025),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _searchController,
-        focusNode: _searchFocusNode,
-        textAlignVertical: TextAlignVertical.center,
-        style: const TextStyle(
-          fontSize: 14,
-          color: Color(0xFF2D3436),
-          fontWeight: FontWeight.w600,
-        ),
-        onTapOutside: (_) {
-          _searchFocusNode.unfocus();
-          setState(() {
-            _searchSuggestions = [];
-          });
-        },
-        decoration: InputDecoration(
-          isDense: true,
-          border: InputBorder.none,
-          prefixIcon: const Padding(
-            padding: EdgeInsets.all(12),
-            child: Icon(
-              Icons.search_rounded,
-              size: 20,
-              color: Color(0xFFE58F7C),
+    return RawAutocomplete<GlobalSearchItem>(
+      textEditingController: _searchController,
+      focusNode: _searchFocusNode,
+      displayStringForOption: (item) => item.title,
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        final query = textEditingValue.text.trim();
+        if (query.isEmpty) {
+          return const Iterable<GlobalSearchItem>.empty();
+        }
+        return GlobalSearchService.filter(_allSearchItems, query).take(8);
+      },
+      onSelected: _selectSearchSuggestion,
+      fieldViewBuilder: (
+          BuildContext context,
+          TextEditingController controller,
+          FocusNode focusNode,
+          VoidCallback onFieldSubmitted,
+          ) {
+        return Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.78),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: const Color(0xFFF1DED8),
+              width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.025),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          hintText: '찾는 아이템을 검색해보세요.',
-          hintStyle: const TextStyle(
-            color: Color(0xFF9AA4B2),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-          contentPadding: const EdgeInsets.fromLTRB(0, 0, 16, 0),
-          suffixIcon: _searchController.text.isNotEmpty
-              ? IconButton(
-            icon: const Icon(
-              Icons.close_rounded,
-              size: 18,
-              color: Color(0xFFB0B8C4),
-            ),
-            onPressed: () {
-              _searchController.clear();
-              _searchFocusNode.unfocus();
-              setState(() {
-                _searchSuggestions = [];
-              });
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              return TextField(
+                controller: controller,
+                focusNode: focusNode,
+                textAlignVertical: TextAlignVertical.center,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF2D3436),
+                  fontWeight: FontWeight.w600,
+                ),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) {
+                  final suggestions = GlobalSearchService.filter(
+                    _allSearchItems,
+                    controller.text,
+                  );
+                  if (suggestions.isNotEmpty) {
+                    _selectSearchSuggestion(suggestions.first);
+                  } else {
+                    focusNode.unfocus();
+                  }
+                },
+                onTapOutside: (_) {
+                  focusNode.unfocus();
+                },
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: Color(0xFFE58F7C),
+                    ),
+                  ),
+                  hintText: '찾는 아이템을 검색해보세요.',
+                  hintStyle: const TextStyle(
+                    color: Color(0xFF9AA4B2),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  contentPadding: const EdgeInsets.fromLTRB(0, 0, 16, 0),
+                  suffixIcon: value.text.isNotEmpty
+                      ? IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: Color(0xFFB0B8C4),
+                    ),
+                    onPressed: _clearSearchInput,
+                  )
+                      : null,
+                ),
+              );
             },
-          )
-              : null,
-        ),
-      ),
+          ),
+        );
+      },
+      optionsViewBuilder: (
+          BuildContext context,
+          AutocompleteOnSelected<GlobalSearchItem> onSelected,
+          Iterable<GlobalSearchItem> options,
+          ) {
+        final optionList = options.toList(growable: false);
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            color: Colors.transparent,
+            child: SizedBox(
+              width: MediaQuery.of(context).size.width - 32,
+              child: _buildSearchSuggestionsOverlay(optionList, onSelected),
+            ),
+          ),
+        );
+      },
     );
   }
 

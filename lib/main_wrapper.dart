@@ -815,6 +815,10 @@ class _MainWrapperState extends State<MainWrapper> {
   Future<void> _handleGlobalSearchSelection(GlobalSearchItem item) async {
     FocusManager.instance.primaryFocus?.unfocus();
 
+    debugPrint(
+      'MAIN search selection received: ${item.title} / ${item.screen} ',
+    );
+
     int targetIndex = 0;
 
     switch (item.screen) {
@@ -832,35 +836,54 @@ class _MainWrapperState extends State<MainWrapper> {
         break;
     }
 
+    debugPrint('MAIN targetIndex = $targetIndex');
+
     if (!mounted) return;
 
     setState(() {
       _selectedIndex = targetIndex;
       _isCommunityMenuOpen = false;
-      _pendingSearchItem = null;
     });
 
-    await WidgetsBinding.instance.endOfFrame;
-    await Future.delayed(const Duration(milliseconds: 10));
+    debugPrint('MAIN setState done -> selectedIndex=$_selectedIndex');
 
-    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
-    switch (item.screen) {
-      case SearchTargetScreen.gathering:
-        _gatheringSearchController.open(item);
-        break;
-      case SearchTargetScreen.cooking:
-        _cookingSearchController.open(item);
-        break;
-      case SearchTargetScreen.pet:
-        setState(() {
-          _pendingSearchItem = item;
-        });
-        break;
-      case SearchTargetScreen.encyclopedia:
-        _gatheringSearchController.open(item);
-        break;
-    }
+      debugPrint('MAIN first post frame reached');
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        debugPrint(
+          'MAIN second post frame reached -> dispatching search item: ${item.title} / ${item.screen}',
+        );
+
+        switch (item.screen) {
+          case SearchTargetScreen.gathering:
+            debugPrint('MAIN dispatch -> GatheringSearchController.open');
+            _gatheringSearchController.open(item);
+            break;
+
+          case SearchTargetScreen.cooking:
+            debugPrint('MAIN dispatch -> CookingSearchController.open');
+            _cookingSearchController.open(item);
+            break;
+
+          case SearchTargetScreen.pet:
+            debugPrint('MAIN dispatch -> pending pet search item set');
+            setState(() {
+              _pendingSearchItem = item;
+            });
+            break;
+
+          case SearchTargetScreen.encyclopedia:
+            debugPrint('MAIN dispatch -> GatheringSearchController.open (encyclopedia)');
+            _gatheringSearchController.open(item);
+            break;
+        }
+      });
+    });
   }
 
   void _showImageViewer({
