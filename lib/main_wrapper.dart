@@ -27,6 +27,7 @@ import 'services/event_api_service.dart';
 import 'services/community_tag_api_service.dart';
 import 'dart:async';
 import 'package:app_links/app_links.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 class MainWrapper extends StatefulWidget {
@@ -75,7 +76,6 @@ class _MainWrapperState extends State<MainWrapper> {
   String _userUid = "";
   String? _profileImageUrl;
   String? _headerImageUrl;
-  String _kakaoId = "";
 
   GlobalSearchItem? _pendingSearchItem;
 
@@ -516,30 +516,37 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Future<void> _fetchUserInfo() async {
     try {
-      User user = await UserApi.instance.me();
-      final String kakaoId = user.id.toString();
+      final prefs = await SharedPreferences.getInstance();
+      final provider = prefs.getString('authProvider');
+      final providerUserId = prefs.getString('providerUserId');
+      final storedNickname = prefs.getString('nickname') ?? '사용자';
+      final storedProfileImageUrl = prefs.getString('profileImageUrl');
 
-      if (!mounted) return;
-      setState(() {
-        _kakaoId = kakaoId;
-      });
+      if (provider == null || providerUserId == null) {
+        debugPrint('_fetchUserInfo 실패: 저장된 로그인 정보 없음');
+        return;
+      }
 
       final response = await http.post(
         Uri.parse('https://api.keepers-note.o-r.kr/api/user/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "provider": "KAKAO",
-          "providerUserId": user.id.toString(),
-          "nickname": user.kakaoAccount?.profile?.nickname ?? "사용자",
-          "profileImageUrl": user.kakaoAccount?.profile?.profileImageUrl,
+          "provider": provider,
+          "providerUserId": providerUserId,
+          "nickname": storedNickname,
+          "profileImageUrl": storedProfileImageUrl,
         }),
       );
 
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final serverUserId = data['id']?.toString() ?? '';
+
+        await prefs.setString('userId', serverUserId);
+
         setState(() {
           final gameUid = data['gameUid']?.toString().trim() ?? '';
-          _serverUserId = data['id']?.toString() ?? "";
+          _serverUserId = serverUserId;
           _userUid = gameUid.isNotEmpty ? gameUid : 'UID를 입력해보세요';
           _userName = data['nickname'] ?? "사용자";
           _isAdmin = data['isAdmin'] ?? false;
@@ -548,7 +555,7 @@ class _MainWrapperState extends State<MainWrapper> {
             _profileImageUrl =
             "https://api.keepers-note.o-r.kr${data['profileImageUrl']}?t=${DateTime.now().millisecondsSinceEpoch}";
           } else {
-            _profileImageUrl = user.kakaoAccount?.profile?.thumbnailImageUrl;
+            _profileImageUrl = storedProfileImageUrl;
           }
 
           if (data['headerImageUrl'] != null) {
@@ -558,26 +565,26 @@ class _MainWrapperState extends State<MainWrapper> {
             _headerImageUrl = null;
           }
         });
+
+        await _loadTodoFromServer(serverUserId);
       } else {
         if (!mounted) return;
         setState(() {
           _userUid = 'UID를 입력해보세요';
         });
       }
-
-      await _loadTodoFromServer(kakaoId);
     } catch (e) {
       debugPrint("_fetchUserInfo 실패: $e");
     }
   }
 
-  Future<void> _loadTodoFromServer([String? uid]) async {
-    final targetUid = uid ?? _kakaoId;
-    if (targetUid.isEmpty || targetUid == "UID를 입력해보세요") return;
+  Future<void> _loadTodoFromServer([String? userId]) async {
+    final targetUserId = userId ?? _serverUserId;
+    if (targetUserId.isEmpty || targetUserId == "UID를 입력해보세요") return;
 
     try {
       final response = await http.get(
-        Uri.parse('https://api.keepers-note.o-r.kr/api/todo/$targetUid'),
+        Uri.parse('https://api.keepers-note.o-r.kr/api/todo/$targetUserId'),
       );
 
       if (response.statusCode != 200) return;
@@ -606,12 +613,12 @@ class _MainWrapperState extends State<MainWrapper> {
             Uri.parse('https://api.keepers-note.o-r.kr/api/todo/add'),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
-              "userId": _serverUserId,
+              "userId": targetUserId,
               "taskName": taskName,
             }),
           );
         }
-        await _loadTodoFromServer(targetUid);
+        await _loadTodoFromServer(targetUserId);
         return;
       }
 
@@ -627,7 +634,7 @@ class _MainWrapperState extends State<MainWrapper> {
             Uri.parse('https://api.keepers-note.o-r.kr/api/todo/add'),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
-              "kakaoId": targetUid,
+              "userId": targetUserId,
               "taskName": taskName,
             }),
           );
@@ -635,25 +642,9 @@ class _MainWrapperState extends State<MainWrapper> {
       }
 
       if (addedMissingDefault) {
-        await _loadTodoFromServer(targetUid);
+        await _loadTodoFromServer(targetUserId);
         return;
       }
-
-      mapped.sort((a, b) {
-        final aName = (a["taskName"] ?? "").toString();
-        final bName = (b["taskName"] ?? "").toString();
-
-        final aIndex = _defaultSystemTasks.indexOf(aName);
-        final bIndex = _defaultSystemTasks.indexOf(bName);
-
-        final aIsDefault = aIndex != -1;
-        final bIsDefault = bIndex != -1;
-
-        if (aIsDefault && bIsDefault) return aIndex.compareTo(bIndex);
-        if (aIsDefault) return -1;
-        if (bIsDefault) return 1;
-        return 0;
-      });
 
       if (!mounted) return;
       setState(() {
@@ -755,17 +746,15 @@ class _MainWrapperState extends State<MainWrapper> {
         Uri.parse('https://api.keepers-note.o-r.kr/api/todo/add'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "kakaoId": _kakaoId,
+          "userId": _serverUserId,
           "taskName": taskName,
         }),
       );
 
-      debugPrint("할 일 추가 응답: ${response.statusCode} / ${response.body}");
-
       if (response.statusCode == 200 || response.statusCode == 201) {
-        FocusManager.instance.primaryFocus?.unfocus(); // 키보드 닫기
-        _todoController.clear(); // 입력값 비우기
-        await _loadTodoFromServer(_kakaoId); // 목록 새로고침
+        FocusManager.instance.primaryFocus?.unfocus();
+        _todoController.clear();
+        await _loadTodoFromServer(_serverUserId);
       }
     } catch (e) {
       debugPrint("_addTodo 실패: $e");
@@ -1954,27 +1943,14 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
-  Future<bool> _ensureKakaoIdReady() async {
-
-    if (_kakaoId.isNotEmpty) return true;
-
-    await _fetchUserInfo();
-
-    await WidgetsBinding.instance.endOfFrame;
-    await Future.delayed(const Duration(milliseconds: 50));
-
-
-    return mounted && _kakaoId.isNotEmpty;
-  }
-
   Future<void> _openCommunityWrite() async {
     if (_isOpeningCommunityRoute) return;
 
-    if (_kakaoId.isEmpty) {
+    if (_serverUserId.isEmpty) {
       await _fetchUserInfo();
     }
 
-    if (_kakaoId.isEmpty) {
+    if (_serverUserId.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.')),
@@ -2056,11 +2032,11 @@ class _MainWrapperState extends State<MainWrapper> {
   Future<void> _openCommunityAdmin() async {
     if (_isOpeningCommunityRoute) return;
 
-    if (_kakaoId.isEmpty) {
+    if (_serverUserId.isEmpty) {
       await _fetchUserInfo();
     }
 
-    if (_kakaoId.isEmpty) {
+    if (_serverUserId.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.')),

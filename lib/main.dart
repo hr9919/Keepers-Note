@@ -7,6 +7,7 @@ import 'onboarding_screen.dart';
 import 'main_wrapper.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:app_links/app_links.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -245,47 +246,47 @@ class _SplashScreenState extends State<SplashScreen>
     try {
       _log('자동 로그인 체크 시작');
 
-      final hasToken = await AuthApi.instance.hasToken();
-      _log('hasToken = $hasToken');
+      final prefs = await SharedPreferences.getInstance();
+      final provider = prefs.getString('authProvider');
+      final providerUserId = prefs.getString('providerUserId');
+      final nickname = prefs.getString('nickname') ?? '사용자';
+      final profileImageUrl = prefs.getString('profileImageUrl');
 
-      if (!hasToken) {
+      if (provider == null || providerUserId == null) {
+        _log('저장된 세션 없음');
         return false;
       }
 
-      final user = await _safeGetKakaoUser();
-      if (user == null) {
-        _log('사용자 정보 조회 실패 → 토큰 삭제');
-        await _clearKakaoToken();
-        return false;
-      }
-
-      final kakaoId = user.id;
-      final nickname = user.kakaoAccount?.profile?.nickname ?? '사용자';
-
-      _log('kakaoId = $kakaoId');
-      _log('nickname = $nickname');
-
-      if (kakaoId == null) {
-        _log('kakaoId null → 토큰 삭제');
-        await _clearKakaoToken();
-        return false;
+      if (provider == 'KAKAO') {
+        final hasToken = await AuthApi.instance.hasToken();
+        _log('카카오 hasToken = $hasToken');
+        if (!hasToken) {
+          await _clearSavedSession();
+          return false;
+        }
       }
 
       final synced = await _syncUserToServer(
-        kakaoId: kakaoId,
+        provider: provider,
+        providerUserId: providerUserId,
         nickname: nickname,
+        profileImageUrl: profileImageUrl,
       );
 
       _log('서버 동기화 결과 = $synced');
 
       if (!synced) {
-        await _clearKakaoToken();
+        await _clearSavedSession();
+        if (provider == 'KAKAO') {
+          await _clearKakaoToken();
+        }
       }
 
       return synced;
     } catch (e, s) {
       _log('로그인 상태 체크 에러: $e');
       debugPrint('$s');
+      await _clearSavedSession();
       await _clearKakaoToken();
       return false;
     }
@@ -305,39 +306,32 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<bool> _syncUserToServer({
-    required int kakaoId,
+    required String provider,
+    required String providerUserId,
     required String nickname,
+    String? profileImageUrl,
   }) async {
     try {
-      _log('서버 동기화 요청 시작');
-
-      final kakaoUser = await _safeGetKakaoUser();
-      final profileImageUrl =
-          kakaoUser?.kakaoAccount?.profile?.profileImageUrl;
-
       final response = await http
           .post(
         Uri.parse('$_baseUrl/api/user/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'provider': 'KAKAO',
-          'providerUserId': kakaoId.toString(),
+          'provider': provider,
+          'providerUserId': providerUserId,
           'nickname': nickname,
           'profileImageUrl': profileImageUrl,
         }),
       )
           .timeout(const Duration(seconds: 8));
 
-      _log('서버 응답 코드 = ${response.statusCode}');
-      _log('서버 응답 바디 = ${response.body}');
-
       if (response.statusCode != 200) {
         return false;
       }
 
       final Map<String, dynamic> data = jsonDecode(response.body);
-      _log('파싱된 user id = ${data['id']}');
-      _log('파싱된 nickname = ${data['nickname']}');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('userId', data['id'].toString());
 
       return true;
     } catch (e, s) {
@@ -345,6 +339,15 @@ class _SplashScreenState extends State<SplashScreen>
       debugPrint('$s');
       return false;
     }
+  }
+
+  Future<void> _clearSavedSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('authProvider');
+    await prefs.remove('providerUserId');
+    await prefs.remove('nickname');
+    await prefs.remove('profileImageUrl');
+    await prefs.remove('userId');
   }
 
   Future<void> _clearKakaoToken() async {

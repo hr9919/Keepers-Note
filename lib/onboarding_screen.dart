@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'main_wrapper.dart';
 
@@ -47,73 +49,53 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _isLoggingIn = true);
 
     try {
-      debugPrint('--- [Log] 카카오 로그인 시작 ---');
-
       OAuthToken token;
 
       if (await isKakaoTalkInstalled()) {
         try {
           token = await UserApi.instance.loginWithKakaoTalk();
-          debugPrint('--- [Log] 카카오톡으로 로그인 성공 ---');
-        } catch (error, stack) {
-          debugPrint('--- [Error] 카카오톡으로 로그인 실패: $error ---');
-          debugPrint('$stack');
-
+        } catch (error) {
           if (error is PlatformException && error.code == 'CANCELED') {
-            debugPrint('--- [Log] 사용자가 로그인 취소 ---');
             _showLoginMessage('로그인이 취소되었어요.');
             return;
           }
-
-          try {
-            token = await UserApi.instance.loginWithKakaoAccount();
-            debugPrint('--- [Log] 카카오계정으로 로그인 성공 ---');
-          } catch (accountError, accountStack) {
-            debugPrint('--- [Error] 카카오계정으로 로그인 실패: $accountError ---');
-            debugPrint('$accountStack');
-            _showLoginMessage('카카오 로그인에 실패했어요. 다시 시도해주세요.');
-            return;
-          }
+          token = await UserApi.instance.loginWithKakaoAccount();
         }
       } else {
-        try {
-          token = await UserApi.instance.loginWithKakaoAccount();
-          debugPrint('--- [Log] 카카오계정으로 로그인 성공 ---');
-        } catch (error, stack) {
-          debugPrint('--- [Error] 카카오계정으로 로그인 실패: $error ---');
-          debugPrint('$stack');
-          _showLoginMessage('카카오 로그인에 실패했어요. 다시 시도해주세요.');
-          return;
-        }
+        token = await UserApi.instance.loginWithKakaoAccount();
       }
 
-      debugPrint(
-        '--- [Log] accessToken 존재: ${token.accessToken.isNotEmpty} ---',
-      );
-
-      final User kakaoUser = await UserApi.instance.me();
-      final int? kakaoId = kakaoUser.id;
-      final String nickname =
-          kakaoUser.kakaoAccount?.profile?.nickname ?? '키퍼';
-
-      debugPrint('--- [Log] kakaoId=$kakaoId nickname=$nickname ---');
-
-      if (kakaoId == null) {
-        debugPrint('--- [Error] kakaoId null ---');
-        _showLoginMessage('사용자 정보를 불러오지 못했어요. 다시 시도해주세요.');
+      if (token.accessToken.isEmpty) {
+        _showLoginMessage('카카오 로그인에 실패했어요.');
         return;
       }
 
-      final bool synced = await _syncWithBackend(kakaoId, nickname);
+      final User kakaoUser = await UserApi.instance.me();
+      final String? providerUserId = kakaoUser.id?.toString();
+      final String nickname =
+          kakaoUser.kakaoAccount?.profile?.nickname ?? '키퍼';
+      final String? profileImageUrl =
+          kakaoUser.kakaoAccount?.profile?.profileImageUrl;
+
+      if (providerUserId == null || providerUserId.isEmpty) {
+        _showLoginMessage('사용자 정보를 불러오지 못했어요.');
+        return;
+      }
+
+      final bool synced = await _syncWithBackend(
+        provider: 'KAKAO',
+        providerUserId: providerUserId,
+        nickname: nickname,
+        profileImageUrl: profileImageUrl,
+      );
+
       if (!synced) {
-        debugPrint('--- [Error] 서버 동기화 실패 ---');
         _showLoginMessage('서버 연결이 불안정해요. 잠시 후 다시 시도해주세요.');
         return;
       }
 
       if (!mounted) return;
 
-      debugPrint('--- [Log] 메인 화면으로 이동 ---');
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -126,7 +108,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     } catch (error, stack) {
       debugPrint('--- [Error] 로그인 실패: $error ---');
       debugPrint('$stack');
-      _showLoginMessage('로그인 중 문제가 발생했어요. 다시 시도해주세요.');
+      _showLoginMessage('로그인 중 문제가 발생했어요.');
     } finally {
       if (mounted) {
         setState(() => _isLoggingIn = false);
@@ -134,33 +116,130 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  Future<bool> _syncWithBackend(int kakaoId, String nickname) async {
-    try {
-      final User kakaoUser = await UserApi.instance.me();
-      final String? profileImageUrl =
-          kakaoUser.kakaoAccount?.profile?.profileImageUrl;
+  Future<void> _handleAppleLogin() async {
+    if (_isLoggingIn) return;
 
+    setState(() => _isLoggingIn = true);
+
+    try {
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final providerUserId = credential.userIdentifier;
+      if (providerUserId == null || providerUserId.isEmpty) {
+        _showLoginMessage('애플 계정 정보를 불러오지 못했어요.');
+        return;
+      }
+
+      final fullName = [
+        credential.givenName,
+        credential.familyName,
+      ].where((e) => e != null && e!.trim().isNotEmpty).join(' ').trim();
+
+      final nickname = fullName.isNotEmpty ? fullName : 'Apple 사용자';
+
+      final bool synced = await _syncWithBackend(
+        provider: 'APPLE',
+        providerUserId: providerUserId,
+        nickname: nickname,
+        profileImageUrl: null,
+      );
+
+      if (!synced) {
+        _showLoginMessage('서버 연결이 불안정해요. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MainWrapper(
+            initialDeepLink: widget.initialDeepLink,
+          ),
+        ),
+            (route) => false,
+      );
+    } catch (e, stack) {
+      debugPrint('--- [Error] 애플 로그인 실패: $e ---');
+      debugPrint('$stack');
+      _showLoginMessage('애플 로그인 중 문제가 발생했어요.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoggingIn = false);
+      }
+    }
+  }
+
+  Future<bool> _syncWithBackend({
+    required String provider,
+    required String providerUserId,
+    required String nickname,
+    String? profileImageUrl,
+  }) async {
+    try {
       final response = await http
           .post(
         Uri.parse('$_baseUrl/api/user/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'provider': 'KAKAO',
-          'providerUserId': kakaoId.toString(),
+          'provider': provider,
+          'providerUserId': providerUserId,
           'nickname': nickname,
           'profileImageUrl': profileImageUrl,
         }),
       )
           .timeout(const Duration(seconds: 5));
 
-      debugPrint('--- [Log] 서버 응답 코드: ${response.statusCode} ---');
-      debugPrint('--- [Log] 서버 응답 바디: ${response.body} ---');
+      if (response.statusCode != 200) {
+        return false;
+      }
 
-      return response.statusCode == 200;
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      final serverUserId = data['id']?.toString();
+
+      if (serverUserId == null || serverUserId.isEmpty) {
+        return false;
+      }
+
+      await _saveSession(
+        provider: provider,
+        providerUserId: providerUserId,
+        nickname: data['nickname']?.toString() ?? nickname,
+        profileImageUrl: data['profileImageUrl']?.toString(),
+        userId: serverUserId,
+      );
+
+      return true;
     } catch (e, stack) {
       debugPrint('--- [Log] 서버 동기화 실패: $e ---');
       debugPrint('$stack');
       return false;
+    }
+  }
+
+  Future<void> _saveSession({
+    required String provider,
+    required String providerUserId,
+    required String nickname,
+    String? profileImageUrl,
+    required String userId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('authProvider', provider);
+    await prefs.setString('providerUserId', providerUserId);
+    await prefs.setString('nickname', nickname);
+    await prefs.setString('userId', userId);
+
+    if (profileImageUrl != null && profileImageUrl.trim().isNotEmpty) {
+      await prefs.setString('profileImageUrl', profileImageUrl);
+    } else {
+      await prefs.remove('profileImageUrl');
     }
   }
 
@@ -225,7 +304,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: _currentPage == 3
                     ? Align(
                   alignment: Alignment.bottomCenter,
-                  child: _buildBottomLoginButton(context),
+                  child: _buildLoginButtons(context),
                 )
                     : const SizedBox.shrink(),
               ),
@@ -236,80 +315,112 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildBottomLoginButton(BuildContext context) {
+  Widget _buildLoginButtons(BuildContext context) {
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
     final double horizontalPadding =
     MediaQuery.of(context).size.width < 380 ? 20 : 30;
-    final double buttonBottom = bottomPadding > 0 ? bottomPadding + 130 : 130;
+    final double bottomSpace = bottomPadding > 0 ? bottomPadding + 54 : 54;
 
     return Padding(
       padding: EdgeInsets.only(
         left: horizontalPadding,
         right: horizontalPadding,
-        bottom: buttonBottom,
+        bottom: bottomSpace,
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(27),
-          onTap: _isLoggingIn ? null : _handleKakaoLogin,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 180),
-            opacity: _isLoggingIn ? 0.72 : 1.0,
-            child: Container(
-              height: 54,
-              decoration: ShapeDecoration(
-                color: const Color(0xFFFEE500),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(27),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildKakaoLoginButton(),
+          const SizedBox(height: 12),
+          _buildAppleLoginButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKakaoLoginButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(27),
+        onTap: _isLoggingIn ? null : _handleKakaoLogin,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          opacity: _isLoggingIn ? 0.72 : 1.0,
+          child: Container(
+            height: 54,
+            decoration: ShapeDecoration(
+              color: const Color(0xFFFEE500),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(27),
+              ),
+              shadows: const [
+                BoxShadow(
+                  color: Color(0x19000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
                 ),
-                shadows: const [
-                  BoxShadow(
-                    color: Color(0x19000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_isLoggingIn) ...[
+                  const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    '로그인 중...',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'SF Pro',
+                    ),
+                  ),
+                ] else ...[
+                  Image.asset('assets/images/kakao_logo.png', height: 24),
+                  const SizedBox(width: 10),
+                  const Text(
+                    '카카오로 시작하기',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'SF Pro',
+                    ),
                   ),
                 ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (_isLoggingIn) ...[
-                    const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      '로그인 중...',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'SF Pro',
-                      ),
-                    ),
-                  ] else ...[
-                    Image.asset('assets/images/kakao_logo.png', height: 24),
-                    const SizedBox(width: 10),
-                    const Text(
-                      '카카오로 시작하기',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'SF Pro',
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppleLoginButton() {
+    final Widget button = SignInWithAppleButton(
+      onPressed: _isLoggingIn ? () {} : _handleAppleLogin,
+      style: SignInWithAppleButtonStyle.black,
+      borderRadius: const BorderRadius.all(Radius.circular(27)),
+      height: 54,
+    );
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 180),
+      opacity: _isLoggingIn ? 0.72 : 1.0,
+      child: IgnorePointer(
+        ignoring: _isLoggingIn,
+        child: SizedBox(
+          width: double.infinity,
+          child: button,
         ),
       ),
     );
