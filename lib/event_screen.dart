@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'models/event_item.dart';
 import 'services/event_api_service.dart';
 
@@ -80,16 +80,29 @@ class _EventScreenState extends State<EventScreen> {
   }
 
   Future<void> _loadUserId() async {
-    final user = await UserApi.instance.me();
+    final prefs = await SharedPreferences.getInstance();
+
+    final provider = prefs.getString('authProvider');
+    final providerUserId = prefs.getString('providerUserId');
+    final nickname = prefs.getString('nickname') ?? '사용자';
+    final profileImageUrl = prefs.getString('profileImageUrl');
+
+    if (provider == null || provider.isEmpty) {
+      throw Exception('authProvider 없음');
+    }
+
+    if (providerUserId == null || providerUserId.isEmpty) {
+      throw Exception('providerUserId 없음');
+    }
 
     final response = await http.post(
       Uri.parse('https://api.keepers-note.o-r.kr/api/user/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'provider': 'KAKAO',
-        'providerUserId': user.id.toString(),
-        'nickname': user.kakaoAccount?.profile?.nickname ?? '여행자',
-        'profileImageUrl': user.kakaoAccount?.profile?.profileImageUrl,
+        'provider': provider,
+        'providerUserId': providerUserId,
+        'nickname': nickname,
+        'profileImageUrl': profileImageUrl,
       }),
     );
 
@@ -104,6 +117,7 @@ class _EventScreenState extends State<EventScreen> {
       throw Exception('서버 userId가 비어 있어요.');
     }
 
+    await prefs.setString('userId', id);
     _serverUserId = id;
   }
 

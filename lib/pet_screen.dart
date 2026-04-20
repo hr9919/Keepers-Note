@@ -6,12 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'image_adjust_screen.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'manage_pet_screen.dart';
 import 'models/global_search_item.dart';
 import 'models/pet_model.dart';
@@ -293,9 +291,15 @@ class _PetScreenState extends State<PetScreen>
     setState(() => _isLoading = true);
 
     await _loadUserInfo();
+
+    await Future.wait([
+      _fetchPetSnackOptions(),
+      _fetchFishData(),
+      _fetchCatalogData(),
+    ]);
+
     await _fetchPetData();
     await _fetchLikedVariantIds();
-    await _fetchFishData();
 
     if (mounted) {
       setState(() => _isLoading = false);
@@ -320,14 +324,13 @@ class _PetScreenState extends State<PetScreen>
             .map((e) => PetSnackOption.fromJson(Map<String, dynamic>.from(e)))
             .toList();
 
-        // ✅ 고양이 사료 / 공용 사료 보강
         void ensureCatSnackOption({
           required String itemId,
           required String nameKo,
           required String imagePath,
         }) {
           final exists = _catSnackOptions.any(
-                (e) => e.sourceType == 'snacks' && e.itemId == itemId,
+                (e) => e.sourceType == 'snack' && e.itemId == itemId,
           );
 
           if (!exists) {
@@ -356,19 +359,21 @@ class _PetScreenState extends State<PetScreen>
         );
 
         _catSnackOptions.sort(
-              (a, b) => _snackOptionDisplayName(a).compareTo(_snackOptionDisplayName(b)),
+              (a, b) =>
+              _snackOptionDisplayName(a).compareTo(_snackOptionDisplayName(b)),
         );
       } else {
+        debugPrint('고양이 간식 옵션 조회 실패: ${catResponse.statusCode}');
         _catSnackOptions = [
           PetSnackOption(
-            sourceType: 'snacks',
+            sourceType: 'snack',
             itemId: 'cat_food',
             nameKo: '고양이 사료',
             imagePath: 'assets/images/snacks/feed_cat.png',
             category: 'snack',
           ),
           PetSnackOption(
-            sourceType: 'snacks',
+            sourceType: 'snack',
             itemId: 'common_food',
             nameKo: '공용 사료',
             imagePath: 'assets/images/snacks/feed_common.png',
@@ -380,43 +385,36 @@ class _PetScreenState extends State<PetScreen>
       if (dogResponse.statusCode == 200) {
         final List<dynamic> data =
         jsonDecode(utf8.decode(dogResponse.bodyBytes)) as List<dynamic>;
+
         _dogSnackOptions = data
             .map((e) => PetSnackOption.fromJson(Map<String, dynamic>.from(e)))
             .toList();
-      } else {
-        _dogSnackOptions = [];
-      }
 
-      debugPrint('cat snacks parsed count: ${_catSnackOptions.length}');
-      debugPrint('dog snacks parsed count: ${_dogSnackOptions.length}');
-      if (_catSnackOptions.isNotEmpty) {
-        debugPrint(
-          'first cat snacks: ${_catSnackOptions.first.sourceType} / ${_catSnackOptions.first.itemId} / ${_catSnackOptions.first.nameKo}',
+        _dogSnackOptions.sort(
+              (a, b) =>
+              _snackOptionDisplayName(a).compareTo(_snackOptionDisplayName(b)),
         );
-      }
-      if (_dogSnackOptions.isNotEmpty) {
-        debugPrint(
-          'first dog snacks: ${_dogSnackOptions.first.sourceType} / ${_dogSnackOptions.first.itemId} / ${_dogSnackOptions.first.nameKo}',
-        );
+      } else {
+        debugPrint('강아지 간식 옵션 조회 실패: ${dogResponse.statusCode}');
+        _dogSnackOptions = [];
       }
     } catch (e) {
       debugPrint('간식 옵션 로드 실패: $e');
 
-      // ✅ cat은 최소 사료 2종 유지
       _catSnackOptions = [
         PetSnackOption(
-          sourceType: 'snacks',
+          sourceType: 'snack',
           itemId: 'cat_food',
           nameKo: '고양이 사료',
-          imagePath: 'assets/images/feed/feed_cat.png',
-          category: 'snacks',
+          imagePath: 'assets/images/snacks/feed_cat.png',
+          category: 'snack',
         ),
         PetSnackOption(
-          sourceType: 'snacks',
+          sourceType: 'snack',
           itemId: 'common_food',
           nameKo: '공용 사료',
-          imagePath: 'assets/images/feed/feed_common.png',
-          category: 'snacks',
+          imagePath: 'assets/images/snacks/feed_common.png',
+          category: 'snack',
         ),
       ];
 
@@ -444,18 +442,37 @@ class _PetScreenState extends State<PetScreen>
 
   Future<void> _loadUserInfo() async {
     try {
-      final user = await UserApi.instance.me();
-      final providerUserId = user.id?.toString();
-      final nickname = user.kakaoAccount?.profile?.nickname ?? '사용자';
-      final profileImageUrl = user.kakaoAccount?.profile?.profileImageUrl;
+      final prefs = await SharedPreferences.getInstance();
 
-      if (providerUserId == null || providerUserId.isEmpty) return;
+      // 1) 이미 저장된 server userId가 있으면 먼저 사용
+      final cachedUserId = prefs.getString('userId');
+      if (cachedUserId != null && cachedUserId.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _serverUserId = cachedUserId;
+        });
+        return;
+      }
+
+      // 2) 없을 때만 provider 기반으로 서버 재동기화
+      final provider = prefs.getString('authProvider');
+      final providerUserId = prefs.getString('providerUserId');
+      final nickname = prefs.getString('nickname') ?? '사용자';
+      final profileImageUrl = prefs.getString('profileImageUrl');
+
+      if (provider == null || provider.isEmpty) {
+        throw Exception('authProvider 없음');
+      }
+
+      if (providerUserId == null || providerUserId.isEmpty) {
+        throw Exception('providerUserId 없음');
+      }
 
       final response = await http.post(
         Uri.parse('https://api.keepers-note.o-r.kr/api/user/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'provider': 'KAKAO',
+          'provider': provider,
           'providerUserId': providerUserId,
           'nickname': nickname,
           'profileImageUrl': profileImageUrl,
@@ -467,13 +484,19 @@ class _PetScreenState extends State<PetScreen>
       }
 
       final data = jsonDecode(utf8.decode(response.bodyBytes));
+      final serverUserId = data['id']?.toString();
+
+      if (serverUserId == null || serverUserId.isEmpty) {
+        throw Exception('serverUserId 없음');
+      }
+
+      await prefs.setString('userId', serverUserId);
 
       if (!mounted) return;
       setState(() {
-        _serverUserId = data['id']?.toString();
+        _serverUserId = serverUserId;
       });
     } catch (e) {
-      debugPrint('펫 화면 유저 정보 로드 실패: $e');
     }
   }
 
@@ -517,7 +540,6 @@ class _PetScreenState extends State<PetScreen>
         _dogVariants = [];
       }
     } catch (e) {
-      debugPrint('도감 데이터 로드 실패: $e');
       _catVariants = [];
       _dogVariants = [];
     }
@@ -543,10 +565,8 @@ class _PetScreenState extends State<PetScreen>
           );
         });
       } else {
-        debugPrint('펫 조회 실패: ${response.statusCode} ${response.body}');
       }
     } catch (e) {
-      debugPrint('펫 로드 실패: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -571,18 +591,12 @@ class _PetScreenState extends State<PetScreen>
         }
       }
     } catch (e) {
-      debugPrint('물고기 데이터 로드 에러: $e');
     }
   }
 
   Future<void> _fetchLikedVariantIds() async {
     if (_serverUserId == null || _serverUserId!.isEmpty) {
       await _loadUserInfo();
-    }
-
-    if (_serverUserId == null || _serverUserId!.isEmpty) {
-      debugPrint('좋아요 목록 조회 스킵: serverUserId 없음');
-      return;
     }
 
     final bool isCatTab = _tabController.index == 0;
@@ -608,10 +622,8 @@ class _PetScreenState extends State<PetScreen>
             ..addAll(rawIds.map((e) => e.toString()));
         });
       } else {
-        debugPrint('좋아요 목록 조회 실패: ${response.statusCode} ${response.body}');
       }
     } catch (e) {
-      debugPrint('좋아요 목록 조회 에러: $e');
     }
   }
 
@@ -648,12 +660,7 @@ class _PetScreenState extends State<PetScreen>
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(petIds),
       );
-
-      if (response.statusCode != 200) {
-        debugPrint('순서 저장 실패: ${response.statusCode}');
-      }
     } catch (e) {
-      debugPrint('순서 저장 에러: $e');
     }
   }
 
@@ -672,8 +679,6 @@ class _PetScreenState extends State<PetScreen>
       if (_serverUserId == null || _serverUserId!.isEmpty) {
         await _loadUserInfo();
       }
-
-      debugPrint('🔥 저장 전 serverUserId = $_serverUserId');
 
       if (_serverUserId == null || _serverUserId!.isEmpty) {
         if (mounted) {
@@ -718,12 +723,6 @@ class _PetScreenState extends State<PetScreen>
             : (trimmedImagePath.isEmpty ? null : trimmedImagePath),
       };
 
-      debugPrint('📦 pet save body = $body');
-      debugPrint('🖼️ trimmedImagePath = $trimmedImagePath');
-      debugPrint('🖼️ isRemoteImage = $isRemoteImage');
-      debugPrint('🖼️ isExistingLocalFile = $isExistingLocalFile');
-      debugPrint('🖼️ isLocalFile = $isLocalFile');
-
       final Uri uri = existingId == null
           ? Uri.parse(_petApiUrl)
           : Uri.parse('$_petApiUrl/$existingId');
@@ -741,8 +740,7 @@ class _PetScreenState extends State<PetScreen>
       );
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        debugPrint('펫 저장 실패: ${response.statusCode} ${response.body}');
-        throw Exception('펫 저장 실패');
+        throw Exception('펫 저장 실패: ${response.statusCode} ${response.body}');
       }
 
       final Map<String, dynamic> savedData =
@@ -789,38 +787,6 @@ class _PetScreenState extends State<PetScreen>
     }
   }
 
-  Future<String?> _uploadPetImageToServer({
-    required int petId,
-    required String localImagePath,
-  }) async {
-    try {
-      final file = File(localImagePath);
-      if (!file.existsSync()) return null;
-
-      final uri = Uri.parse('$_petApiUrl/$petId/image');
-      final request = http.MultipartRequest('POST', uri);
-
-      request.files.add(
-        await http.MultipartFile.fromPath('file', file.path),
-      );
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data =
-        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-        return data['imagePath']?.toString();
-      }
-
-      debugPrint('펫 이미지 업로드 실패: ${response.statusCode} ${response.body}');
-      return null;
-    } catch (e) {
-      debugPrint('펫 이미지 업로드 에러: $e');
-      return null;
-    }
-  }
-
   Future<void> _updatePetSnacks(Pet pet) async {
     if (_serverUserId == null || pet.id == null) return;
 
@@ -831,7 +797,6 @@ class _PetScreenState extends State<PetScreen>
         body: jsonEncode(_buildPetUpsertBody(pet)),
       );
     } catch (e) {
-      debugPrint('간식 업데이트 실패: $e');
     }
   }
 
@@ -2307,6 +2272,8 @@ class _PetScreenState extends State<PetScreen>
   }
 
   void _openBreedDetail(String breed, List<PetCatalogVariant> items) {
+    final bool isCat = items.isNotEmpty ? items.first.isCat : _tabController.index == 0;
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -2317,6 +2284,7 @@ class _PetScreenState extends State<PetScreen>
           imageBuilder: _buildPetImage,
           likedIds: _likedVariantIds,
           onToggleLike: _toggleLikedVariant,
+          catalogLabel: isCat ? '고양이 도감' : '강아지 도감',
         ),
       ),
     );
@@ -3255,7 +3223,6 @@ class _PetScreenState extends State<PetScreen>
     }
 
     if (_serverUserId == null || _serverUserId!.isEmpty) {
-      debugPrint('좋아요 토글 중단: serverUserId 없음');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -3289,14 +3256,7 @@ class _PetScreenState extends State<PetScreen>
             '&variantId=$variantId',
       );
 
-      debugPrint(
-        '좋아요 요청: userId=$_serverUserId, petType=$petType, variantId=$variantId',
-      );
-
       final response = await http.post(uri);
-
-      debugPrint('좋아요 응답 코드: ${response.statusCode}');
-      debugPrint('좋아요 응답 바디: ${response.body}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data =
@@ -3319,7 +3279,6 @@ class _PetScreenState extends State<PetScreen>
         throw Exception('좋아요 토글 실패: ${response.statusCode} ${response.body}');
       }
     } catch (e) {
-      debugPrint('좋아요 토글 에러: $e');
 
       if (!mounted) return;
 
@@ -4507,10 +4466,8 @@ class _PetScreenState extends State<PetScreen>
       if (response.statusCode == 200) {
         await _fetchPetData();
       } else {
-        debugPrint('삭제 실패: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('삭제 에러: $e');
     }
   }
 
@@ -5742,16 +5699,6 @@ class _PetScreenState extends State<PetScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setSheetState) {
-          debugPrint('snack lab pet: ${pet.name}');
-          debugPrint('snack lab isCat: ${pet.isCat}');
-          debugPrint('snack lab source count: ${_snackOptionsForPet(pet).length}');
-          if (_snackOptionsForPet(pet).isNotEmpty) {
-            debugPrint(
-              'snack lab first option: ${_snackOptionsForPet(pet).first.sourceType} / '
-                  '${_snackOptionsForPet(pet).first.itemId} / '
-                  '${_snackOptionsForPet(pet).first.nameKo}',
-            );
-          }
 
           final triedCount = pet.triedSnacks.length;
           final totalSnackCount = _snackOptionsForPet(pet).length;
@@ -6492,7 +6439,7 @@ class PetBreedDetailScreen extends StatefulWidget {
     required this.likedIds,
     required this.onPreview,
     required this.onToggleLike,
-    this.catalogLabel = '고양이 도감',
+    required this.catalogLabel,
     required this.imageBuilder,
   });
 

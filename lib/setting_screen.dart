@@ -48,6 +48,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _recoverLostData();
   }
 
+  Future<void> _recoverLostData() async {
+    try {
+      if (!mounted) return;
+
+      // iOS에서 미구현 예외가 나는 경우가 있어 우선 무시
+      final response = await _picker.retrieveLostData();
+
+      if (response.isEmpty) return;
+
+      final XFile? file = response.file;
+      if (file == null) return;
+
+      debugPrint('복구된 이미지: ${file.path}');
+    } catch (e) {
+      debugPrint('lostData 복구 스킵: $e');
+    }
+  }
+
   // 1. 데이터 로딩 로직 (깜빡임 방지 핵심)
   Future<void> _loadUserInfo() async {
     try {
@@ -158,11 +176,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<String?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('userId');
-  }
-
-  Future<void> _recoverLostData() async {
-    final LostDataResponse response = await _picker.retrieveLostData();
-    if (response.file != null) debugPrint('복구됨: ${response.file!.path}');
   }
 
   // --- UI 빌더 파트 ---

@@ -808,31 +808,50 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   void _handleGlobalSearchSelection(GlobalSearchItem item) {
-    setState(() {
-      _pendingSearchItem = item;
-    });
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    if (!mounted) return;
 
     switch (item.screen) {
       case SearchTargetScreen.encyclopedia:
-        _selectedIndex = 2; // 임시로 채집 대신 쓰지 말고, 아래 별도 처리 추천
-        break;
-      case SearchTargetScreen.cooking:
-        _selectedIndex = 3;
-        break;
-      case SearchTargetScreen.gathering:
-        _selectedIndex = 1;
-        break;
-      case SearchTargetScreen.pet:
-        _selectedIndex = 4;
-        break;
-    }
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                EncyclopediaScreen(
+                  openDrawer: _openDrawerSmooth,
+                ),
+          ),
+        );
+        return;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() {
-        _pendingSearchItem = null;
-      });
-    });
+      case SearchTargetScreen.gathering:
+        setState(() {
+          _selectedIndex = 1;
+          _pendingSearchItem = item;
+          _isCommunityMenuOpen = false;
+          _searchResetSignal++;
+        });
+        return;
+
+      case SearchTargetScreen.cooking:
+        setState(() {
+          _selectedIndex = 3;
+          _pendingSearchItem = item;
+          _isCommunityMenuOpen = false;
+          _searchResetSignal++;
+        });
+        return;
+
+      case SearchTargetScreen.pet:
+        setState(() {
+          _selectedIndex = 4;
+          _pendingSearchItem = item;
+          _isCommunityMenuOpen = false;
+          _searchResetSignal++;
+        });
+        return;
+    }
   }
 
   void _showImageViewer({
@@ -921,13 +940,13 @@ class _MainWrapperState extends State<MainWrapper> {
     if (!mounted) return;
 
     await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EventScreen(
-          isAdmin: false,
-          canManage: _isAdmin,
-        ),
-      )
+        context,
+        MaterialPageRoute(
+          builder: (_) => EventScreen(
+            isAdmin: false,
+            canManage: _isAdmin,
+          ),
+        )
     );
 
     await _loadEvents();
@@ -1061,6 +1080,7 @@ class _MainWrapperState extends State<MainWrapper> {
         isAdmin: _isAdmin,
       ),
       GatheringScreen(
+        key: const ValueKey('gathering_tab'),
         openDrawer: _openDrawerSmooth,
         initialSearchItem: _pendingSearchItem,
         resetSearchSignal: _searchResetSignal,
@@ -1075,6 +1095,7 @@ class _MainWrapperState extends State<MainWrapper> {
         openMyProfileSignal: _communityOpenMyProfileSignal,
       ),
       CookingScreen(
+        key: const ValueKey('cooking_tab'),
         openDrawer: _openDrawerSmooth,
         initialSearchItem: _pendingSearchItem,
         resetSearchSignal: _searchResetSignal,
@@ -1082,6 +1103,7 @@ class _MainWrapperState extends State<MainWrapper> {
         isAdmin: _isAdmin,
       ),
       PetScreen(
+        key: const ValueKey('pet_tab'),
         openDrawer: _openDrawerSmooth,
         initialSearchItem: _pendingSearchItem,
       ),

@@ -516,6 +516,8 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   final ScrollController _recipeScrollController = ScrollController();
   final ScrollController _materialScrollController = ScrollController();
 
+  int _recipeRequestToken = 0;
+  int _materialRequestToken = 0;
 
   void _dismissSearchFocus() {
     if (_searchFocusNode.hasFocus) {
@@ -579,22 +581,26 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
+        if (!mounted) return;
         setState(() => _selectedFilter = '전체');
         _applyFilters();
       }
     });
 
     _searchController.addListener(() {
+      if (!mounted) return;
       setState(() => _searchQuery = _searchController.text.trim().toLowerCase());
       _applyFilters();
     });
 
     void _scrollListener(ScrollController controller) {
-      if (!controller.hasClients) return;
+      if (!controller.hasClients || !mounted) return;
+
       final bool showBtn = controller.offset > 100;
       if (showBtn != _showTopBtn) {
         setState(() => _showTopBtn = showBtn);
       }
+
       if (controller.offset <= 5 && !_isFilterVisible) {
         setState(() => _isFilterVisible = true);
       }
@@ -611,7 +617,9 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _fetchMaterialData();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       if (widget.initialSearchItem != null) {
+        _pendingSearchItem = widget.initialSearchItem;
         _applySearchItem(widget.initialSearchItem!);
       }
     });
@@ -621,20 +629,26 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   void didUpdateWidget(covariant CookingScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
+      _clearSearchState();
+    }
+
     if (widget.initialSearchItem != null &&
         widget.initialSearchItem != oldWidget.initialSearchItem) {
       _pendingSearchItem = widget.initialSearchItem;
-      _applySearchItem(widget.initialSearchItem!);
-      return;
-    }
 
-    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
-      _clearSearchState();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || widget.initialSearchItem == null) return;
+        _applySearchItem(widget.initialSearchItem!);
+      });
     }
   }
 
   @override
   void dispose() {
+    _recipeRequestToken++;
+    _materialRequestToken++;
+
     _tabController.dispose();
     _searchFocusNode.dispose();
     _searchController.dispose();
@@ -2394,24 +2408,53 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   }
 
   Future<void> _fetchRecipeData() async {
-    setState(() => _isRecipeLoading = true);
+    final int requestToken = ++_recipeRequestToken;
+
+    if (mounted) {
+      setState(() => _isRecipeLoading = true);
+    }
+
     try {
       final response = await http.get(Uri.parse(_recipeApiUrl));
+
+      if (!mounted || requestToken != _recipeRequestToken) return;
+
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
+        final List<dynamic> data =
+        jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+
         _allRecipeList = data.map((json) => Gourmet.fromJson(json)).toList();
       }
-    } catch (e) { debugPrint('로드 실패: $e'); }
-    setState(() => _isRecipeLoading = false); _applyFilters();
+    } catch (e) {
+      debugPrint('로드 실패: $e');
+    }
+
+    if (!mounted || requestToken != _recipeRequestToken) return;
+
+    setState(() => _isRecipeLoading = false);
+    _applyFilters();
+
+    if (_pendingSearchItem != null) {
+      _applySearchItem(_pendingSearchItem!);
+    }
   }
 
   Future<void> _fetchMaterialData() async {
-    setState(() => _isMaterialLoading = true);
+    final int requestToken = ++_materialRequestToken;
+
+    if (mounted) {
+      setState(() => _isMaterialLoading = true);
+    }
 
     try {
       final response = await http.get(Uri.parse(_materialApiUrl));
+
+      if (!mounted || requestToken != _materialRequestToken) return;
+
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
+        final List<dynamic> data =
+        jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+
         _allMaterialList = data
             .map((json) => CookingMaterialItem.fromJson(json))
             .toList();
@@ -2420,7 +2463,8 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       debugPrint('요리 재료 로드 실패: $e');
     }
 
-    if (!mounted) return;
+    if (!mounted || requestToken != _materialRequestToken) return;
+
     setState(() => _isMaterialLoading = false);
     _applyFilters();
 
@@ -2510,9 +2554,13 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   void _onSortSelected(String sort) { setState(() => _selectedSort = sort); _applyFilters(); }
 
   void _applySearchItem(GlobalSearchItem item) {
+    if (!mounted) return;
+
     _pendingSearchItem = item;
 
-    if (item.cookingTab == null) return;
+    if (_allRecipeList.isEmpty && _allMaterialList.isEmpty) {
+      return;
+    }
 
     final normalizedId = _normalizeSearchTargetId(item.id);
 
@@ -2735,20 +2783,16 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   void _clearSearchState() {
     _pendingSearchItem = null;
+    _highlightedId = null;
+    _selectedFilter = '전체';
+    _selectedSort = '이름순';
 
     if (_searchController.text.isNotEmpty) {
       _searchController.clear();
-    }
-
-    if (!mounted) return;
-
-    setState(() {
+    } else {
       _searchQuery = '';
-      _highlightedId = null;
-      _selectedFilter = '전체';
-    });
-
-    _applyFilters();
+      _applyFilters();
+    }
   }
 }
 

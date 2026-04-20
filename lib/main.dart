@@ -259,7 +259,7 @@ class _SplashScreenState extends State<SplashScreen>
 
       if (provider == 'KAKAO') {
         final hasToken = await AuthApi.instance.hasToken();
-        _log('카카오 hasToken = $hasToken');
+        _log('hasToken = $hasToken');
         if (!hasToken) {
           await _clearSavedSession();
           return false;
@@ -289,19 +289,6 @@ class _SplashScreenState extends State<SplashScreen>
       await _clearSavedSession();
       await _clearKakaoToken();
       return false;
-    }
-  }
-
-  Future<User?> _safeGetKakaoUser() async {
-    try {
-      _log('UserApi.instance.me() 호출');
-      final user = await UserApi.instance.me();
-      _log('me() 성공');
-      return user;
-    } catch (e, s) {
-      _log('me() 실패: $e');
-      debugPrint('$s');
-      return null;
     }
   }
 

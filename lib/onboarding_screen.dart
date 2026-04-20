@@ -21,13 +21,23 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
+enum _LoginProvider {
+  none,
+  kakao,
+  apple,
+}
+
 class _OnboardingScreenState extends State<OnboardingScreen> {
   static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   int _currentPage = 0;
   final PageController _pageController = PageController();
 
-  bool _isLoggingIn = false;
+  _LoginProvider _loadingProvider = _LoginProvider.none;
+
+  bool get _isLoggingIn => _loadingProvider != _LoginProvider.none;
+  bool get _isKakaoLoggingIn => _loadingProvider == _LoginProvider.kakao;
+  bool get _isAppleLoggingIn => _loadingProvider == _LoginProvider.apple;
 
   void _showLoginMessage(String message) {
     if (!mounted) return;
@@ -46,7 +56,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _handleKakaoLogin() async {
     if (_isLoggingIn) return;
 
-    setState(() => _isLoggingIn = true);
+    setState(() => _loadingProvider = _LoginProvider.kakao);
 
     try {
       OAuthToken token;
@@ -106,12 +116,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             (route) => false,
       );
     } catch (error, stack) {
-      debugPrint('--- [Error] 로그인 실패: $error ---');
+      debugPrint('--- [Error] 카카오 로그인 실패: $error ---');
       debugPrint('$stack');
       _showLoginMessage('로그인 중 문제가 발생했어요.');
     } finally {
       if (mounted) {
-        setState(() => _isLoggingIn = false);
+        setState(() => _loadingProvider = _LoginProvider.none);
       }
     }
   }
@@ -119,7 +129,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _handleAppleLogin() async {
     if (_isLoggingIn) return;
 
-    setState(() => _isLoggingIn = true);
+    setState(() => _loadingProvider = _LoginProvider.apple);
 
     try {
       final credential = await SignInWithApple.getAppleIDCredential(
@@ -171,7 +181,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _showLoginMessage('애플 로그인 중 문제가 발생했어요.');
     } finally {
       if (mounted) {
-        setState(() => _isLoggingIn = false);
+        setState(() => _loadingProvider = _LoginProvider.none);
       }
     }
   }
@@ -346,7 +356,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         onTap: _isLoggingIn ? null : _handleKakaoLogin,
         child: AnimatedOpacity(
           duration: const Duration(milliseconds: 180),
-          opacity: _isLoggingIn ? 0.72 : 1.0,
+          opacity: _isLoggingIn && !_isKakaoLoggingIn ? 0.72 : 1.0,
           child: Container(
             height: 54,
             decoration: ShapeDecoration(
@@ -365,7 +375,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (_isLoggingIn) ...[
+                if (_isKakaoLoggingIn) ...[
                   const SizedBox(
                     width: 22,
                     height: 22,
@@ -388,7 +398,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   Image.asset('assets/images/kakao_logo.png', height: 24),
                   const SizedBox(width: 10),
                   const Text(
-                    '카카오로 로그인',
+                    '카카오로 시작하기',
                     style: TextStyle(
                       color: Colors.black,
                       fontSize: 16,
@@ -406,28 +416,66 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildAppleLoginButton() {
-    return GestureDetector(
-      onTap: _handleAppleLogin,
-      child: Container(
-        height: 54,
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(27),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.apple, color: Colors.white, size: 20),
-            const SizedBox(width: 10),
-            const Text(
-              'Apple로 로그인',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 180),
+      opacity: _isLoggingIn && !_isAppleLoggingIn ? 0.72 : 1.0,
+      child: IgnorePointer(
+        ignoring: _isLoggingIn,
+        child: SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(27),
+              onTap: _handleAppleLogin,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(27),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isAppleLoggingIn) ...[
+                      const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        '로그인 중...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ] else ...[
+                      const Icon(
+                        Icons.apple,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Apple로 로그인',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

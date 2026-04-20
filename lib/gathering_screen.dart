@@ -896,7 +896,11 @@ class _GatheringScreenState extends State<GatheringScreen>
     if (widget.initialSearchItem != null &&
         widget.initialSearchItem != oldWidget.initialSearchItem) {
       _pendingSearchItem = widget.initialSearchItem;
-      _applySearchItem(widget.initialSearchItem!);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || widget.initialSearchItem == null) return;
+        _applySearchItem(widget.initialSearchItem!);
+      });
       return;
     }
 
@@ -959,9 +963,20 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   void _applySearchItem(GlobalSearchItem item) {
+    if (!mounted) return;
+
     _pendingSearchItem = item;
 
     if (item.gatheringTab == null) return;
+
+    final bool noFishData = _fishList.isEmpty;
+    final bool noBirdData = _birdList.isEmpty;
+    final bool noInsectData = _insectList.isEmpty;
+    final bool noPlantData = _plantList.isEmpty;
+
+    if (noFishData && noBirdData && noInsectData && noPlantData) {
+      return;
+    }
 
     final normalizedId = _normalizeGatheringTargetId(item.id);
 
@@ -1080,15 +1095,20 @@ class _GatheringScreenState extends State<GatheringScreen>
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        final fish = data
+        final loadedList = data
             .map((e) => FishItem.fromJson(e as Map<String, dynamic>))
             .toList();
 
         setState(() {
-          _fishList = fish;
+          _fishList = loadedList;
           _isFishLoading = false;
         });
+
         _applyFilters();
+
+        if (_pendingSearchItem != null) {
+          _applySearchItem(_pendingSearchItem!);
+        }
       } else {
         setState(() {
           _errorMessage = '물고기 데이터를 불러오지 못했어요. (${response.statusCode})';
@@ -1118,15 +1138,20 @@ class _GatheringScreenState extends State<GatheringScreen>
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        final birds = data
+        final loadedList = data
             .map((e) => BirdItem.fromJson(e as Map<String, dynamic>))
             .toList();
 
         setState(() {
-          _birdList = birds;
+          _birdList = loadedList;
           _isBirdLoading = false;
         });
+
         _applyFilters();
+
+        if (_pendingSearchItem != null) {
+          _applySearchItem(_pendingSearchItem!);
+        }
       } else {
         setState(() {
           _errorMessage = '새 데이터를 불러오지 못했어요. (${response.statusCode})';
@@ -1156,15 +1181,20 @@ class _GatheringScreenState extends State<GatheringScreen>
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        final insects = data
+        final loadedList = data
             .map((e) => InsectItem.fromJson(e as Map<String, dynamic>))
             .toList();
 
         setState(() {
-          _insectList = insects;
+          _insectList = loadedList;
           _isInsectLoading = false;
         });
+
         _applyFilters();
+
+        if (_pendingSearchItem != null) {
+          _applySearchItem(_pendingSearchItem!);
+        }
       } else {
         setState(() {
           _errorMessage = '곤충 데이터를 불러오지 못했어요. (${response.statusCode})';
@@ -1194,25 +1224,30 @@ class _GatheringScreenState extends State<GatheringScreen>
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        final plants = data
+        final loadedList = data
             .map((e) => PlantItem.fromJson(e as Map<String, dynamic>))
             .toList();
 
         setState(() {
-          _plantList = plants;
+          _plantList = loadedList;
           _isPlantLoading = false;
         });
+
         _applyFilters();
+
+        if (_pendingSearchItem != null) {
+          _applySearchItem(_pendingSearchItem!);
+        }
       } else {
         setState(() {
-          _errorMessage = '원예 데이터를 불러오지 못했어요. (${response.statusCode})';
+          _errorMessage = '식물 데이터를 불러오지 못했어요. (${response.statusCode})';
           _isPlantLoading = false;
         });
       }
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = '원예 데이터를 불러오는 중 오류가 발생했어요.';
+        _errorMessage = '식물 데이터를 불러오는 중 오류가 발생했어요.';
         _isPlantLoading = false;
       });
     }
