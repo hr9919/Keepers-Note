@@ -515,22 +515,15 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
                     children: [
                       Row(
                         children: [
-                          _buildAppBarButton(
-                            icon: 'assets/icons/ic_menu.svg',
-                            onTap: widget.openDrawer ?? () {},
-                          ),
+                          _buildBackButton(),
+
                           const Spacer(),
+
                           _buildAppTitle(),
+
                           const Spacer(),
-                          _buildAppBarButton(
-                            icon: 'assets/icons/ic_settings.svg',
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SettingsScreen(),
-                              ),
-                            ),
-                          ),
+
+                          const SizedBox(width: 40),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -857,6 +850,34 @@ class _EncyclopediaScreenState extends State<EncyclopediaScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBackButton() {
+    return Material(
+      color: const Color(0xFFFFF3F0),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.pop(context),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: const Color(0xFFFFE2DB),
+              width: 1,
+            ),
+          ),
+          child: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 18,
+            color: Color(0xFFFF8E7C),
+          ),
+        ),
       ),
     );
   }
