@@ -1116,6 +1116,7 @@ class _MainWrapperState extends State<MainWrapper> {
         resetSearchSignal: _searchResetSignal,
         userId: _serverUserId,
         isAdmin: _isAdmin,
+        onExternalSearchRequested: _handleGlobalSearchSelection,
       ),
       PetScreen(
         key: const ValueKey('pet_tab'),

@@ -176,32 +176,6 @@ class _HomeScreenState extends State<HomeScreen>
     return raw;
   }
 
-  double _previewSpawnPointOpacity(SpawnPointModel point) {
-    if (point.hasAnyVotedByMe) return 1.0;
-    if (point.isOakVerified || point.isFluoriteVerified) return 1.0;
-
-    final int maxVote = point.resources.isEmpty
-        ? 0
-        : point.resources
-        .map((r) => r.voteCount)
-        .reduce((a, b) => a > b ? a : b);
-
-    switch (maxVote) {
-      case 0:
-        return 0.32;
-      case 1:
-        return 0.46;
-      case 2:
-        return 0.60;
-      case 3:
-        return 0.76;
-      case 4:
-        return 0.90;
-      default:
-        return 1.0;
-    }
-  }
-
   Widget _buildPreviewSpawnPin(SpawnPointModel point) {
     final bool hasOak = point.oak != null;
     final bool hasFluorite = point.fluorite != null;
@@ -2146,28 +2120,27 @@ class _HomeScreenState extends State<HomeScreen>
                     child: Transform.scale(
                       scale: textScale,
                       alignment: Alignment.centerLeft,
-                      child: Opacity(
-                        opacity: 0.74,
-                        child: Text(
-                          place.nameKo,
-                          style: const TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            height: 1.0,
-                            shadows: [
-                              Shadow(
-                                color: Color(0xBB000000),
-                                blurRadius: 4,
-                                offset: Offset(0, 1),
-                              ),
-                              Shadow(
-                                color: Color(0x55000000),
-                                blurRadius: 8,
-                                offset: Offset(0, 0),
-                              ),
-                            ],
-                          ),
+                      child: Text(
+                        place.nameKo,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          height: 1.0,
+                          shadows: [
+                            Shadow(
+                              color: Color(0xBB000000),
+                              blurRadius: 4,
+                              offset: Offset(0, 1),
+                            ),
+                            Shadow(
+                              color: Color(0x55000000),
+                              blurRadius: 8,
+                              offset: Offset(0, 0),
+                            ),
+                          ],
+                        ).copyWith(
+                          color: Colors.white.withOpacity(0.74),
                         ),
                       ),
                     ),
@@ -2290,15 +2263,16 @@ class _HomeScreenState extends State<HomeScreen>
             Positioned.fill(
               child: IgnorePointer(
                 ignoring: !_isPreviewFilterPanelOpen,
-                child: AnimatedOpacity(
+                child: AnimatedContainer(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOut,
-                  opacity: _isPreviewFilterPanelOpen ? 1 : 0,
+                  color: _isPreviewFilterPanelOpen
+                      ? const Color(0x2E000000)
+                      : Colors.transparent,
                   child: GestureDetector(
                     onTap: _closePreviewFilterPanel,
-                    child: Container(
-                      color: Colors.black.withOpacity(0.18),
-                    ),
+                    behavior: HitTestBehavior.opaque,
+                    child: const SizedBox.expand(),
                   ),
                 ),
               ),
@@ -2631,171 +2605,170 @@ class _HomeScreenState extends State<HomeScreen>
       right: _isPreviewFilterPanelOpen ? 12 : -320,
       child: IgnorePointer(
         ignoring: !_isPreviewFilterPanelOpen,
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-          opacity: _isPreviewFilterPanelOpen ? 1 : 0.96,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              width: 286,
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height
-                    - topPadding
-                    - bottomPadding
-                    - 120,
+        child: Material(
+          color: Colors.transparent,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            width: 286,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height
+                  - topPadding
+                  - bottomPadding
+                  - 120,
+            ),
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            decoration: BoxDecoration(
+              color: _isPreviewFilterPanelOpen
+                  ? const Color(0xFFFDFDFD)
+                  : const Color(0xF5FDFDFD),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: const Color(0xFFF0E3DC),
               ),
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.992),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: const Color(0xFFF0E3DC),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.09),
+                  blurRadius: 22,
+                  offset: const Offset(-4, 10),
                 ),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.09),
-                    blurRadius: 22,
-                    offset: const Offset(-4, 10),
-                  ),
-                  BoxShadow(
-                    color: const Color(0xFFFF8E7C).withOpacity(0.045),
-                    blurRadius: 14,
-                    offset: const Offset(-2, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      const Expanded(
-                        child: Text(
-                          '정렬 및 필터',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF443834),
-                          ),
+                BoxShadow(
+                  color: const Color(0xFFFF8E7C).withOpacity(0.045),
+                  blurRadius: 14,
+                  offset: const Offset(-2, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    const Expanded(
+                      child: Text(
+                        '정렬 및 필터',
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF443834),
                         ),
                       ),
-                      _buildHomeFilterPanelIconButton(
-                        icon: Icons.refresh_rounded,
-                        onTap: _resetPreviewFiltersToDefault,
-                      ),
-                      const SizedBox(width: 6),
-                      _buildHomeFilterPanelIconButton(
-                        icon: Icons.close_rounded,
-                        onTap: _closePreviewFilterPanel,
-                      ),
-                    ],
+                    ),
+                    _buildHomeFilterPanelIconButton(
+                      icon: Icons.refresh_rounded,
+                      onTap: _resetPreviewFiltersToDefault,
+                    ),
+                    const SizedBox(width: 6),
+                    _buildHomeFilterPanelIconButton(
+                      icon: Icons.close_rounded,
+                      onTap: _closePreviewFilterPanel,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '필터',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF6E625D),
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    '필터',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF6E625D),
+                ),
+                const SizedBox(height: 8),
+                _buildHomePreviewCompactTogglePair(),
+                const SizedBox(height: 14),
+                Flexible(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        _buildHomePreviewFilterSection(
+                          title: '유동 자원',
+                          items: mobileResourceItems,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildHomePreviewFilterSection(
+                          title: '채집 자원',
+                          items: gatherItems,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildHomePreviewFilterSection(
+                          title: '버섯 종류',
+                          items: mushroomItems,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  _buildHomePreviewCompactTogglePair(),
-                  const SizedBox(height: 14),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          _buildHomePreviewFilterSection(
-                            title: '유동 자원',
-                            items: mobileResourceItems,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Container(
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: const Color(0xFFE7DBD3),
                           ),
-                          const SizedBox(height: 12),
-                          _buildHomePreviewFilterSection(
-                            title: '채집 자원',
-                            items: gatherItems,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildHomePreviewFilterSection(
-                            title: '버섯 종류',
-                            items: mushroomItems,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Container(
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
                             borderRadius: BorderRadius.circular(15),
-                            border: Border.all(
-                              color: const Color(0xFFE7DBD3),
-                            ),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(15),
-                              onTap: _resetPreviewFiltersToDefault,
-                              child: const Center(
-                                child: Text(
-                                  '기본값',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 12.5,
-                                    color: Color(0xFF8A7B71),
-                                  ),
+                            onTap: _resetPreviewFiltersToDefault,
+                            child: const Center(
+                              child: Text(
+                                '기본값',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12.5,
+                                  color: Color(0xFF8A7B71),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Container(
-                          height: 42,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFFFF9C88),
-                                Color(0xFFFF8E7C),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(15),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        height: 42,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFFFF9C88),
+                              Color(0xFFFF8E7C),
+                            ],
                           ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(15),
-                              onTap: _closePreviewFilterPanel,
-                              child: const Center(
-                                child: Text(
-                                  '적용',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 12.5,
-                                    color: Colors.white,
-                                  ),
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(15),
+                            onTap: _closePreviewFilterPanel,
+                            child: const Center(
+                              child: Text(
+                                '적용',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12.5,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -3386,13 +3359,12 @@ class _HomeScreenState extends State<HomeScreen>
                         return Positioned(
                           left: baseX + sway,
                           top: y,
-                          child: Opacity(
-                            opacity: 0.34 + band * 0.08,
-                            child: Text(
-                              '✦',
-                              style: TextStyle(
-                                fontSize: size,
-                                color: Colors.white.withOpacity(0.74),
+                          child: Text(
+                            '✦',
+                            style: TextStyle(
+                              fontSize: size,
+                              color: Colors.white.withOpacity(
+                                (0.34 + band * 0.08) * 0.74,
                               ),
                             ),
                           ),
@@ -3426,25 +3398,22 @@ class _HomeScreenState extends State<HomeScreen>
                         left: -12,
                         right: -12,
                         bottom: -26,
-                        child: Opacity(
-                          opacity: 0.24,
-                          child: Container(
-                            height: 110,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(120),
-                              gradient: const SweepGradient(
-                                startAngle: 3.2,
-                                endAngle: 6.2,
-                                colors: [
-                                  Color(0xFFFF8BA7),
-                                  Color(0xFFFFC46B),
-                                  Color(0xFFFFF08A),
-                                  Color(0xFF8DE3B7),
-                                  Color(0xFF82CFFF),
-                                  Color(0xFFC5A3FF),
-                                  Color(0xFFFF8BA7),
-                                ],
-                              ),
+                        child: Container(
+                          height: 110,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(120),
+                            gradient: const SweepGradient(
+                              startAngle: 3.2,
+                              endAngle: 6.2,
+                              colors: [
+                                Color(0x3DFF8BA7),
+                                Color(0x3DFFC46B),
+                                Color(0x3DFFF08A),
+                                Color(0x3D8DE3B7),
+                                Color(0x3D82CFFF),
+                                Color(0x3DC5A3FF),
+                                Color(0x3DFF8BA7),
+                              ],
                             ),
                           ),
                         ),
@@ -3457,21 +3426,20 @@ class _HomeScreenState extends State<HomeScreen>
                       Positioned(
                         top: 18,
                         right: 22,
-                        child: Opacity(
-                          opacity: 0.18 + glow * 0.18,
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.white.withOpacity(0.55),
-                                  blurRadius: 18,
-                                  spreadRadius: 2,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.white.withOpacity(
+                                  (0.18 + glow * 0.18) * 0.55,
                                 ),
-                              ],
-                            ),
+                                blurRadius: 18,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -3729,30 +3697,31 @@ class _HomeScreenState extends State<HomeScreen>
   }) {
     final radius = borderRadius ?? BorderRadius.circular(20);
 
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
-            borderRadius: radius,
-            border: Border.all(
-              color: Colors.white.withOpacity(0.22),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: child,
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.16),
+            Colors.white.withOpacity(0.08),
+          ],
         ),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.22),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      child: child,
     );
   }
 

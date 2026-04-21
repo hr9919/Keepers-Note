@@ -54,8 +54,9 @@ class KeepersHomeWidgetService {
 
     await HomeWidget.updateWidget(
       name: Platform.isAndroid
-          ? 'HomeWidgetProvider'
+          ? 'TodayInfoWidgetProvider'
           : 'HomeWidget',
+      androidName: 'TodayInfoWidgetProvider',
     );
   }
 }

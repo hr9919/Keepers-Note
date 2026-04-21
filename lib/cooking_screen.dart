@@ -9,6 +9,33 @@ import 'map_screen.dart';
 import 'setting_screen.dart';
 import 'dart:ui';
 
+int _parseLevel(Map<String, dynamic> json) {
+  final dynamic raw =
+      json['level'] ??
+          json['recipeLevel'] ??
+          json['recipe_level'] ??
+          json['gourmetLevel'] ??
+          json['gourmet_level'];
+
+  return int.tryParse(raw?.toString() ?? '') ?? 1;
+}
+
+bool _parseHiddenRecipe(Map<String, dynamic> json) {
+  final dynamic raw =
+      json['is_hidden_recipe'] ??
+          json['isHiddenRecipe'] ??
+          json['hiddenRecipe'] ??
+          json['hidden_recipe'];
+
+  if (raw is bool) return raw;
+  if (raw is num) return raw == 1;
+  if (raw is String) {
+    final value = raw.trim().toLowerCase();
+    return value == '1' || value == 'true' || value == 'y';
+  }
+  return false;
+}
+
 String _normalizeIngredientDisplayName(String raw) {
   final value = raw.trim().toLowerCase();
 
@@ -170,6 +197,7 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '아무 조개류': 'assets/images/icon_shellfish_any.png',
     '아무 랍스터': 'assets/images/icon_lobster_any.png',
     '아무 킹크랩': 'assets/images/icon_lobster_any.png',
+    '아무 해산물': 'assets/images/icon_lobster_any.png',
     '아무 커피': 'assets/images/cooking/coffee.webp',
     '아무 음식': 'assets/images/icon_food_any.png',
     '아무 음료': 'assets/images/icon_drink_any.png',
@@ -311,7 +339,7 @@ class RecipeIngredientDetail {
       isNavigable: (json['isNavigable'] ?? false) == true,
       image: json['image']?.toString(),
       isCultivable: (json['isCultivable'] ?? false) == true,
-      level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
+      level: _parseLevel(json),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price2'] ?? json['price_2'] ?? '0').toString()) ?? 0,
@@ -346,7 +374,7 @@ class CookingMaterialDetail {
       nameKo: (json['nameKo'] ?? json['name_ko'] ?? '').toString(),
       image: json['image']?.toString(),
       isCultivable: (json['isCultivable'] ?? json['is_cultivable'] ?? false) == true,
-      level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
+      level: _parseLevel(json),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price2'] ?? json['price_2'] ?? '0').toString()) ?? 0,
@@ -378,7 +406,7 @@ class RelatedRecipe {
       id: json['id']?.toString() ?? '',
       nameKo: (json['nameKo'] ?? json['name_ko'] ?? '').toString(),
       image: json['image']?.toString(),
-      level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
+      level: _parseLevel(json),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price2'] ?? json['price_2'] ?? '0').toString()) ?? 0,
@@ -423,6 +451,7 @@ class Gourmet {
   final int level;
   final String? image;
   final List<int> prices;
+  final bool isHiddenRecipe;
 
   Gourmet({
     required this.id,
@@ -432,6 +461,7 @@ class Gourmet {
     required this.level,
     this.image,
     required this.prices,
+    required this.isHiddenRecipe,
   });
 
   factory Gourmet.fromJson(Map<String, dynamic> json) {
@@ -453,7 +483,7 @@ class Gourmet {
         e as Map<String, dynamic>,
       ))
           .toList(),
-      level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
+      level: _parseLevel(json),
       image: json['image']?.toString(),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
@@ -462,6 +492,7 @@ class Gourmet {
         int.tryParse((json['price4'] ?? json['price_4'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price5'] ?? json['price_5'] ?? '0').toString()) ?? 0,
       ],
+      isHiddenRecipe: _parseHiddenRecipe(json),
     );
   }
 }
@@ -502,7 +533,7 @@ class CookingMaterialItem {
       nameKo: (json['nameKo'] ?? json['name_ko'] ?? '').toString(),
       image: json['image']?.toString(),
       isCultivable: parsedCultivable,
-      level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
+      level: _parseLevel(json),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price2'] ?? json['price_2'] ?? '0').toString()) ?? 0,
@@ -522,6 +553,8 @@ class CookingScreen extends StatefulWidget {
   final String userId;
   final bool isAdmin;
 
+  final void Function(GlobalSearchItem item)? onExternalSearchRequested;
+
   const CookingScreen({
     super.key,
     this.openDrawer,
@@ -529,6 +562,7 @@ class CookingScreen extends StatefulWidget {
     this.resetSearchSignal = 0,
     required this.userId,
     required this.isAdmin,
+    this.onExternalSearchRequested,
   });
 
   @override
@@ -559,7 +593,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   String _selectedFilter = '전체';
   String _searchQuery = '';
-  String _selectedSort = '이름순';
+  String _selectedSort = '레벨순';
 
   List<Gourmet> _allRecipeList = [];
   List<Gourmet> _visibleRecipeList = [];
@@ -1933,13 +1967,20 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         }).toList();
       }
 
-      if (_selectedFilter != '전체') {
-        if (_selectedFilter == '이벤트') {
-          filtered = filtered.where((item) => _isEventRecipe(item)).toList();
-        }
+      if (_selectedFilter == '일반 레시피') {
+        filtered = filtered.where((item) => !item.isHiddenRecipe).toList();
+      } else if (_selectedFilter == '히든 레시피') {
+        filtered = filtered.where((item) => item.isHiddenRecipe).toList();
       }
 
       switch (_selectedSort) {
+        case '레벨순':
+          filtered.sort((a, b) {
+            final levelCompare = a.level.compareTo(b.level);
+            if (levelCompare != 0) return levelCompare;
+            return a.nameKo.compareTo(b.nameKo);
+          });
+          break;
         case '가격순':
           filtered.sort((a, b) {
             final aPrice = a.prices.where((e) => e > 0).isEmpty
@@ -2000,6 +2041,13 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     }
 
     switch (_selectedSort) {
+      case '레벨순':
+        filtered.sort((a, b) {
+          final levelCompare = a.level.compareTo(b.level);
+          if (levelCompare != 0) return levelCompare;
+          return a.nameKo.compareTo(b.nameKo);
+        });
+        break;
       case '가격순':
         filtered.sort((a, b) {
           final aPrice = a.prices.where((e) => e > 0).isEmpty
@@ -2382,11 +2430,35 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
               final String? mapFilterKey =
               _mapFilterKeyForMaterial(ingredient.ingredientNameKo);
 
+              // 1) 지도 자원
               if (mapFilterKey != null) {
                 _openMapForMaterialResource(mapFilterKey);
                 return;
               }
 
+              // 2) 다른 요리가 재료인 경우 -> 그 요리 레시피 상세
+              if (ingredient.targetType == 'gourmet') {
+                final recipe = _findRecipeByIdOrName(
+                  recipeId: ingredient.targetId,
+                  recipeNameKo: ingredient.ingredientNameKo,
+                );
+
+                if (recipe != null) {
+                  _openRecipeDetail(recipe);
+                  return;
+                }
+              }
+
+              // 3) 물고기 재료인 경우 -> 홈 검색처럼 채집 물고기 탭으로
+              if (ingredient.targetType == 'fish') {
+                _jumpToFishInGathering(
+                  fishId: ingredient.targetId,
+                  fishNameKo: ingredient.ingredientNameKo,
+                );
+                return;
+              }
+
+              // 4) 나머지는 기존 재료 탭 이동
               if (ingredient.targetId != null && ingredient.targetId!.isNotEmpty) {
                 _jumpToMaterialById(
                   ingredient.targetId!,
@@ -2395,8 +2467,36 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
               }
             },
             onMaterialOpenDetail: (ingredientId) async {
+              final matched = ingredients.where((e) => e.targetId == ingredientId);
+              if (matched.isEmpty) return;
+
+              final ingredient = matched.first;
+
               if (!mounted) return;
               Navigator.pop(context);
+
+              // 다른 요리가 재료인 경우 -> 그 요리 레시피 상세
+              if (ingredient.targetType == 'gourmet') {
+                final recipe = _findRecipeByIdOrName(
+                  recipeId: ingredient.targetId,
+                  recipeNameKo: ingredient.ingredientNameKo,
+                );
+
+                if (recipe != null) {
+                  await _openRecipeDetail(recipe);
+                  return;
+                }
+              }
+
+              // 물고기 재료인 경우 -> 채집 물고기 탭으로
+              if (ingredient.targetType == 'fish') {
+                _jumpToFishInGathering(
+                  fishId: ingredient.targetId,
+                  fishNameKo: ingredient.ingredientNameKo,
+                );
+                return;
+              }
+
               await _openMaterialDetailById(ingredientId);
             },
           ),
@@ -2522,6 +2622,52 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         }
       });
     });
+  }
+
+  Gourmet? _findRecipeByIdOrName({
+    String? recipeId,
+    String? recipeNameKo,
+  }) {
+    if (recipeId != null && recipeId.trim().isNotEmpty) {
+      try {
+        return _allRecipeList.firstWhere((e) => e.id == recipeId.trim());
+      } catch (_) {}
+    }
+
+    if (recipeNameKo != null && recipeNameKo.trim().isNotEmpty) {
+      final normalizedName =
+      recipeNameKo.trim().replaceAll(' ', '').toLowerCase();
+
+      for (final recipe in _allRecipeList) {
+        final candidate =
+        recipe.nameKo.trim().replaceAll(' ', '').toLowerCase();
+        if (candidate == normalizedName) {
+          return recipe;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  void _jumpToFishInGathering({
+    String? fishId,
+    required String fishNameKo,
+  }) {
+    final item = GlobalSearchItem(
+      id: (fishId != null && fishId.trim().isNotEmpty)
+          ? 'fish_${fishId.trim()}'
+          : 'fish_${fishNameKo.trim()}',
+      title: fishNameKo.trim(),
+      subtitle: '물고기',
+      iconPath: _ingredientFallbackAssetPath(fishNameKo)
+          .replaceFirst('assets/', ''),
+      screen: SearchTargetScreen.gathering,
+      gatheringTab: GatheringTabType.fish,
+      keyword: fishNameKo.trim(),
+    );
+
+    widget.onExternalSearchRequested?.call(item);
   }
 
   void _jumpToMaterialById(String materialId, {String? displayName}) {
@@ -2657,6 +2803,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                 ),
               ),
               itemBuilder: (context) => [
+                _buildSortPopupItem('레벨순'),
                 _buildSortPopupItem('이름순'),
                 _buildSortPopupItem('가격순'),
                 _buildSortPopupItem('좋아요순'),

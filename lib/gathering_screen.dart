@@ -1200,69 +1200,91 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   void _applySearchItem(GlobalSearchItem item) {
-    if (!mounted) return;
-
     _pendingSearchItem = item;
 
     if (item.gatheringTab == null) return;
 
-    final bool noFishData = _fishList.isEmpty;
-    final bool noBirdData = _birdList.isEmpty;
-    final bool noInsectData = _insectList.isEmpty;
-    final bool noPlantData = _plantList.isEmpty;
-
-    if (noFishData && noBirdData && noInsectData && noPlantData) {
-      return;
-    }
-
     final normalizedId = _normalizeGatheringTargetId(item.id);
+    final displayText = item.title.trim();
+    final keyword = (item.keyword ?? item.title).trim().toLowerCase();
 
-    _dismissKeyboard();
-    _searchController.clear();
-    _searchQuery = '';
+    _searchController.value = TextEditingValue(
+      text: displayText,
+      selection: TextSelection.collapsed(offset: displayText.length),
+    );
+    _searchQuery = keyword;
     _selectedFilter = '전체';
 
-    int targetIndex = 0;
     switch (item.gatheringTab!) {
       case GatheringTabType.fish:
-        targetIndex = 0;
+        _tabController.animateTo(0);
         break;
       case GatheringTabType.bird:
-        targetIndex = 1;
+        _tabController.animateTo(1);
         break;
       case GatheringTabType.insect:
-        targetIndex = 2;
+        _tabController.animateTo(2);
         break;
       case GatheringTabType.plant:
-        targetIndex = 3;
+        _tabController.animateTo(3);
         break;
     }
 
-    _tabController.animateTo(targetIndex);
-
-    Future.delayed(const Duration(milliseconds: 260), () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyFilters();
+
+      String resolvedHighlightId = normalizedId;
+
+      if (item.gatheringTab == GatheringTabType.fish) {
+        final normalizedTitle =
+        item.title.trim().replaceAll(' ', '').toLowerCase();
+        final normalizedKeyword =
+        (item.keyword ?? item.title).trim().replaceAll(' ', '').toLowerCase();
+
+        for (final fish in _visibleFishList) {
+          final fishName =
+          _displayName(fish).trim().replaceAll(' ', '').toLowerCase();
+          final fishNameKo =
+          (fish.nameKo ?? '').trim().replaceAll(' ', '').toLowerCase();
+
+          final idMatch = fish.id.trim() == normalizedId.trim();
+          final nameMatch =
+              fishName == normalizedTitle ||
+                  fishName == normalizedKeyword ||
+                  fishNameKo == normalizedTitle ||
+                  fishNameKo == normalizedKeyword;
+
+          if (idMatch || nameMatch) {
+            resolvedHighlightId = fish.id;
+            break;
+          }
+        }
+      }
+
+      setState(() {
+        _highlightedId = resolvedHighlightId;
+      });
+
+      _scrollToTopForTab(item.gatheringTab!);
+
+      Future.delayed(const Duration(milliseconds: 350), () {
         if (!mounted) return;
 
+        _searchController.clear();
+        _searchQuery = '';
         _applyFilters();
+      });
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
 
         setState(() {
-          _highlightedId = normalizedId;
-        });
-
-        _scrollToTopForTab(item.gatheringTab!);
-
-        Future.delayed(const Duration(seconds: 2), () {
-          if (!mounted) return;
-
-          setState(() {
-            if (_highlightedId == normalizedId) {
-              _highlightedId = null;
-            }
-            _pendingSearchItem = null;
-          });
+          if (_highlightedId == resolvedHighlightId) {
+            _highlightedId = null;
+          }
+          _pendingSearchItem = null;
         });
       });
     });
@@ -1840,9 +1862,29 @@ class _GatheringScreenState extends State<GatheringScreen>
 
       switch (item.gatheringTab!) {
         case GatheringTabType.fish:
+          final normalizedTitle =
+          item.title.trim().replaceAll(' ', '').toLowerCase();
+          final normalizedKeyword =
+          (item.keyword ?? item.title).trim().replaceAll(' ', '').toLowerCase();
+
           _moveToTopInList<FishItem>(
             filteredFish,
-                (e) => e.id.trim() == normalizedId.trim(),
+                (e) {
+              final idMatch = e.id.trim() == normalizedId.trim();
+
+              final fishName =
+              _displayName(e).trim().replaceAll(' ', '').toLowerCase();
+              final fishNameKo =
+              (e.nameKo ?? '').trim().replaceAll(' ', '').toLowerCase();
+
+              final nameMatch =
+                  fishName == normalizedTitle ||
+                      fishName == normalizedKeyword ||
+                      fishNameKo == normalizedTitle ||
+                      fishNameKo == normalizedKeyword;
+
+              return idMatch || nameMatch;
+            },
           );
           break;
         case GatheringTabType.bird:
@@ -2070,6 +2112,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   Widget _buildFlowerColorSummaryBox(FlowerColorSummary color) {
     return Container(
       width: 62,
+      height: 58,
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       decoration: BoxDecoration(
@@ -2081,42 +2124,39 @@ class _GatheringScreenState extends State<GatheringScreen>
         ),
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.72),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               child: Image.asset(
                 _imageAssetPath(color.image),
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const Icon(
                   Icons.local_florist_rounded,
-                  size: 18,
+                  size: 16,
                   color: Color(0xFFB08968),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 5),
-          Expanded(
-            child: Center(
-              child: Text(
-                color.colorNameKo,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF6B5B45),
-                  height: 1.15,
-                ),
-              ),
+          const SizedBox(height: 4),
+          Text(
+            color.colorNameKo,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF6B5B45),
+              height: 1.1,
             ),
           ),
         ],
@@ -2747,17 +2787,17 @@ class _GatheringScreenState extends State<GatheringScreen>
                             if (plant.flowerColorSummaries.isNotEmpty)
                               SizedBox(
                                 height: 58,
-                                child: ListView.builder(
+                                child: SingleChildScrollView(
                                   scrollDirection: Axis.horizontal,
-                                  itemCount: plant.flowerColorSummaries.length,
-                                  itemBuilder: (context, index) {
-                                    return _buildFlowerColorSummaryBox(
-                                      plant.flowerColorSummaries[index],
-                                    );
-                                  },
+                                  physics: const BouncingScrollPhysics(),
+                                  child: Row(
+                                    children: plant.flowerColorSummaries
+                                        .map((color) => _buildFlowerColorSummaryBox(color))
+                                        .toList(),
+                                  ),
                                 ),
                               ),
-                            const Spacer(),
+                            const SizedBox(height: 8),
                             Align(
                               alignment: Alignment.centerRight,
                               child: _buildPriceButton(plant.prices),
@@ -2774,57 +2814,6 @@ class _GatheringScreenState extends State<GatheringScreen>
         ),
       ),
     );
-  }
-
-  List<Widget> _buildFlowerColorSummaryIcons(List<FlowerColorSummary> colors) {
-    if (colors.isEmpty) {
-      return [
-        Container(
-          width: 32,
-          height: 32,
-          margin: const EdgeInsets.only(right: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xC6FFF8E7),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: const Center(
-            child: Icon(
-              Icons.local_florist_rounded,
-              size: 16,
-              color: Color(0xFF7C6F57),
-            ),
-          ),
-        ),
-      ];
-    }
-
-    return colors.map((color) {
-      final path = _imageAssetPath(color.image);
-
-      return Container(
-        width: 32,
-        height: 32,
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xC6FFF8E7),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Image.asset(
-              path,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.local_florist_rounded,
-                size: 16,
-                color: Color(0xFF7C6F57),
-              ),
-            ),
-          ),
-        ),
-      );
-    }).toList();
   }
 
   Widget _buildFishCard(FishItem fish) {
