@@ -352,16 +352,17 @@ class FishItem {
       return int.tryParse(value.toString());
     }
 
+    final nameKo = (json['name_ko'] ?? json['nameKo'] ?? '').toString();
+
     return FishItem(
       id: (json['id'] ?? '').toString(),
-      name: (json['name'] ?? '').toString(),
-      nameKo: (json['name_ko'] ?? json['nameKo'] ?? json['name'] ?? '').toString(),
+      name: nameKo, // 🔥 핵심: name = nameKo로 통일
+      nameKo: nameKo,
       image: (json['image'] ?? '').toString(),
       location: (json['location'] ?? '').toString(),
       availableTime: (
           json['available_time'] ??
               json['availableTime'] ??
-              json['timeOfDay'] ??
               ''
       ).toString(),
       level: parseNullableInt(json['level']),
@@ -371,7 +372,7 @@ class FishItem {
       price3: parseNullableInt(json['price_3'] ?? json['price3']),
       price4: parseNullableInt(json['price_4'] ?? json['price4']),
       price5: parseNullableInt(json['price_5'] ?? json['price5']),
-      weather: (json['weather'] ?? 'Unknown').toString(),
+      weather: (json['weather'] ?? '').toString(),
     );
   }
 }
@@ -402,7 +403,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   String _selectedFilter = '전체';
   String _searchQuery = '';
-  String _selectedSort = '이름순';
+  String _selectedSort = '레벨순';
 
   bool _showTopBtn = false;
   bool _isFilterVisible = true;
@@ -596,6 +597,154 @@ class _GatheringScreenState extends State<GatheringScreen>
         .replaceAllMapped(RegExp(r'(\d{1,2})(?=시~| /|$)'), (m) => '${m[1]}');
   }
 
+  Map<String, Color> _locationChipColors(String raw) {
+    final value = raw.trim();
+    final compact = value.replaceAll(' ', '').toLowerCase();
+
+    // 강
+    if (compact.contains('거목강')) {
+      return {
+        'bg': const Color(0xFFEAF7EE),
+        'border': const Color(0xFFCFE8D7),
+        'text': const Color(0xFF3E8E5A),
+      };
+    }
+    if (compact.contains('고요한강')) {
+      return {
+        'bg': const Color(0xFFEAF4FF),
+        'border': const Color(0xFFCFE2FF),
+        'text': const Color(0xFF4A7FD1),
+      };
+    }
+    if (compact.contains('노을강')) {
+      return {
+        'bg': const Color(0xFFFFEFE6),
+        'border': const Color(0xFFFFD8C2),
+        'text': const Color(0xFFDD7A4A),
+      };
+    }
+    if (compact.contains('얕은강')) {
+      return {
+        'bg': const Color(0xFFF2FBF7),
+        'border': const Color(0xFFD9F1E7),
+        'text': const Color(0xFF4AA37C),
+      };
+    }
+    if (compact.contains('강전체') || compact == '강') {
+      return {
+        'bg': const Color(0xFFEDF6FF),
+        'border': const Color(0xFFD8E9FF),
+        'text': const Color(0xFF5A8FD8),
+      };
+    }
+
+    // 호수
+    if (compact.contains('숲속호수')) {
+      return {
+        'bg': const Color(0xFFF0F7EE),
+        'border': const Color(0xFFDDEBD8),
+        'text': const Color(0xFF5A8A57),
+      };
+    }
+    if (compact.contains('초원호수')) {
+      return {
+        'bg': const Color(0xFFF3FAEA),
+        'border': const Color(0xFFE0F0C8),
+        'text': const Color(0xFF7AA33C),
+      };
+    }
+    if (compact.contains('근교호수')) {
+      return {
+        'bg': const Color(0xFFF2F6FF),
+        'border': const Color(0xFFDEE7FF),
+        'text': const Color(0xFF6C7FD8),
+      };
+    }
+    if (compact.contains('온천산호수') || compact.contains('온천산수')) {
+      return {
+        'bg': const Color(0xFFFFF1E8),
+        'border': const Color(0xFFFFDDC7),
+        'text': const Color(0xFFD67C4A),
+      };
+    }
+    if (compact.contains('호수전체') || compact == '호수') {
+      return {
+        'bg': const Color(0xFFF2F7FF),
+        'border': const Color(0xFFDCE9FF),
+        'text': const Color(0xFF5C84C9),
+      };
+    }
+
+    // 바다
+    if (compact.contains('동해')) {
+      return {
+        'bg': const Color(0xFFEAF3FF),
+        'border': const Color(0xFFD1E2FF),
+        'text': const Color(0xFF4F7ECF),
+      };
+    }
+    if (compact.contains('구해')) {
+      return {
+        'bg': const Color(0xFFE9F7FF),
+        'border': const Color(0xFFCDEBFA),
+        'text': const Color(0xFF3D92B8),
+      };
+    }
+    if (compact.contains('고래바다')) {
+      return {
+        'bg': const Color(0xFFEDEBFF),
+        'border': const Color(0xFFD9D3FF),
+        'text': const Color(0xFF6E63C7),
+      };
+    }
+    if (compact.contains('잔잔한바다')) {
+      return {
+        'bg': const Color(0xFFEFFBFA),
+        'border': const Color(0xFFD6F0EE),
+        'text': const Color(0xFF4A9B95),
+      };
+    }
+    if (compact.contains('바다전체')) {
+      return {
+        'bg': const Color(0xFFF0F6FF),
+        'border': const Color(0xFFD9E6FF),
+        'text': const Color(0xFF5F86C9),
+      };
+    }
+    if (compact.contains('바다낚시사건') || compact.contains('바다낚시')) {
+      return {
+        'bg': const Color(0xFFFFF0F5),
+        'border': const Color(0xFFFFD8E6),
+        'text': const Color(0xFFD86A92),
+      };
+    }
+    if (compact.contains('바다') || compact.contains('해변') || compact.contains('해')) {
+      return {
+        'bg': const Color(0xFFF0F7FF),
+        'border': const Color(0xFFD9E9FF),
+        'text': const Color(0xFF5B88C7),
+      };
+    }
+
+    // 기본
+    return {
+      'bg': const Color(0xFFF4F6F8),
+      'border': const Color(0xFFE5E7EB),
+      'text': const Color(0xFF6B7280),
+    };
+  }
+
+  Widget _buildLocationTag(String location) {
+    final colors = _locationChipColors(location);
+
+    return _buildBaseChip(
+      location,
+      bg: colors['bg']!,
+      border: colors['border']!,
+      textColor: colors['text']!,
+    );
+  }
+
   String _normalizeLocationLabel(String raw) {
     final value = raw.trim();
     final compact = value.replaceAll(' ', '').toLowerCase();
@@ -740,6 +889,70 @@ class _GatheringScreenState extends State<GatheringScreen>
     return hours.first;
   }
 
+  Map<String, Color> _levelChipColors(int level) {
+    if (level == 1) {
+      return {
+        'bg': const Color(0xFFEEEEEE),
+        'border': const Color(0xFFBDBDBD),
+        'text': const Color(0xFF616161),
+      };
+    } else if (level == 2) {
+      return {
+        'bg': const Color(0xFFFFEBEE),
+        'border': const Color(0xFFFFCDD2),
+        'text': const Color(0xFFC62828),
+      };
+    } else if (level == 3) {
+      return {
+        'bg': const Color(0xFFFFF3E0),
+        'border': const Color(0xFFFFE0B2),
+        'text': const Color(0xFFE65100),
+      };
+    } else if (level == 4) {
+      return {
+        'bg': const Color(0xFFFFFDE7),
+        'border': const Color(0xFFFFF9C4),
+        'text': const Color(0xFFF57F17),
+      };
+    } else if (level == 5) {
+      return {
+        'bg': const Color(0xFFE8F5E9),
+        'border': const Color(0xFFC8E6C9),
+        'text': const Color(0xFF2E7D32),
+      };
+    } else if (level == 6) {
+      return {
+        'bg': const Color(0xFFE1F5FE),
+        'border': const Color(0xFFB3E5FC),
+        'text': const Color(0xFF0277BD),
+      };
+    } else if (level == 7) {
+      return {
+        'bg': const Color(0xFFE8EAF6),
+        'border': const Color(0xFFC5CAE9),
+        'text': const Color(0xFF1A237E),
+      };
+    } else if (level == 8) {
+      return {
+        'bg': const Color(0xFFF3E5F5),
+        'border': const Color(0xFFE1BEE7),
+        'text': const Color(0xFF7B1FA2),
+      };
+    } else if (level == 9) {
+      return {
+        'bg': const Color(0xFFFCE4EC),
+        'border': const Color(0xFFF8BBD0),
+        'text': const Color(0xFFC2185B),
+      };
+    } else {
+      return {
+        'bg': const Color(0xFFFFF8E1),
+        'border': const Color(0xFFFFECB3),
+        'text': const Color(0xFFEF6C00),
+      };
+    }
+  }
+
   Map<String, Color> _timeChipColors(String raw) {
     final hour = _extractRepresentativeHour(raw);
 
@@ -787,10 +1000,17 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     final compact = time.trim().replaceAll(' ', '').toLowerCase();
 
+    // 🔥 여기 추가 (핵심)
+    if (compact == 'allday' ||
+        compact == 'all' ||
+        compact == '0~24' ||
+        compact == '0-24' ||
+        compact == '상시' ||
+        compact == '하루종일') {
+      return '';
+    }
+
     switch (compact) {
-      case 'all':
-      case 'dawn_day_night':
-        return '';
       case 'day_night':
         return '6시~24시';
       case 'dawn_night':
@@ -935,7 +1155,10 @@ class _GatheringScreenState extends State<GatheringScreen>
     _fetchPlants();
   }
 
-  void _scrollToTopForTab(GatheringTabType tab) {
+  void _scrollToTopForTab(
+      GatheringTabType tab, {
+        int retryCount = 0,
+      }) {
     ScrollController? controller;
 
     switch (tab) {
@@ -951,16 +1174,26 @@ class _GatheringScreenState extends State<GatheringScreen>
       case GatheringTabType.plant:
         controller = _plantScrollController;
         break;
-      default:
-        return;
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || controller == null || !controller.hasClients) return;
+    if (controller == null) return;
 
-      controller.animateTo(
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      if (!controller!.hasClients) {
+        if (retryCount < 8) {
+          Future.delayed(const Duration(milliseconds: 80), () {
+            if (!mounted) return;
+            _scrollToTopForTab(tab, retryCount: retryCount + 1);
+          });
+        }
+        return;
+      }
+
+      controller!.animateTo(
         0,
-        duration: const Duration(milliseconds: 350),
+        duration: const Duration(milliseconds: 420),
         curve: Curves.easeOutCubic,
       );
     });
@@ -984,42 +1217,52 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     final normalizedId = _normalizeGatheringTargetId(item.id);
 
+    _dismissKeyboard();
     _searchController.clear();
     _searchQuery = '';
+    _selectedFilter = '전체';
 
+    int targetIndex = 0;
     switch (item.gatheringTab!) {
       case GatheringTabType.fish:
-        _tabController.animateTo(0);
+        targetIndex = 0;
         break;
       case GatheringTabType.bird:
-        _tabController.animateTo(1);
+        targetIndex = 1;
         break;
       case GatheringTabType.insect:
-        _tabController.animateTo(2);
+        targetIndex = 2;
         break;
       case GatheringTabType.plant:
-        _tabController.animateTo(3);
+        targetIndex = 3;
         break;
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _tabController.animateTo(targetIndex);
+
+    Future.delayed(const Duration(milliseconds: 260), () {
       if (!mounted) return;
 
-      _applyFilters();
-
-      setState(() {
-        _highlightedId = normalizedId;
-      });
-
-      _scrollToTopForTab(item.gatheringTab!);
-
-      Future.delayed(const Duration(seconds: 2), () {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+
+        _applyFilters();
+
         setState(() {
-          if (_highlightedId == normalizedId) {
-            _highlightedId = null;
-          }
-          _pendingSearchItem = null;
+          _highlightedId = normalizedId;
+        });
+
+        _scrollToTopForTab(item.gatheringTab!);
+
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!mounted) return;
+
+          setState(() {
+            if (_highlightedId == normalizedId) {
+              _highlightedId = null;
+            }
+            _pendingSearchItem = null;
+          });
         });
       });
     });
@@ -1268,8 +1511,10 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     final isRiver = _containsAny(location, ['river', '강', '하천']);
     final isLake = _containsAny(location, ['lake', '호수', '연못']);
-    final isSea = _containsAny(location, [
-      'sea', 'ocean', 'fishing', '바다', '해역', '바다낚시', '동해', '구해', '고래바다', '잔잔한바다'
+    final normalizedLocation = location.replaceAll(' ', '');
+
+    final isSea = _containsAny(normalizedLocation, [
+      '바다', '해', '고래바다', '잔잔한바다'
     ]);
 
     switch (filter) {
@@ -1535,11 +1780,9 @@ class _GatheringScreenState extends State<GatheringScreen>
     if (query.isNotEmpty) {
       filteredFish = filteredFish.where((item) {
         final ko = (item.nameKo ?? '').toLowerCase();
-        final en = item.name.toLowerCase();
-        return ko.contains(query) || en.contains(query);
+        return ko.contains(query);
       }).toList();
-    }
-    if (tabIndex == 0 && _selectedFilter != '전체') {
+    }    if (tabIndex == 0 && _selectedFilter != '전체') {
       filteredFish = filteredFish
           .where((item) => _matchesFishFilter(item, _selectedFilter))
           .toList();
@@ -1637,6 +1880,15 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   void _sortFish(List<FishItem> list) {
     switch (_selectedSort) {
+      case '레벨순':
+        list.sort((a, b) {
+          final aLevel = a.level ?? 0;
+          final bLevel = b.level ?? 0;
+          final levelCompare = aLevel.compareTo(bLevel);
+          if (levelCompare != 0) return levelCompare;
+          return _displayName(a).compareTo(_displayName(b));
+        });
+        break;
       case '가격순':
         list.sort((a, b) {
           final aPrice = a.price5 ?? a.price4 ?? a.price3 ?? a.price2 ?? a.price1 ?? a.price ?? 0;
@@ -1665,6 +1917,13 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   void _sortBirds(List<BirdItem> list) {
     switch (_selectedSort) {
+      case '레벨순':
+        list.sort((a, b) {
+          final levelCompare = a.level.compareTo(b.level);
+          if (levelCompare != 0) return levelCompare;
+          return _displayBirdName(a).compareTo(_displayBirdName(b));
+        });
+        break;
       case '가격순':
         list.sort((a, b) {
           final compare = _maxPrice(b.prices).compareTo(_maxPrice(a.prices));
@@ -1691,6 +1950,13 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   void _sortInsects(List<InsectItem> list) {
     switch (_selectedSort) {
+      case '레벨순':
+        list.sort((a, b) {
+          final levelCompare = a.level.compareTo(b.level);
+          if (levelCompare != 0) return levelCompare;
+          return _displayInsectName(a).compareTo(_displayInsectName(b));
+        });
+        break;
       case '가격순':
         list.sort((a, b) {
           final compare = _maxPrice(b.prices).compareTo(_maxPrice(a.prices));
@@ -1935,6 +2201,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                 ),
               ),
               itemBuilder: (context) => [
+                _buildSortPopupItem('레벨순'),
                 _buildSortPopupItem('이름순'),
                 _buildSortPopupItem('가격순'),
                 _buildSortPopupItem('좋아요순'),
@@ -2285,6 +2552,8 @@ class _GatheringScreenState extends State<GatheringScreen>
     final bool isHighlighted = _highlightedId == insect.id;
     final timeChip = _normalizeInsectTimeLabel(insect.availableTime);
     final locationChip = _normalizeInsectLocationLabel(insect.location);
+    final levelColors = _levelChipColors(insect.level);
+    final timeColors = _timeChipColors(timeChip);
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -2306,11 +2575,21 @@ class _GatheringScreenState extends State<GatheringScreen>
                       spacing: 4,
                       runSpacing: 4,
                       children: [
-                        _buildSmallTag('채집 ${insect.level}레벨'),
+                        _buildBaseChip(
+                          '채집 ${insect.level}레벨',
+                          bg: levelColors['bg']!,
+                          border: levelColors['border']!,
+                          textColor: levelColors['text']!,
+                        ),
                         if (timeChip.isNotEmpty)
-                          _buildSmallTag(timeChip, isTime: true),
+                          _buildBaseChip(
+                            timeChip,
+                            bg: timeColors['bg']!,
+                            border: timeColors['border']!,
+                            textColor: timeColors['text']!,
+                          ),
                         if (locationChip.isNotEmpty)
-                          _buildSmallTag(locationChip, isLocation: true),
+                          _buildLocationTag(locationChip),
                       ],
                     ),
                     const Spacer(),
@@ -2331,6 +2610,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   Widget _buildPlantCard(PlantItem plant) {
     final bool isHighlighted = _highlightedId == plant.id;
     final bool isFavorite = _favoriteIds.contains(plant.id);
+    final levelColors = _levelChipColors(plant.level);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -2360,7 +2640,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isHighlighted
-                      ? const Color(0xFFFFB27A).withOpacity(0.6)
+                      ? const Color(0xFFFFB27A).withOpacity(0.55)
                       : const Color(0xFFFF8E7C).withOpacity(0.12),
                   width: 1,
                 ),
@@ -2375,24 +2655,21 @@ class _GatheringScreenState extends State<GatheringScreen>
                       height: 116,
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFFAF8),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.black.withOpacity(0.05),
+                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
                         ),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(6),
-                            child: Image.asset(
-                              _imageAssetPath(plant.image),
-                              fit: BoxFit.contain,
-                              alignment: Alignment.center,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.local_florist_rounded,
-                                color: Colors.grey,
-                              ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Image.asset(
+                            _imageAssetPath(plant.image),
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.local_florist,
+                              color: Colors.grey,
                             ),
                           ),
                         ),
@@ -2403,7 +2680,6 @@ class _GatheringScreenState extends State<GatheringScreen>
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(minHeight: 116),
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
@@ -2450,53 +2726,41 @@ class _GatheringScreenState extends State<GatheringScreen>
                               ],
                             ),
                             const SizedBox(height: 6),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
                               children: [
-                                Expanded(
-                                  child: Wrap(
-                                    spacing: 5,
-                                    runSpacing: 4,
-                                    children: [
-                                      _buildSmallTag('원예 ${plant.level}레벨'),
-                                      if (plant.growthTime.trim().isNotEmpty &&
-                                          plant.growthTime.trim() != '-')
-                                        _buildGrowthTimeTag(
-                                          plant.growthTime.trim(),
-                                        ),
-                                    ],
-                                  ),
+                                _buildBaseChip(
+                                  '원예 ${plant.level}레벨',
+                                  bg: levelColors['bg']!,
+                                  border: levelColors['border']!,
+                                  textColor: levelColors['text']!,
                                 ),
-                                const SizedBox(width: 6),
-                                const Padding(
-                                  padding: EdgeInsets.only(right: 2),
-                                  child: Icon(
-                                    Icons.chevron_right_rounded,
-                                    size: 22,
-                                    color: Color(0xFFB8C2CC),
+                                if (plant.growthTime.trim().isNotEmpty &&
+                                    plant.growthTime.trim() != '-')
+                                  _buildGrowthTimeTag(
+                                    plant.growthTime.trim(),
                                   ),
-                                ),
                               ],
                             ),
                             const SizedBox(height: 8),
-                            SizedBox(
-                              height: 34,
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: _buildFlowerColorSummaryIcons(
-                                    plant.flowerColorSummaries,
-                                  ),
+                            if (plant.flowerColorSummaries.isNotEmpty)
+                              SizedBox(
+                                height: 58,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: plant.flowerColorSummaries.length,
+                                  itemBuilder: (context, index) {
+                                    return _buildFlowerColorSummaryBox(
+                                      plant.flowerColorSummaries[index],
+                                    );
+                                  },
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
+                            const Spacer(),
                             Align(
                               alignment: Alignment.centerRight,
-                              child: _buildPriceButton(
-                                plant.prices,
-                                seedCost: null,
-                              ),
+                              child: _buildPriceButton(plant.prices),
                             ),
                           ],
                         ),
@@ -2575,7 +2839,8 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     final timeChip = _formatAvailableTimeChip(fish.availableTime);
     final weatherLabels = _normalizeWeatherLabel(fish.weather);
-    final locationChip = _normalizeLocationLabel(fish.location);
+    final locationChip = fish.location.trim();
+    final timeColors = _timeChipColors(timeChip);
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -2598,14 +2863,61 @@ class _GatheringScreenState extends State<GatheringScreen>
                       runSpacing: 4,
                       children: [
                         if (fish.level != null)
-                          _buildSmallTag('낚시 ${fish.level}레벨'),
+                          _buildBaseChip(
+                            '낚시 ${fish.level}레벨',
+                            bg: _levelChipColors(fish.level!)['bg']!,
+                            border: _levelChipColors(fish.level!)['border']!,
+                            textColor: _levelChipColors(fish.level!)['text']!,
+                          ),
                         if (timeChip.isNotEmpty)
-                          _buildSmallTag(timeChip, isTime: true),
+                          _buildBaseChip(
+                            timeChip,
+                            bg: timeColors['bg']!,
+                            border: timeColors['border']!,
+                            textColor: timeColors['text']!,
+                          ),
                         if (locationChip.isNotEmpty)
-                          _buildSmallTag(locationChip, isLocation: true),
-                        ...weatherLabels.map(
-                              (label) => _buildSmallTag(label, isWeather: true),
-                        ),
+                          _buildLocationTag(locationChip),
+                        ...weatherLabels.map((label) {
+                          Color bg = const Color(0xFFF0F7FF);
+                          Color border = const Color(0xFFD9E9FF);
+                          Color textColor = const Color(0xFF5B88C7);
+
+                          switch (label) {
+                            case '맑음':
+                              bg = const Color(0xFFFFF7D6);
+                              border = const Color(0xFFFFE6A3);
+                              textColor = const Color(0xFFB7791F);
+                              break;
+                            case '비':
+                              bg = const Color(0xFFEAF3FF);
+                              border = const Color(0xFFD4E4FF);
+                              textColor = const Color(0xFF4A67A1);
+                              break;
+                            case '눈':
+                              bg = const Color(0xFFF3F4F6);
+                              border = const Color(0xFFE5E7EB);
+                              textColor = const Color(0xFF6B7280);
+                              break;
+                            case '무지개':
+                              bg = const Color(0xFFFFF0FA);
+                              border = const Color(0xFFF6D6EC);
+                              textColor = const Color(0xFFC05A9D);
+                              break;
+                            case '흐림':
+                              bg = const Color(0xFFF3F4F6);
+                              border = const Color(0xFFE5E7EB);
+                              textColor = const Color(0xFF6B7280);
+                              break;
+                          }
+
+                          return _buildBaseChip(
+                            label,
+                            bg: bg,
+                            border: border,
+                            textColor: textColor,
+                          );
+                        }),
                       ],
                     ),
                     const Spacer(),
@@ -2623,6 +2935,37 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
+  Widget _buildBaseChip(
+      String text, {
+        Color bg = const Color(0xFFF4F6F8),
+        Color border = const Color(0xFFE5E7EB),
+        Color textColor = const Color(0xFF6B7280),
+      }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: border,
+          width: 0.8,
+        ),
+      ),
+      child: Transform.translate(
+        offset: const Offset(0, -0.5),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 9.5,
+            height: 1.0,
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBirdCard(BirdItem bird) {
     final bool isHighlighted = _highlightedId == bird.id;
     final timeChip = _formatAvailableTimeChip(
@@ -2630,6 +2973,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
     final locationChip = _normalizeBirdLocationLabel(bird.location);
     final weatherLabels = _normalizeWeatherLabel(bird.weather);
+    final timeColors = _timeChipColors(timeChip);
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -2651,14 +2995,61 @@ class _GatheringScreenState extends State<GatheringScreen>
                       spacing: 4,
                       runSpacing: 4,
                       children: [
-                        _buildSmallTag('관찰 ${bird.level}레벨'),
-                        if (timeChip.isNotEmpty)
-                          _buildSmallTag(timeChip, isTime: true),
-                        if (locationChip.isNotEmpty)
-                          _buildSmallTag(locationChip, isLocation: true),
-                        ...weatherLabels.map(
-                              (label) => _buildSmallTag(label, isWeather: true),
+                        _buildBaseChip(
+                          '관찰 ${bird.level}레벨',
+                          bg: _levelChipColors(bird.level)['bg']!,
+                          border: _levelChipColors(bird.level)['border']!,
+                          textColor: _levelChipColors(bird.level)['text']!,
                         ),
+                        if (timeChip.isNotEmpty)
+                          _buildBaseChip(
+                            timeChip,
+                            bg: timeColors['bg']!,
+                            border: timeColors['border']!,
+                            textColor: timeColors['text']!,
+                          ),
+                        if (locationChip.isNotEmpty)
+                          _buildLocationTag(locationChip),
+                        ...weatherLabels.map((label) {
+                          Color bg = const Color(0xFFF0F7FF);
+                          Color border = const Color(0xFFD9E9FF);
+                          Color textColor = const Color(0xFF5B88C7);
+
+                          switch (label) {
+                            case '맑음':
+                              bg = const Color(0xFFFFF7D6);
+                              border = const Color(0xFFFFE6A3);
+                              textColor = const Color(0xFFB7791F);
+                              break;
+                            case '비':
+                              bg = const Color(0xFFEAF3FF);
+                              border = const Color(0xFFD4E4FF);
+                              textColor = const Color(0xFF4A67A1);
+                              break;
+                            case '눈':
+                              bg = const Color(0xFFF3F4F6);
+                              border = const Color(0xFFE5E7EB);
+                              textColor = const Color(0xFF6B7280);
+                              break;
+                            case '무지개':
+                              bg = const Color(0xFFFFF0FA);
+                              border = const Color(0xFFF6D6EC);
+                              textColor = const Color(0xFFC05A9D);
+                              break;
+                            case '흐림':
+                              bg = const Color(0xFFF3F4F6);
+                              border = const Color(0xFFE5E7EB);
+                              textColor = const Color(0xFF6B7280);
+                              break;
+                          }
+
+                          return _buildBaseChip(
+                            label,
+                            bg: bg,
+                            border: border,
+                            textColor: textColor,
+                          );
+                        }),
                       ],
                     ),
                     const Spacer(),
@@ -2675,8 +3066,6 @@ class _GatheringScreenState extends State<GatheringScreen>
       ),
     );
   }
-
-
   // 카드 공통 컨테이너
   Widget _buildBaseContainer({
     required Widget child,

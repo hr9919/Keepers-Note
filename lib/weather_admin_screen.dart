@@ -22,7 +22,15 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
     _WeatherOption(label: '비', value: 'RAINY', icon: Icons.grain_rounded),
     _WeatherOption(label: '눈', value: 'SNOWY', icon: Icons.ac_unit_rounded),
     _WeatherOption(
-        label: '무지개', value: 'RAINBOW', icon: Icons.auto_awesome_rounded),
+      label: '무지개',
+      value: 'RAINBOW',
+      icon: Icons.auto_awesome_rounded,
+    ),
+    _WeatherOption(
+      label: '유성우',
+      value: 'METEOR_SHOWER',
+      icon: Icons.star_rounded,
+    ),
   ];
 
   bool _isLoading = true;
@@ -350,6 +358,9 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
         _isUpdatingDaily = true;
       });
 
+      // 🔥 여기!
+      debugPrint('수정 요청 forecastDate=$forecastDate weatherType=$weatherType');
+
       final response = await http.post(
         Uri.parse('$_baseUrl/api/admin/weather/daily/update'),
         headers: _adminHeaders(),
@@ -420,7 +431,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
 
   String _formatDateOnlyDisplay(String isoString) {
     try {
-      final date = DateTime.parse('$isoString 00:00:00');
+      final date = DateTime.parse(isoString);
       return _formatDateDisplay(date);
     } catch (_) {
       return isoString;
@@ -429,7 +440,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
 
   String _dayOfWeekKoFromDate(String isoString) {
     try {
-      final date = DateTime.parse('$isoString 00:00:00');
+      final date = DateTime.parse(isoString); // 🔥 수정
       switch (date.weekday) {
         case DateTime.monday:
           return '월';
@@ -557,7 +568,8 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
 
   Widget _buildEditableItemRow({
     required String leading,
-    required String value,
+    required String? value,
+    required String displayLabel,
     required ValueChanged<String?>? onChanged,
     required VoidCallback? onApply,
     required bool isApplying,
@@ -587,8 +599,18 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: value,
+                  value: _weatherOptions.any((e) => e.value == value) ? value : null,
                   isExpanded: true,
+                  hint: Text(
+                    displayLabel,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: displayLabel == '수집중'
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF111827),
+                    ),
+                  ),
                   decoration: InputDecoration(
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(
@@ -709,6 +731,28 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
       case 'RAINBOW':
       case '무지개':
         return '무지개';
+      case 'METEOR_SHOWER':
+      case '유성우':
+        return '유성우';
+      default:
+        return raw;
+    }
+  }
+
+  String _weatherLabelOf(String raw) {
+    switch (raw) {
+      case 'SUNNY':
+        return '맑음';
+      case 'CLOUDY':
+        return '흐림';
+      case 'RAINY':
+        return '비';
+      case 'SNOWY':
+        return '눈';
+      case 'RAINBOW':
+        return '무지개';
+      case 'METEOR_SHOWER':
+        return '유성우';
       default:
         return raw;
     }
@@ -719,6 +763,7 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
 
     await HomeWidget.saveWidgetData<String>('weather', normalized);
     await HomeWidget.updateWidget(
+      name: 'TodayInfoWidgetProvider',
       androidName: 'TodayInfoWidgetProvider',
     );
   }
@@ -845,15 +890,16 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
           else
             ..._hourlyItems.map((item) {
               final forecastTime = item['forecastTime']?.toString() ?? '';
-              final originalWeatherType =
-                  item['weatherType']?.toString() ?? 'SUNNY';
-              final currentValue =
-                  _editedHourlyWeather[forecastTime] ?? originalWeatherType;
-              final isDirty = currentValue != originalWeatherType;
+              final originalWeatherType = item['weatherType']?.toString();
+              final currentValue = _editedHourlyWeather[forecastTime] ?? originalWeatherType;
+              final displayLabel =
+              originalWeatherType == null ? '수집중' : _weatherLabelOf(originalWeatherType);
+              final isDirty = currentValue != originalWeatherType && currentValue != null;
 
               return _buildEditableItemRow(
                 leading: _formatTimeSlotDisplay(forecastTime),
                 value: currentValue,
+                displayLabel: displayLabel,
                 isApplying: _isUpdatingHourly,
                 isDirty: isDirty,
                 onChanged: _isUpdatingHourly
@@ -943,16 +989,17 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
           else
             ..._dailyItems.map((item) {
               final forecastDate = item['forecastDate']?.toString() ?? '';
-              final originalWeatherType =
-                  item['weatherType']?.toString() ?? 'SUNNY';
+              final originalWeatherType = item['weatherType']?.toString();
               final dayOfWeek = _dayOfWeekKoFromDate(forecastDate);
-              final currentValue =
-                  _editedDailyWeather[forecastDate] ?? originalWeatherType;
-              final isDirty = currentValue != originalWeatherType;
+              final currentValue = _editedDailyWeather[forecastDate] ?? originalWeatherType;
+              final displayLabel =
+              originalWeatherType == null ? '수집중' : _weatherLabelOf(originalWeatherType);
+              final isDirty = currentValue != originalWeatherType && currentValue != null;
 
               return _buildEditableItemRow(
                 leading: '$dayOfWeek · ${_formatDateOnlyDisplay(forecastDate)}',
                 value: currentValue,
+                displayLabel: displayLabel,
                 isApplying: _isUpdatingDaily,
                 isDirty: isDirty,
                 onChanged: _isUpdatingDaily

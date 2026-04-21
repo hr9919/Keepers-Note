@@ -815,10 +815,6 @@ class _MainWrapperState extends State<MainWrapper> {
   Future<void> _handleGlobalSearchSelection(GlobalSearchItem item) async {
     FocusManager.instance.primaryFocus?.unfocus();
 
-    debugPrint(
-      'MAIN search selection received: ${item.title} / ${item.screen} ',
-    );
-
     int targetIndex = 0;
 
     switch (item.screen) {
@@ -836,49 +832,37 @@ class _MainWrapperState extends State<MainWrapper> {
         break;
     }
 
-    debugPrint('MAIN targetIndex = $targetIndex');
-
     if (!mounted) return;
 
     setState(() {
       _selectedIndex = targetIndex;
       _isCommunityMenuOpen = false;
+      _pendingSearchItem = null;
+      _searchResetSignal++;
     });
-
-    debugPrint('MAIN setState done -> selectedIndex=$_selectedIndex');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      debugPrint('MAIN first post frame reached');
-
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
 
-        debugPrint(
-          'MAIN second post frame reached -> dispatching search item: ${item.title} / ${item.screen}',
-        );
-
         switch (item.screen) {
           case SearchTargetScreen.gathering:
-            debugPrint('MAIN dispatch -> GatheringSearchController.open');
             _gatheringSearchController.open(item);
             break;
 
           case SearchTargetScreen.cooking:
-            debugPrint('MAIN dispatch -> CookingSearchController.open');
             _cookingSearchController.open(item);
             break;
 
           case SearchTargetScreen.pet:
-            debugPrint('MAIN dispatch -> pending pet search item set');
             setState(() {
               _pendingSearchItem = item;
             });
             break;
 
           case SearchTargetScreen.encyclopedia:
-            debugPrint('MAIN dispatch -> GatheringSearchController.open (encyclopedia)');
             _gatheringSearchController.open(item);
             break;
         }
@@ -1110,6 +1094,7 @@ class _MainWrapperState extends State<MainWrapper> {
         eventList: _eventList,
         userId: _serverUserId,
         isAdmin: _isAdmin,
+        resetSearchSignal: _searchResetSignal,
       ),
       GatheringScreen(
         openDrawer: _openDrawerSmooth,
@@ -2839,15 +2824,12 @@ class _MainWrapperState extends State<MainWrapper> {
                       angle: value * 3.14,
                       child: Transform.scale(
                         scale: 0.9 + (value * 0.1),
-                        child: Opacity(
-                          opacity: 0.7 + (value * 0.3),
-                          child: Icon(
-                            isDropUpOpen
-                                ? Icons.close_rounded
-                                : Icons.favorite_rounded,
-                            size: 28,
-                            color: Colors.white,
-                          ),
+                        child: Icon(
+                          isDropUpOpen
+                              ? Icons.close_rounded
+                              : Icons.favorite_rounded,
+                          size: 28,
+                          color: Colors.white.withOpacity(0.7 + (value * 0.3)),
                         ),
                       ),
                     );

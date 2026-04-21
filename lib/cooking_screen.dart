@@ -141,12 +141,25 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '레드빈': 'assets/images/ingredients/red-bean.webp',
     '봄날 카라멜 슈가': 'assets/images/ingredients/springday-brown-sugar.webp',
 
+    '코코아': 'assets/images/crops/cocoa-tree.webp',
+
+    //생선류
+    '황금 킹크랩': 'assets/images/fish/golden-king-crab.webp',
+    '유럽민물가재': 'assets/images/fish/european-crayfish.webp',
+
     // 완성 요리인데 다른 요리 재료로도 쓰이는 것들
-    '케첩': 'assets/images/gourmet/ketchup.png',
-    '마요': 'assets/images/gourmet/mayonnaise.png',
-    '잼': 'assets/images/gourmet/jam.png',
-    '토마토소스': 'assets/images/gourmet/tomato-sauce.png',
-    '토마토 소스': 'assets/images/gourmet/tomato-sauce.png',
+    '케첩': 'assets/images/cooking/tomato-sauce.webp',
+    '잼': 'assets/images/cooking/jam.png',
+    '토마토소스': 'assets/images/cooking/tomato-sauce.webp',
+    '토마토 소스': 'assets/images/cooking/tomato-sauce.webp',
+    '티라미수': 'assets/images/cooking/tiramisu.webp',
+    '베지 샐러드': 'assets/images/cooking/house-salad.webp',
+    '훈제 연어 베이글': 'assets/images/cooking/smoked-fish-bagel.webp',
+    '씨푸드 덮밥': 'assets/images/cooking/seafood-rice-bowl.webp',
+    '씨푸드 피자': 'assets/images/cooking/seafood-pizza.webp',
+    '애플파이': 'assets/images/cooking/apple-pie.webp',
+    '피시 앤 칩스': 'assets/images/cooking/fish-chips.webp',
+
 
     // 범용 아이콘
     '아무 채소': 'assets/images/icon_veg_any.png',
@@ -156,8 +169,8 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '아무 설탕': 'assets/images/icon_sugar_any.png',
     '아무 조개류': 'assets/images/icon_shellfish_any.png',
     '아무 랍스터': 'assets/images/icon_lobster_any.png',
-    '아무 킹크랩': 'assets/images/icon_king_crab_any.png',
-    '아무 커피': 'assets/images/icon_coffee_any.png',
+    '아무 킹크랩': 'assets/images/icon_lobster_any.png',
+    '아무 커피': 'assets/images/cooking/coffee.webp',
     '아무 음식': 'assets/images/icon_food_any.png',
     '아무 음료': 'assets/images/icon_drink_any.png',
   };
@@ -639,7 +652,6 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.searchController != widget.searchController) {
-      oldWidget.searchController?.removeListener(_handleExternalSearch);
       widget.searchController?.addListener(_handleExternalSearch);
     }
 

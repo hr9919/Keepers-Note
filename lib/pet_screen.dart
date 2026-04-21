@@ -183,10 +183,17 @@ class _PetScreenState extends State<PetScreen>
       'https://api.keepers-note.o-r.kr/api/cat-variants?uploadedOnly=true';
   final String _dogVariantApiUrl =
       'https://api.keepers-note.o-r.kr/api/dog-variants?uploadedOnly=true';
+  final String _catVariantPickerApiUrl =
+      'https://api.keepers-note.o-r.kr/api/cat-variants';
+  final String _dogVariantPickerApiUrl =
+      'https://api.keepers-note.o-r.kr/api/dog-variants';
   final String _baseUrl = 'https://api.keepers-note.o-r.kr';
 
   List<PetCatalogVariant> _catVariants = [];
   List<PetCatalogVariant> _dogVariants = [];
+
+  List<PetCatalogVariant> _catPickerVariants = [];
+  List<PetCatalogVariant> _dogPickerVariants = [];
 
   final Set<String> _selectedBreedFilters = {};
   final Set<String> _selectedColorFilters = {};
@@ -307,6 +314,45 @@ class _PetScreenState extends State<PetScreen>
   }
 
   Future<void> _fetchPetSnackOptions() async {
+    List<PetSnackOption> parseSnackOptionsSafely(
+        List<dynamic> data, {
+          required String label,
+        }) {
+      final List<PetSnackOption> result = [];
+
+      for (final raw in data) {
+        try {
+          final map = Map<String, dynamic>.from(raw as Map);
+
+          final sourceType = (map['sourceType'] ?? '').toString().trim();
+          final itemId = (map['itemId'] ?? '').toString().trim();
+          final nameKo = (map['nameKo'] ?? '').toString().trim();
+          final imagePathRaw = map['imagePath']?.toString().trim();
+          final category = (map['category'] ?? '').toString().trim();
+
+          if (sourceType.isEmpty || itemId.isEmpty) {
+            debugPrint('$label item skipped: sourceType/itemId 없음 -> $map');
+            continue;
+          }
+
+          result.add(
+            PetSnackOption(
+              sourceType: sourceType,
+              itemId: itemId,
+              nameKo: nameKo.isEmpty ? itemId : nameKo,
+              imagePath: (imagePathRaw == null || imagePathRaw.isEmpty)
+                  ? ''
+                  : imagePathRaw,
+              category: category.isEmpty ? 'snack' : category,
+            ),
+          );
+        } catch (e) {
+        }
+      }
+
+      return result;
+    }
+
     try {
       final responses = await Future.wait([
         http.get(Uri.parse(_catSnackOptionsApiUrl)),
@@ -316,109 +362,138 @@ class _PetScreenState extends State<PetScreen>
       final catResponse = responses[0];
       final dogResponse = responses[1];
 
+      // 🐱 고양이
       if (catResponse.statusCode == 200) {
         final List<dynamic> data =
         jsonDecode(utf8.decode(catResponse.bodyBytes)) as List<dynamic>;
 
-        _catSnackOptions = data
-            .map((e) => PetSnackOption.fromJson(Map<String, dynamic>.from(e)))
-            .toList();
-
-        void ensureCatSnackOption({
-          required String itemId,
-          required String nameKo,
-          required String imagePath,
-        }) {
-          final exists = _catSnackOptions.any(
-                (e) => e.sourceType == 'snack' && e.itemId == itemId,
-          );
-
-          if (!exists) {
-            _catSnackOptions.add(
-              PetSnackOption(
-                sourceType: 'snack',
-                itemId: itemId,
-                nameKo: nameKo,
-                imagePath: imagePath,
-                category: 'snack',
-              ),
-            );
-          }
-        }
-
-        ensureCatSnackOption(
-          itemId: 'cat_food',
-          nameKo: '고양이 사료',
-          imagePath: 'assets/images/snacks/feed_cat.png',
-        );
-
-        ensureCatSnackOption(
-          itemId: 'common_food',
-          nameKo: '공용 사료',
-          imagePath: 'assets/images/snacks/feed_common.png',
-        );
-
-        _catSnackOptions.sort(
-              (a, b) =>
-              _snackOptionDisplayName(a).compareTo(_snackOptionDisplayName(b)),
+        _catSnackOptions = parseSnackOptionsSafely(
+          data,
+          label: 'cat snacks',
         );
       } else {
-        debugPrint('고양이 간식 옵션 조회 실패: ${catResponse.statusCode}');
-        _catSnackOptions = [
-          PetSnackOption(
-            sourceType: 'snack',
-            itemId: 'cat_food',
-            nameKo: '고양이 사료',
-            imagePath: 'assets/images/snacks/feed_cat.png',
-            category: 'snack',
-          ),
-          PetSnackOption(
-            sourceType: 'snack',
-            itemId: 'common_food',
-            nameKo: '공용 사료',
-            imagePath: 'assets/images/snacks/feed_common.png',
-            category: 'snack',
-          ),
-        ];
+        _catSnackOptions = [];
       }
 
+      // 🐶 강아지
       if (dogResponse.statusCode == 200) {
         final List<dynamic> data =
         jsonDecode(utf8.decode(dogResponse.bodyBytes)) as List<dynamic>;
 
-        _dogSnackOptions = data
-            .map((e) => PetSnackOption.fromJson(Map<String, dynamic>.from(e)))
-            .toList();
-
-        _dogSnackOptions.sort(
-              (a, b) =>
-              _snackOptionDisplayName(a).compareTo(_snackOptionDisplayName(b)),
+        _dogSnackOptions = parseSnackOptionsSafely(
+          data,
+          label: 'dog snacks',
         );
       } else {
-        debugPrint('강아지 간식 옵션 조회 실패: ${dogResponse.statusCode}');
         _dogSnackOptions = [];
       }
-    } catch (e) {
-      debugPrint('간식 옵션 로드 실패: $e');
+
+      void ensureCatSnackOption({
+        required String itemId,
+        required String nameKo,
+        required String imagePath,
+      }) {
+        final exists = _catSnackOptions.any((e) => e.itemId == itemId);
+        if (!exists) {
+          _catSnackOptions.add(
+            PetSnackOption(
+              sourceType: 'snack',
+              itemId: itemId,
+              nameKo: nameKo,
+              imagePath: imagePath,
+              category: 'snack',
+            ),
+          );
+        }
+      }
+
+      void ensureDogSnackOption({
+        required String itemId,
+        required String nameKo,
+        required String imagePath,
+      }) {
+        final exists = _dogSnackOptions.any((e) => e.itemId == itemId);
+        if (!exists) {
+          _dogSnackOptions.add(
+            PetSnackOption(
+              sourceType: 'snack',
+              itemId: itemId,
+              nameKo: nameKo,
+              imagePath: imagePath,
+              category: 'snack',
+            ),
+          );
+        }
+      }
+
+      ensureCatSnackOption(
+        itemId: 'cat_food',
+        nameKo: '고양이 사료',
+        imagePath: 'assets/images/snacks/feed_cat.png',
+      );
+      ensureCatSnackOption(
+        itemId: 'common_food',
+        nameKo: '공용 사료',
+        imagePath: 'assets/images/snacks/feed_common.png',
+      );
+
+      ensureDogSnackOption(
+        itemId: 'dog_food',
+        nameKo: '강아지 사료',
+        imagePath: 'assets/images/snacks/feed_dog.png',
+      );
+      ensureDogSnackOption(
+        itemId: 'common_food',
+        nameKo: '공용 사료',
+        imagePath: 'assets/images/snacks/feed_common.png',
+      );
+
+      _catSnackOptions.sort(
+            (a, b) => _snackOptionDisplayName(a).compareTo(_snackOptionDisplayName(b)),
+      );
+      _dogSnackOptions.sort(
+            (a, b) => _snackOptionDisplayName(a).compareTo(_snackOptionDisplayName(b)),
+      );
+
+    } catch (e, s) {
 
       _catSnackOptions = [
         PetSnackOption(
           sourceType: 'snack',
           itemId: 'cat_food',
           nameKo: '고양이 사료',
-          imagePath: 'assets/images/snacks/feed_cat.png',
+          imagePath: 'assets/images/feed/feed_cat.png',
           category: 'snack',
         ),
         PetSnackOption(
           sourceType: 'snack',
           itemId: 'common_food',
           nameKo: '공용 사료',
-          imagePath: 'assets/images/snacks/feed_common.png',
+          imagePath: 'assets/images/feed/feed_common.png',
           category: 'snack',
         ),
       ];
 
-      _dogSnackOptions = [];
+      _dogSnackOptions = [
+        PetSnackOption(
+          sourceType: 'snack',
+          itemId: 'dog_food',
+          nameKo: '강아지 사료',
+          imagePath: 'assets/images/feed/feed_dog.png',
+          category: 'snack',
+        ),
+        PetSnackOption(
+          sourceType: 'snack',
+          itemId: 'common_food',
+          nameKo: '공용 사료',
+          imagePath: 'assets/images/feed/feed_common.png',
+          category: 'snack',
+        ),
+      ];
+    }
+
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -503,46 +578,72 @@ class _PetScreenState extends State<PetScreen>
   Future<void> _fetchCatalogData() async {
     try {
       final results = await Future.wait([
-        http.get(Uri.parse(_catVariantApiUrl)),
-        http.get(Uri.parse(_dogVariantApiUrl)),
+        http.get(Uri.parse(_catVariantApiUrl)),        // 리스트 표시용
+        http.get(Uri.parse(_dogVariantApiUrl)),        // 리스트 표시용
+        http.get(Uri.parse(_catVariantPickerApiUrl)),  // 등록 드롭다운용
+        http.get(Uri.parse(_dogVariantPickerApiUrl)),  // 등록 드롭다운용
       ]);
 
-      final catResponse = results[0];
-      final dogResponse = results[1];
+      final catUploadedResponse = results[0];
+      final dogUploadedResponse = results[1];
+      final catPickerResponse = results[2];
+      final dogPickerResponse = results[3];
 
-      if (catResponse.statusCode == 200) {
+      if (catUploadedResponse.statusCode == 200) {
         final List<dynamic> raw =
-        jsonDecode(utf8.decode(catResponse.bodyBytes)) as List<dynamic>;
+        jsonDecode(utf8.decode(catUploadedResponse.bodyBytes)) as List<dynamic>;
+
         _catVariants = raw
-            .map((e) =>
-            PetCatalogVariant.fromCatJson(e as Map<String, dynamic>))
-            .where((e) =>
-        e.isUploaded && (e.imagePath ?? '')
-            .trim()
-            .isNotEmpty)
+            .map((e) => PetCatalogVariant.fromCatJson(e as Map<String, dynamic>))
+            .where((e) => e.isUploaded && (e.imagePath ?? '').trim().isNotEmpty)
             .toList();
       } else {
         _catVariants = [];
       }
 
-      if (dogResponse.statusCode == 200) {
+      if (dogUploadedResponse.statusCode == 200) {
         final List<dynamic> raw =
-        jsonDecode(utf8.decode(dogResponse.bodyBytes)) as List<dynamic>;
+        jsonDecode(utf8.decode(dogUploadedResponse.bodyBytes)) as List<dynamic>;
+
         _dogVariants = raw
-            .map((e) =>
-            PetCatalogVariant.fromDogJson(e as Map<String, dynamic>))
-            .where((e) =>
-        e.isUploaded && (e.imagePath ?? '')
-            .trim()
-            .isNotEmpty)
+            .map((e) => PetCatalogVariant.fromDogJson(e as Map<String, dynamic>))
+            .where((e) => e.isUploaded && (e.imagePath ?? '').trim().isNotEmpty)
             .toList();
       } else {
         _dogVariants = [];
       }
+
+      if (catPickerResponse.statusCode == 200) {
+        final List<dynamic> raw =
+        jsonDecode(utf8.decode(catPickerResponse.bodyBytes)) as List<dynamic>;
+
+        _catPickerVariants = raw
+            .map((e) => PetCatalogVariant.fromCatJson(e as Map<String, dynamic>))
+            .toList();
+      } else {
+        _catPickerVariants = [];
+      }
+
+      if (dogPickerResponse.statusCode == 200) {
+        final List<dynamic> raw =
+        jsonDecode(utf8.decode(dogPickerResponse.bodyBytes)) as List<dynamic>;
+
+        _dogPickerVariants = raw
+            .map((e) => PetCatalogVariant.fromDogJson(e as Map<String, dynamic>))
+            .toList();
+      } else {
+        _dogPickerVariants = [];
+      }
     } catch (e) {
       _catVariants = [];
       _dogVariants = [];
+      _catPickerVariants = [];
+      _dogPickerVariants = [];
     }
+  }
+
+  List<PetCatalogVariant> _currentPickerVariantList(bool isCat) {
+    return isCat ? _catPickerVariants : _dogPickerVariants;
   }
 
   Future<void> _fetchPetData() async {
@@ -3770,7 +3871,7 @@ class _PetScreenState extends State<PetScreen>
   }
 
   List<String> _pickerBreedOptions({required bool isCat}) {
-    final items = _currentVariantList(isCat)
+    final items = _currentPickerVariantList(isCat)
         .map((e) => e.breedName.trim())
         .where((e) => e.isNotEmpty)
         .toSet()
@@ -3785,7 +3886,7 @@ class _PetScreenState extends State<PetScreen>
   }
 
   List<String> _pickerColorOptions({required bool isCat, String? breedName}) {
-    Iterable<PetCatalogVariant> variants = _currentVariantList(isCat);
+    Iterable<PetCatalogVariant> variants = _currentPickerVariantList(isCat);
 
     if (breedName != null && breedName.isNotEmpty && breedName != '선택 안됨') {
       variants = variants.where((v) => v.breedName.trim() == breedName.trim());
@@ -5069,7 +5170,8 @@ class _PetScreenState extends State<PetScreen>
     String? tempImagePath = isEdit ? pet.imagePath : null;
     bool isSaving = false;
 
-    final List<PetCatalogVariant> variantPool = _currentVariantList(isCatTab);
+    final List<PetCatalogVariant> variantPool =
+    _currentPickerVariantList(isCatTab);
     final List<String> breedOptions = _pickerBreedOptions(isCat: isCatTab);
 
     PetCatalogVariant? selectedVariant;
@@ -5655,7 +5757,7 @@ class _PetScreenState extends State<PetScreen>
     required bool isCat,
     required String breedName,
   }) {
-    final variants = _currentVariantList(isCat)
+    final variants = _currentPickerVariantList(isCat)
         .where((v) => v.breedName.trim() == breedName.trim())
         .toList();
 
@@ -5671,7 +5773,7 @@ class _PetScreenState extends State<PetScreen>
     required bool isCat,
     required String breedName,
   }) {
-    final variants = _currentVariantList(isCat)
+    final variants = _currentPickerVariantList(isCat)
         .where((v) => v.breedName.trim() == breedName.trim())
         .toList();
 
@@ -5679,7 +5781,8 @@ class _PetScreenState extends State<PetScreen>
         .map((v) => v.colorName.trim())
         .where((e) => e.isNotEmpty)
         .toSet()
-        .toList();
+        .toList()
+      ..sort();
 
     if (colors.length == 1) {
       return colors.first;

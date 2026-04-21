@@ -51,6 +51,7 @@ class HomeScreen extends StatefulWidget {
   final void Function(GlobalSearchItem item)? onSearchItemSelected;
   final String userId;
   final bool isAdmin;
+  final int resetSearchSignal;
 
   const HomeScreen({
     super.key,
@@ -65,6 +66,7 @@ class HomeScreen extends StatefulWidget {
     this.eventList = const [],
     required this.userId,
     required this.isAdmin,
+    this.resetSearchSignal = 0,
   });
 
   @override
@@ -112,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final response = await ApiService.voteResource(
         id: res.id,
-        userId: _voterId,
+        userId: widget.userId,
       );
 
       await _loadMapPreviewResources();
@@ -573,16 +575,20 @@ class _HomeScreenState extends State<HomeScreen>
       };
     }).toList();
 
-    await KeepersHomeWidgetService.saveAndRefresh(
-      weather: _normalizeWeatherLabel(_currentWeather),
-      oakText: oakText,
-      fluoriteText: fluoriteText,
-      updatedAt: updatedAt,
-      oakVerified: oakPoint != null,
-      fluoriteVerified: fluoritePoint != null,
-      voterId: _userId,
-      hourlyWeather: nextThree,
-    );
+    try {
+      await KeepersHomeWidgetService.saveAndRefresh(
+        weather: _normalizeWeatherLabel(_currentWeather),
+        oakText: oakText,
+        fluoriteText: fluoriteText,
+        updatedAt: updatedAt,
+        oakVerified: oakPoint != null,
+        fluoriteVerified: fluoritePoint != null,
+        voterId: _userId,
+        hourlyWeather: nextThree,
+      );
+    } catch (e) {
+      debugPrint('홈 위젯 동기화 실패: $e');
+    }
   }
 
   Future<void> _openEventLink(String rawUrl, int eventId) async {
@@ -681,18 +687,21 @@ class _HomeScreenState extends State<HomeScreen>
   void didUpdateWidget(covariant HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
+      _clearSearchInput();
+      _loadGlobalSearchItems();
+    }
+
     // 이벤트 리스트가 변경되었을 때만 실행
     if (oldWidget.eventList != widget.eventList) {
       _eventResumeTimer?.cancel();
       _eventBannerTimer?.cancel();
 
-      // 1. 새로운 리스트 기준으로 다시 중앙 위치(양방향 무한 스크롤 가능 지점) 계산 후 점프
       if (widget.eventList.isNotEmpty && _eventPageController.hasClients) {
         final events = _activeEvents;
         if (events.isNotEmpty) {
           int centerPage = (10000 ~/ 2) - ((10000 ~/ 2) % events.length);
 
-          // 애니메이션 없이 즉시 새로운 중앙점으로 이동
           _eventPageController.jumpToPage(centerPage);
 
           setState(() {
@@ -701,7 +710,6 @@ class _HomeScreenState extends State<HomeScreen>
         }
       }
 
-      // 2. 자동 스크롤 재시작
       _startEventBannerAutoScroll(initialDelay: true);
     }
   }
@@ -731,7 +739,7 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final response = await ApiService.voteResource(
         id: res.id,
-        userId: _userId,
+        userId: widget.userId,
       );
 
       await _loadMapPreviewResources();
@@ -800,14 +808,19 @@ class _HomeScreenState extends State<HomeScreen>
       case '흐림':
         return '흐림';
       case 'RAIN':
+      case 'RAINY':
       case '비':
         return '비';
       case 'SNOW':
+      case 'SNOWY':
       case '눈':
         return '눈';
       case 'RAINBOW':
       case '무지개':
         return '무지개';
+      case 'METEOR_SHOWER':
+      case '유성우':
+        return '유성우';
       default:
         return value.isEmpty ? '수집중' : value;
     }
@@ -883,7 +896,7 @@ class _HomeScreenState extends State<HomeScreen>
       if (currentRes.statusCode == 200) {
         final currentData = jsonDecode(utf8.decode(currentRes.bodyBytes));
         final String currentWeather =
-        (currentData['currentWeather'] ?? '맑음').toString();
+        (currentData['currentWeather'] ?? '수집중').toString();
 
         final List<dynamic> timeline =
             (currentData['timeline'] as List<dynamic>?) ?? const [];
@@ -892,7 +905,7 @@ class _HomeScreenState extends State<HomeScreen>
           final map = e as Map<String, dynamic>;
           return {
             'time': (map['label'] ?? '').toString(),
-            'weather': (map['weather'] ?? '맑음').toString(),
+            'weather': (map['weather'] ?? '수집중').toString(),
             'slot': (map['slot'] ?? '').toString(),
           };
         }).toList();
@@ -912,7 +925,7 @@ class _HomeScreenState extends State<HomeScreen>
           final map = e as Map<String, dynamic>;
           return {
             'day': (map['dayOfWeek'] ?? '').toString(),
-            'weather': (map['weather'] ?? '맑음').toString(),
+            'weather': (map['weather'] ?? '수집중').toString(),
             'date': (map['date'] ?? '').toString(),
           };
         }).toList();
@@ -955,20 +968,17 @@ class _HomeScreenState extends State<HomeScreen>
   Color _getWeatherTextColor(String weather) {
     switch (weather) {
       case '맑음':
-        return const Color(0xFF2F4858); // 밝은 하늘 배경용 진한 블루그레이
-
+        return const Color(0xFF2F4858);
       case '흐림':
-        return const Color(0xFFFFFFFF).withOpacity(0.96); // 중간~어두운 회청 배경용
-
+        return const Color(0xFFFFFFFF).withOpacity(0.96);
       case '비':
-        return const Color(0xFFFFFFFF).withOpacity(0.98); // 가장 어두운 배경용
-
+        return const Color(0xFFFFFFFF).withOpacity(0.98);
       case '눈':
-        return const Color(0xFF16324A); // 차가운 밝은 배경용 더 진한 네이비톤
-
+        return const Color(0xFF16324A);
       case '무지개':
-        return const Color(0xFF4A345E); // 파스텔 다색 배경용 진한 퍼플그레이
-
+        return const Color(0xFF4A345E);
+      case '유성우':
+        return const Color(0xFFF8FAFF);
       default:
         return const Color(0xFF334155);
     }
@@ -978,19 +988,16 @@ class _HomeScreenState extends State<HomeScreen>
     switch (weather) {
       case '맑음':
         return const Color(0xFF486577).withOpacity(0.92);
-
       case '흐림':
         return const Color(0xFFFFFFFF).withOpacity(0.86);
-
       case '비':
         return const Color(0xFFFFFFFF).withOpacity(0.90);
-
       case '눈':
         return const Color(0xFF244761).withOpacity(0.90);
-
       case '무지개':
         return const Color(0xFF5B4771).withOpacity(0.92);
-
+      case '유성우':
+        return const Color(0xFFE9DDFF).withOpacity(0.95);
       default:
         return const Color(0xFF475569).withOpacity(0.86);
     }
@@ -1069,6 +1076,20 @@ class _HomeScreenState extends State<HomeScreen>
           borderRadius: BorderRadius.circular(22),
           boxShadow: _kCommonShadow,
         );
+      case '유성우':
+        return BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0F172A),
+              Color(0xFF312E81),
+              Color(0xFF4C1D95),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: _kCommonShadow,
+        );
     // 🔥 에러 해결 핵심: 어떤 조건에도 맞지 않을 때 반환할 기본값을 설정합니다.
       default:
         return BoxDecoration(
@@ -1103,6 +1124,9 @@ class _HomeScreenState extends State<HomeScreen>
 
       case '눈':
         return Text('❄️', style: TextStyle(fontSize: size, shadows: shadow));
+
+      case '유성우':
+        return Text('🌠', style: TextStyle(fontSize: size, shadows: shadow));
 
       default:
         return Text('🌤️', style: TextStyle(fontSize: size, shadows: shadow));
@@ -1153,15 +1177,10 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _loadVoterId() async {
-    try {
-      final user = await UserApi.instance.me();
-      final voterId = user.id?.toString() ?? "";
-
-      if (!mounted) return;
-      setState(() {
-        _voterId = voterId;
-      });
-    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _voterId = widget.userId;
+    });
   }
 
   Future<void> _checkAndResetAtStart() async {
@@ -1996,10 +2015,50 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  String? _getPreviewFilterIconPath(String resourceName) {
+    if (resourceName == 'roaming_oak' || resourceName == 'fluorite') {
+      for (final point in _previewSpawnPoints) {
+        for (final res in point.resources) {
+          final key = _normalizeSpawnPreviewFilterKey(res);
+          if (key == resourceName && res.iconPath.trim().isNotEmpty) {
+            return res.iconPath;
+          }
+        }
+      }
+    }
+
+    final sample = _getPreviewRepresentativeByResourceName(resourceName);
+    if (sample != null && sample.iconPath.trim().isNotEmpty) {
+      return sample.iconPath;
+    }
+
+    switch (resourceName) {
+      case 'roaming_oak':
+        return 'assets/images/resources/roaming-oak.png';
+      case 'fluorite':
+        return 'assets/images/resources/fluorite.png';
+      case 'black_truffle':
+        return 'assets/images/resources/black-truffle.png';
+      default:
+        return null;
+    }
+  }
+
   Widget _buildPreviewResourceChip(String resourceName) {
     final bool selected = _previewEnabledResources.contains(resourceName);
     final ResourceModel? sample =
     _getPreviewRepresentativeByResourceName(resourceName);
+
+    String? fallbackIconPath;
+    if (resourceName == 'roaming_oak') {
+      fallbackIconPath = 'assets/images/resources/roaming-oak.png';
+    } else if (resourceName == 'fluorite') {
+      fallbackIconPath = 'assets/images/resources/fluorite.png';
+    } else if (resourceName == 'black_truffle') {
+      fallbackIconPath = 'assets/images/resources/black-truffle.png';
+    }
+
+    final String? iconPath = sample?.iconPath ?? fallbackIconPath;
 
     return GestureDetector(
       onTap: () => _togglePreviewResource(resourceName),
@@ -2033,17 +2092,16 @@ class _HomeScreenState extends State<HomeScreen>
                       : const Color(0xFFE5E7EB),
                 ),
               ),
-              child: sample == null
+              child: iconPath == null
                   ? const Icon(
                 Icons.inventory_2_outlined,
                 size: 12,
                 color: Colors.grey,
               )
                   : Image.asset(
-                sample.iconPath,
+                iconPath,
                 fit: BoxFit.contain,
-                errorBuilder: (c, e, s) =>
-                const Icon(
+                errorBuilder: (c, e, s) => const Icon(
                   Icons.inventory_2_outlined,
                   size: 12,
                   color: Colors.grey,
@@ -2254,219 +2312,80 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildHomePreviewFilterPanel() {
-    final double topPadding = MediaQuery.of(context).padding.top;
-    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+  Widget _buildHomePreviewFilterChip(String resourceName) {
+    final bool selected = _previewEnabledResources.contains(resourceName);
+    final String? iconPath = _getPreviewFilterIconPath(resourceName);
 
-    final mobileResourceItems = <String>[
-      if (_getDistinctPreviewResourceKeysByCategory(['tree'])
-          .contains('roaming_oak'))
-        'roaming_oak',
-      if (_getDistinctPreviewResourceKeysByCategory(['mineral'])
-          .contains('fluorite'))
-        'fluorite',
-    ];
-
-    final gatherItems = _getDistinctPreviewResourceKeysByCategory([
-      'fruit',
-      'bubble',
-      'material',
-    ]);
-
-    final mushroomItems =
-    _getDistinctPreviewResourceKeysByCategory(['mushroom']);
-
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 340),
-      curve: _isPreviewFilterPanelOpen
-          ? Curves.easeOutQuad
-          : Curves.easeInCubic,
-      top: topPadding + 86,
-      right: _isPreviewFilterPanelOpen ? 12 : -320,
-      child: IgnorePointer(
-        ignoring: !_isPreviewFilterPanelOpen,
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-          opacity: _isPreviewFilterPanelOpen ? 1 : 0.96,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              width: 286,
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height
-                    - topPadding
-                    - bottomPadding
-                    - 120,
-              ),
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.992),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: const Color(0xFFF0E3DC),
-                ),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.09),
-                    blurRadius: 22,
-                    offset: const Offset(-4, 10),
-                  ),
-                  BoxShadow(
-                    color: const Color(0xFFFF8E7C).withOpacity(0.045),
-                    blurRadius: 14,
-                    offset: const Offset(-2, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      const Expanded(
-                        child: Text(
-                          '정렬 및 필터',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF443834),
-                          ),
-                        ),
-                      ),
-                      _buildHomeFilterPanelIconButton(
-                        icon: Icons.refresh_rounded,
-                        onTap: _resetPreviewFiltersToDefault,
-                      ),
-                      const SizedBox(width: 6),
-                      _buildHomeFilterPanelIconButton(
-                        icon: Icons.close_rounded,
-                        onTap: _closePreviewFilterPanel,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    '필터',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF6E625D),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildHomePreviewCompactTogglePair(),
-                  const SizedBox(height: 14),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          _buildHomePreviewFilterSection(
-                            title: '유동 자원',
-                            items: mobileResourceItems,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildHomePreviewFilterSection(
-                            title: '채집 자원',
-                            items: gatherItems,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildHomePreviewFilterSection(
-                            title: '버섯 종류',
-                            items: mushroomItems,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Container(
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(15),
-                            border: Border.all(
-                              color: const Color(0xFFE7DBD3),
-                            ),
-                            boxShadow: <BoxShadow>[
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.025),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(15),
-                              onTap: _resetPreviewFiltersToDefault,
-                              child: const Center(
-                                child: Text(
-                                  '기본값',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 12.5,
-                                    color: Color(0xFF8A7B71),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Container(
-                          height: 42,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFFFF9C88),
-                                Color(0xFFFF8E7C),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: <BoxShadow>[
-                              BoxShadow(
-                                color: const Color(0xFFFF8E7C)
-                                    .withOpacity(0.22),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(15),
-                              onTap: _closePreviewFilterPanel,
-                              child: const Center(
-                                child: Text(
-                                  '적용',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 12.5,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (_previewEnabledResources.contains(resourceName)) {
+            _previewEnabledResources.remove(resourceName);
+          } else {
+            _previewEnabledResources.add(resourceName);
+          }
+          _mapPreviewResources =
+              _getFilteredPreviewResources(_allPreviewCandidates);
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFFFFF4F1)
+              : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFFFF8E7C)
+                : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              alignment: Alignment.center,
+              child: iconPath != null
+                  ? Image.asset(
+                iconPath,
+                width: 14,
+                height: 14,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(
+                    Icons.inventory_2_outlined,
+                    size: 14,
+                    color: Color(0xFF94A3B8),
+                  );
+                },
+              )
+                  : const Icon(
+                Icons.inventory_2_outlined,
+                size: 14,
+                color: Color(0xFF94A3B8),
               ),
             ),
-          ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                _getPreviewDisplayName(resourceName),
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: selected
+                      ? const Color(0xFFFF8E7C)
+                      : const Color(0xFF475569),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2647,6 +2566,8 @@ class _HomeScreenState extends State<HomeScreen>
   }) {
     if (items.isEmpty) return const SizedBox.shrink();
 
+    final bool isMobileResourceSection = title == '유동 자원' && items.length == 2;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2660,95 +2581,223 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children:
-          items.map((item) => _buildHomePreviewFilterChip(item)).toList(),
-        ),
+        if (isMobileResourceSection)
+          Row(
+            children: [
+              Expanded(child: _buildHomePreviewFilterChip(items[0])),
+              const SizedBox(width: 6),
+              Expanded(child: _buildHomePreviewFilterChip(items[1])),
+            ],
+          )
+        else
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children:
+            items.map((item) => _buildHomePreviewFilterChip(item)).toList(),
+          ),
       ],
     );
   }
 
-  Widget _buildHomePreviewFilterChip(String resourceName) {
-    final bool selected = _previewEnabledResources.contains(resourceName);
-    final ResourceModel? sample =
-    _getPreviewRepresentativeByResourceName(resourceName);
+  Widget _buildHomePreviewFilterPanel() {
+    final double topPadding = MediaQuery.of(context).padding.top;
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    String? fallbackIconPath;
-    if (resourceName == 'roaming_oak') {
-      fallbackIconPath = 'assets/images/resources/roaming-oak.png';
-    } else if (resourceName == 'fluorite') {
-      fallbackIconPath = 'assets/images/resources/fluorite.png';
-    }
+    final mobileResourceItems = <String>[
+      if (_getDistinctPreviewResourceKeysByCategory(['tree'])
+          .contains('roaming_oak'))
+        'roaming_oak',
+      if (_getDistinctPreviewResourceKeysByCategory(['mineral'])
+          .contains('fluorite'))
+        'fluorite',
+    ];
 
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          if (_previewEnabledResources.contains(resourceName)) {
-            _previewEnabledResources.remove(resourceName);
-          } else {
-            _previewEnabledResources.add(resourceName);
-          }
-          _mapPreviewResources =
-              _getFilteredPreviewResources(_allPreviewCandidates);
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFFFFF4F1)
-              : const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected
-                ? const Color(0xFFFF8E7C)
-                : const Color(0xFFE2E8F0),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (sample != null || fallbackIconPath != null)
-              Container(
-                width: 18,
-                height: 18,
-                alignment: Alignment.center,
-                child: Image.asset(
-                  sample?.iconPath ?? fallbackIconPath!,
-                  width: 14,
-                  height: 14,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(
-                      Icons.image_not_supported_outlined,
-                      size: 14,
-                      color: Color(0xFF94A3B8),
-                    );
-                  },
-                ),
-              )
-            else
-              const Icon(
-                Icons.inventory_2_outlined,
-                size: 14,
-                color: Color(0xFF94A3B8),
+    final gatherItems = _getDistinctPreviewResourceKeysByCategory([
+      'fruit',
+      'bubble',
+      'material',
+    ]);
+
+    final mushroomItems =
+    _getDistinctPreviewResourceKeysByCategory(['mushroom']);
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 340),
+      curve: _isPreviewFilterPanelOpen
+          ? Curves.easeOutQuad
+          : Curves.easeInCubic,
+      top: topPadding + 86,
+      right: _isPreviewFilterPanelOpen ? 12 : -320,
+      child: IgnorePointer(
+        ignoring: !_isPreviewFilterPanelOpen,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          opacity: _isPreviewFilterPanelOpen ? 1 : 0.96,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 286,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height
+                    - topPadding
+                    - bottomPadding
+                    - 120,
               ),
-            const SizedBox(width: 5),
-            Text(
-              _getPreviewDisplayName(resourceName),
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: selected
-                    ? const Color(0xFFFF8E7C)
-                    : const Color(0xFF475569),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.992),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFF0E3DC),
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.09),
+                    blurRadius: 22,
+                    offset: const Offset(-4, 10),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFFFF8E7C).withOpacity(0.045),
+                    blurRadius: 14,
+                    offset: const Offset(-2, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      const Expanded(
+                        child: Text(
+                          '정렬 및 필터',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF443834),
+                          ),
+                        ),
+                      ),
+                      _buildHomeFilterPanelIconButton(
+                        icon: Icons.refresh_rounded,
+                        onTap: _resetPreviewFiltersToDefault,
+                      ),
+                      const SizedBox(width: 6),
+                      _buildHomeFilterPanelIconButton(
+                        icon: Icons.close_rounded,
+                        onTap: _closePreviewFilterPanel,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '필터',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF6E625D),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHomePreviewCompactTogglePair(),
+                  const SizedBox(height: 14),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _buildHomePreviewFilterSection(
+                            title: '유동 자원',
+                            items: mobileResourceItems,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildHomePreviewFilterSection(
+                            title: '채집 자원',
+                            items: gatherItems,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildHomePreviewFilterSection(
+                            title: '버섯 종류',
+                            items: mushroomItems,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(
+                              color: const Color(0xFFE7DBD3),
+                            ),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(15),
+                              onTap: _resetPreviewFiltersToDefault,
+                              child: const Center(
+                                child: Text(
+                                  '기본값',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12.5,
+                                    color: Color(0xFF8A7B71),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFFFF9C88),
+                                Color(0xFFFF8E7C),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(15),
+                              onTap: _closePreviewFilterPanel,
+                              child: const Center(
+                                child: Text(
+                                  '적용',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12.5,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -2765,8 +2814,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _selectSearchSuggestion(GlobalSearchItem item) {
     FocusManager.instance.primaryFocus?.unfocus();
-    widget.onSearchItemSelected?.call(item);
     _clearSearchInput();
+    widget.onSearchItemSelected?.call(item);
   }
 
   Widget _buildSearchSuggestionsOverlay(
@@ -2877,29 +2926,57 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildSuggestionLeading(GlobalSearchItem item) {
-    final iconPath = item.iconPath.trim();
+    String path = item.iconPath.trim();
 
-    if (iconPath.isNotEmpty) {
+    if (path.isEmpty) {
+      return const Icon(
+        Icons.inventory_2_outlined,
+        size: 18,
+        color: Color(0xFF94A3B8),
+      );
+    }
+
+    if (!path.startsWith('assets/')) {
+      path = 'assets/$path';
+    }
+
+    final lower = path.toLowerCase();
+    if (!lower.endsWith('.webp') &&
+        !lower.endsWith('.png') &&
+        !lower.endsWith('.jpg') &&
+        !lower.endsWith('.jpeg') &&
+        !lower.endsWith('.svg')) {
+      path = '$path.webp';
+    }
+
+    if (path.endsWith('.svg')) {
       return Padding(
-        padding: const EdgeInsets.all(5),
-        child: Image.asset(
-          iconPath,
+        padding: const EdgeInsets.all(7),
+        child: SvgPicture.asset(
+          path,
           fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            return const Icon(
-              Icons.search_rounded,
-              size: 18,
-              color: Color(0xFFFF8E7C),
-            );
-          },
+          placeholderBuilder: (_) => const Icon(
+            Icons.inventory_2_outlined,
+            size: 18,
+            color: Color(0xFF94A3B8),
+          ),
         ),
       );
     }
 
-    return const Icon(
-      Icons.search_rounded,
-      size: 18,
-      color: Color(0xFFFF8E7C),
+    return Padding(
+      padding: const EdgeInsets.all(5),
+      child: Image.asset(
+        path,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) {
+          return const Icon(
+            Icons.inventory_2_outlined,
+            size: 18,
+            color: Color(0xFF94A3B8),
+          );
+        },
+      ),
     );
   }
 
