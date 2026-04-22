@@ -13,6 +13,65 @@ import 'models/community_tag_item.dart';
 import 'community_user_profile_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'community_uid_verification_screen.dart';
+import 'community_uid_admin_screen.dart';
+
+class CommunityNotificationItem {
+  final int id;
+  final String type;
+  final String title;
+  final String body;
+  final int? targetId;
+  final bool isRead;
+  final String createdAt;
+
+  const CommunityNotificationItem({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.targetId,
+    required this.isRead,
+    required this.createdAt,
+  });
+
+  factory CommunityNotificationItem.fromJson(Map<String, dynamic> json) {
+    int? readNullableInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value.toString());
+    }
+
+    bool readBool(dynamic value, {bool fallback = false}) {
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final lower = value.toLowerCase();
+        if (lower == 'true' || lower == '1') return true;
+        if (lower == 'false' || lower == '0') return false;
+      }
+      return fallback;
+    }
+
+    String readString(dynamic value, {String fallback = ''}) {
+      if (value == null) return fallback;
+      final text = value.toString().trim();
+      return text.isEmpty ? fallback : text;
+    }
+
+    return CommunityNotificationItem(
+      id: readNullableInt(json['id']) ?? 0,
+      type: readString(json['type']),
+      title: readString(json['title']),
+      body: readString(json['body']),
+      targetId: readNullableInt(json['targetId']),
+      isRead: readBool(
+        json['isRead'] ?? json['read'],
+      ),
+      createdAt: readString(json['createdAt']),
+    );
+  }
+}
 
 class CommunityScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
@@ -21,6 +80,13 @@ class CommunityScreen extends StatefulWidget {
   final int? initialPostId;
   final int refreshSignal;
   final int openMyProfileSignal;
+
+  static const double _kHeaderHorizontalPadding = 16;
+  static const double _kHeaderTopExtra = 6;
+  static const double _kHeaderBottomPadding = 14;
+  static const double _kHeaderButtonSize = 40;
+  static const double _kHeaderButtonRadius = 12;
+  static const double _kHeaderIconSize = 17;
 
   static Future<bool?> openWrite(
       BuildContext context, {
@@ -385,6 +451,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
   static const int _virtualInitialPage = 1000;
   int _currentFeedPage = _virtualInitialPage;
 
+  List<CommunityNotificationItem> _notifications = <CommunityNotificationItem>[];
+  int _unreadNotificationCount = 0;
+  bool _notificationLoading = false;
+  bool _isNotificationSheetOpen = false;
+
   bool _didOpenInitialPost = false;
 
   bool _showTopButton = false;
@@ -406,15 +477,22 @@ class _CommunityScreenState extends State<CommunityScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
+
     _currentFeedPage = _virtualInitialPage + (_isGridView ? 1 : 0);
     _feedModePageController = PageController(initialPage: _currentFeedPage);
+
     _loadInitialData();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tryOpenInitialPost();
+    });
   }
 
   Future<void> _loadInitialData() async {
     await Future.wait([
       _fetchTags(),
       _fetchPosts(),
+      _fetchUnreadNotificationCount(),
     ]);
   }
 
@@ -436,6 +514,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     if (widget.userId != oldWidget.userId) {
       _fetchPosts();
+      _fetchUnreadNotificationCount();
     }
 
     if (widget.initialPostId != oldWidget.initialPostId) {
@@ -677,6 +756,51 @@ class _CommunityScreenState extends State<CommunityScreen> {
       return null;
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<void> _fetchUnreadNotificationCount() async {
+    final userId = (widget.userId ?? '').trim();
+    if (userId.isEmpty) return;
+
+    try {
+      final uri = Uri.parse('$_baseUrl/api/community/notifications/unread').replace(
+        queryParameters: {'userId': userId},
+      );
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return;
+      }
+
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (!mounted) return;
+
+      if (decoded is Map<String, dynamic>) {
+        setState(() {
+          _unreadNotificationCount =
+              (decoded['count'] as num?)?.toInt() ?? 0;
+        });
+      } else if (decoded is num) {
+        setState(() {
+          _unreadNotificationCount = decoded.toInt();
+        });
+      }
+    } catch (e) {
+      debugPrint('알림 카운트 조회 실패: $e');
+    }
+  }
+
+  Future<void> _markNotificationRead(int notificationId) async {
+    try {
+      final uri = Uri.parse(
+        '$_baseUrl/api/community/notifications/$notificationId/read',
+      );
+
+      await http.post(uri).timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('알림 읽음 처리 실패: $e');
     }
   }
 
@@ -1051,25 +1175,47 @@ class _CommunityScreenState extends State<CommunityScreen> {
       return;
     }
 
+    // 🔥 로딩 중이면 기다렸다가 다시 시도
     if (_isLoading) {
+      Future.delayed(const Duration(milliseconds: 120), () {
+        if (mounted) _tryOpenInitialPost();
+      });
       return;
     }
 
     CommunityPost? targetPost;
 
+    // 1️⃣ 현재 리스트에서 찾기
     final int index = _posts.indexWhere((e) => e.id == postId);
     if (index >= 0) {
       targetPost = _posts[index];
-    } else {
+    }
+
+    // 2️⃣ 없으면 단건 조회 (🔥 핵심 폴백)
+    if (targetPost == null) {
       targetPost = await _fetchPostDetail(postId);
     }
 
+    // 3️⃣ 그래도 없으면 한 번 더 목록 fetch 후 재시도
+    if (targetPost == null) {
+      await _fetchPosts();
+      if (!mounted) return;
+
+      final retryIndex = _posts.indexWhere((e) => e.id == postId);
+      if (retryIndex >= 0) {
+        targetPost = _posts[retryIndex];
+      }
+    }
+
+    // ❌ 끝까지 못 찾으면 종료
     if (!mounted || targetPost == null) {
+      debugPrint('딥링크 대상 게시글 못찾음: $postId');
       return;
     }
 
     _didOpenInitialPost = true;
 
+    // 🔥 UI 프레임 이후 안정적으로 바텀시트 열기
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
 
@@ -1859,10 +2005,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final topPadding = media.padding.top;
-    const appBarContentHeight = 34.0;
+    const appBarContentHeight = 40.0;
     const appBarBottomPadding = 14.0;
     final appBarTotalHeight =
-        topPadding + 10 + appBarContentHeight + appBarBottomPadding;
+        topPadding + 6 + appBarContentHeight + appBarBottomPadding;
     final posts = _filteredPosts();
 
     return Scaffold(
@@ -1985,7 +2131,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       duration: const Duration(milliseconds: 380),
       curve: _isFilterPanelOpen ? Curves.easeOutQuad : Curves.easeInCubic,
       top: topPadding + 118,
-      right: _isFilterPanelOpen ? 12 : -420,
+      left: _isFilterPanelOpen ? 12 : -320,
       child: IgnorePointer(
         ignoring: !_isFilterPanelOpen,
         child: AnimatedOpacity(
@@ -2022,6 +2168,47 @@ class _CommunityScreenState extends State<CommunityScreen> {
                         _buildPanelIconButton(
                           icon: Icons.close_rounded,
                           onTap: _closeFilterPanel,
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+// 🔥 여기부터 추가 (보기 방식)
+                    const Text(
+                      '보기 방식',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF6E625D),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        _buildViewModeChip(
+                          label: '그리드뷰',
+                          icon: Icons.grid_view_rounded,
+                          selected: _isGridView,
+                          onTap: () {
+                            if (!_isGridView) {
+                              _toggleViewMode();
+                            }
+                          },
+                        ),
+                        _buildViewModeChip(
+                          label: '리스트뷰',
+                          icon: Icons.view_stream_rounded,
+                          selected: !_isGridView,
+                          onTap: () {
+                            if (_isGridView) {
+                              _toggleViewMode();
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -2151,6 +2338,109 @@ class _CommunityScreenState extends State<CommunityScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildViewModeChip({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final Color bg = selected
+        ? const Color(0xFFEAF3FF)
+        : const Color(0xFFF8FAFC);
+    final Color border = selected
+        ? const Color(0xFFBFD7FF)
+        : const Color(0xFFE2E8F0);
+    final Color text = selected
+        ? const Color(0xFF2F6FD6)
+        : const Color(0xFF64748B);
+    final Color iconBg = selected
+        ? const Color(0xFFDCEBFF)
+        : const Color(0xFFEEF2F7);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: border),
+            boxShadow: selected
+                ? [
+              BoxShadow(
+                color: const Color(0xFFBFD7FF).withOpacity(0.22),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  size: 12.5,
+                  color: text,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.8,
+                  fontWeight: FontWeight.w800,
+                  color: text,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<List<CommunityNotificationItem>> _fetchNotificationsForSheet() async {
+    final userId = (widget.userId ?? '').trim();
+    if (userId.isEmpty) return <CommunityNotificationItem>[];
+
+    final uri = Uri.parse('$_baseUrl/api/community/notifications').replace(
+      queryParameters: {'userId': userId},
+    );
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('알림 조회 실패 (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+
+    if (decoded is! List) {
+      debugPrint('알림 응답 List 아님: $decoded');
+      return <CommunityNotificationItem>[];
+    }
+
+    return decoded
+        .whereType<Map>()
+        .map((e) => CommunityNotificationItem.fromJson(
+      Map<String, dynamic>.from(e),
+    ))
+        .toList();
   }
 
   Widget _buildLikedFilterChip() {
@@ -2410,6 +2700,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
             width: 1,
           ),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(
@@ -2425,42 +2722,23 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
             ),
             child: Stack(
-              children: <Widget>[
+              children: [
                 Padding(
-                  padding: EdgeInsets.fromLTRB(16, topPadding + 8, 16, 12),
+                  padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 14),
                   child: SizedBox(
                     height: 40,
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: <Widget>[
-                        SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: _buildIconAppBarButton(
-                            icon: _isGridView
-                                ? Icons.view_stream_rounded
-                                : Icons.grid_view_rounded,
-                            onTap: _toggleViewMode,
-                            isAccent: true,
-                          ),
+                      children: [
+                        _buildIconAppBarButton(
+                          icon: Icons.menu_rounded,
+                          onTap: widget.openDrawer ?? () {},
+                          isAccent: true,
+                          isActive: false,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.center,
-                            child: _buildAppTitle(),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: _buildIconAppBarButton(
-                            icon: Icons.tune_rounded,
-                            onTap: _toggleFilterPanel,
-                            isActive: _isFilterPanelOpen,
-                          ),
-                        ),
+                        const Spacer(),
+                        _buildAppTitle(),
+                        const Spacer(),
+                        _buildNotificationButton(),
                       ],
                     ),
                   ),
@@ -2489,68 +2767,438 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
-  Widget _buildAppTitle() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        const Text(
-          "Keeper's Feed",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF2D3436),
-            letterSpacing: -0.3,
-            fontFamily: 'SF Pro',
-            height: 1.0,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          width: 12,
-          height: 3,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFF8E7C).withOpacity(0.78),
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildIconAppBarButton({
     required IconData icon,
     required VoidCallback onTap,
-    bool isAccent = false,
     bool isActive = false,
+    bool isAccent = false,
   }) {
+    final Color bg = isAccent
+        ? const Color(0xFFFFF3F0)
+        : isActive
+        ? const Color(0xFFFFF1ED)
+        : const Color(0xFFF8FAFC);
+
+    final Color border = isAccent
+        ? const Color(0xFFFFE2DB)
+        : isActive
+        ? const Color(0xFFFFD8CF)
+        : const Color(0xFFE2E8F0);
+
+    final Color iconColor = isAccent
+        ? const Color(0xFFFF8E7C)
+        : isActive
+        ? const Color(0xFFFF8E7C)
+        : const Color(0xFF64748B);
+
     return Material(
-      color: isAccent || isActive
-          ? const Color(0xFFFFF3F0)
-          : const Color(0xFFFFFBFA),
+      color: bg,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
         child: Container(
           width: 40,
           height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isAccent || isActive
-                  ? const Color(0xFFFFE2DB)
-                  : const Color(0xFFF2E3DE),
-              width: 1,
-            ),
+            border: Border.all(color: border, width: 1),
           ),
           child: Icon(
             icon,
-            size: 19,
-            color: const Color(0xFFFF8E7C),
+            size: 17,
+            color: iconColor,
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openNotificationSheet() async {
+    if (_isNotificationSheetOpen) return;
+
+    setState(() {
+      _isNotificationSheetOpen = true;
+    });
+
+    List<CommunityNotificationItem> sheetNotifications =
+    List<CommunityNotificationItem>.from(_notifications);
+    bool sheetLoading = true;
+
+    await showModalBottomSheet<void>(
+      context: Navigator.of(context, rootNavigator: true).context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        Future<void> loadSheetData(StateSetter sheetSetState) async {
+          try {
+            final items = await _fetchNotificationsForSheet();
+
+            if (!mounted) return;
+
+            sheetSetState(() {
+              sheetNotifications = items;
+              sheetLoading = false;
+            });
+
+            if (mounted) {
+              setState(() {
+                _notifications = items;
+                _unreadNotificationCount =
+                    items.where((e) => !e.isRead).length;
+              });
+            }
+          } catch (e) {
+            debugPrint('알림 시트 조회 실패: $e');
+            if (!mounted) return;
+            sheetSetState(() {
+              sheetNotifications = <CommunityNotificationItem>[];
+              sheetLoading = false;
+            });
+          }
+        }
+
+        return StatefulBuilder(
+          builder: (context, sheetSetState) {
+            if (sheetLoading) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (sheetLoading) {
+                  loadSheetData(sheetSetState);
+                }
+              });
+            }
+
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(sheetContext).size.height * 0.82,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(color: const Color(0xFFF0E3DC)),
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 10),
+                      Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE9DDD6),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 18),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '알림',
+                                style: TextStyle(
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF3E332F),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: sheetLoading
+                            ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFFFF8E7C),
+                          ),
+                        )
+                            : sheetNotifications.isEmpty
+                            ? const Center(
+                          child: Text(
+                            '새 알림이 없어요.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF8A94A6),
+                            ),
+                          ),
+                        )
+                            : ListView.separated(
+                          padding:
+                          const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                          itemCount: sheetNotifications.length,
+                          separatorBuilder: (_, __) => const Divider(
+                            height: 1,
+                            color: Color(0xFFF3E7E1),
+                          ),
+                          itemBuilder: (_, index) {
+                            final item = sheetNotifications[index];
+
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(18),
+                              onTap: () async {
+                                await _markNotificationRead(item.id);
+
+                                final updated =
+                                sheetNotifications.map((e) {
+                                  if (e.id == item.id) {
+                                    return CommunityNotificationItem(
+                                      id: e.id,
+                                      type: e.type,
+                                      title: e.title,
+                                      body: e.body,
+                                      targetId: e.targetId,
+                                      isRead: true,
+                                      createdAt: e.createdAt,
+                                    );
+                                  }
+                                  return e;
+                                }).toList();
+
+                                sheetSetState(() {
+                                  sheetNotifications = updated;
+                                });
+
+                                if (mounted) {
+                                  setState(() {
+                                    _notifications = updated;
+                                    _unreadNotificationCount = updated
+                                        .where((e) => !e.isRead)
+                                        .length;
+                                  });
+                                }
+
+                                Navigator.pop(sheetContext);
+
+                                if (item.type == 'uid_request') {
+                                  if (!mounted) return;
+
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => CommunityUidAdminScreen(
+                                        userId: widget.userId ?? '',
+                                      ),
+                                    ),
+                                  );
+
+                                  return;
+                                }
+
+// UID 승인 알림
+                                if (item.type == 'uid_approved') {
+                                  if (!mounted) return;
+
+                                  _showSnackBar('UID 인증이 완료되었어요. 이제 글쓰기를 이용할 수 있어요.');
+                                  return;
+                                }
+
+                                if (item.type == 'uid_rejected') {
+                                  if (!mounted) return;
+
+                                  final bool? requested = await Navigator.push<bool>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => CommunityUidVerificationScreen(
+                                        userId: widget.userId ?? '',
+                                      ),
+                                    ),
+                                  );
+
+                                  if (!mounted) return;
+
+                                  if (requested == true) {
+                                    _showSnackBar('UID 인증 요청이 다시 접수되었어요.');
+                                  }
+
+                                  return;
+                                }
+
+                                if (item.targetId != null) {
+                                  CommunityPost? target;
+
+                                  for (final post in _posts) {
+                                    if (post.id == item.targetId) {
+                                      target = post;
+                                      break;
+                                    }
+                                  }
+
+                                  target ??= await _fetchPostDetail(item.targetId!);
+
+                                  if (target != null && mounted) {
+                                    await _openPostDetailSheet(target);
+                                  }
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: item.isRead
+                                      ? Colors.white
+                                      : const Color(0xFFFFF8F5),
+                                  borderRadius:
+                                  BorderRadius.circular(18),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.title,
+                                            style: const TextStyle(
+                                              fontSize: 13.6,
+                                              fontWeight:
+                                              FontWeight.w800,
+                                              color: Color(0xFF33414B),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            item.body,
+                                            style: const TextStyle(
+                                              fontSize: 12.4,
+                                              fontWeight:
+                                              FontWeight.w600,
+                                              color: Color(0xFF7B8794),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            item.createdAt,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight:
+                                              FontWeight.w600,
+                                              color: Color(0xFFACB4BF),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (!item.isRead)
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        margin: const EdgeInsets.only(
+                                          left: 6,
+                                        ),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFFF8E7C),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (mounted) {
+      setState(() {
+        _isNotificationSheetOpen = false;
+      });
+    }
+  }
+
+  Widget _buildAppTitle() {
+    return const Text(
+      "Keeper's Feed",
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+        color: Color(0xFF2D3436),
+        letterSpacing: -0.3,
+        fontFamily: 'SF Pro',
+      ),
+    );
+  }
+
+  Widget _buildNotificationButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _openNotificationSheet,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F7FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFDCEBFF),
+                  width: 1,
+                ),
+              ),
+              child: const Icon(
+                Icons.notifications_none_rounded,
+                size: 17,
+                color: Color(0xFF4A90E2),
+              ),
+            ),
+            if (_unreadNotificationCount > 0)
+              Positioned(
+                right: -1,
+                top: -1,
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minWidth: 18,
+                    minHeight: 18,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF6F61),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white, width: 1.4),
+                  ),
+                  child: Text(
+                    _unreadNotificationCount > 99
+                        ? '99+'
+                        : _unreadNotificationCount.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -3677,7 +4325,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     });
 
     await showModalBottomSheet<void>(
-      context: context,
+      context: Navigator.of(context, rootNavigator: true).context,
       isScrollControlled: true,
       enableDrag: true,
       isDismissible: true,
@@ -3761,6 +4409,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     );
                   });
                 }
+                _fetchUnreadNotificationCount();
               } catch (e) {
                 if (context.mounted) {
                   setSheetState(() {
@@ -3888,6 +4537,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   });
                 }
               }
+              _fetchUnreadNotificationCount();
             }
 
             Future<void> deleteComment(CommunityComment comment) async {
@@ -5094,6 +5744,7 @@ class _PostImageCarouselState extends State<_PostImageCarousel> {
     _pageController = PageController();
     _precacheAspectRatios();
   }
+
   @override
   void didUpdateWidget(covariant _PostImageCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);

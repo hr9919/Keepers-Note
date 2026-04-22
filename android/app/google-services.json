@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "620567768535",
+    "project_id": "keepers-note",
+    "storage_bucket": "keepers-note.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:620567768535:android:b1e4322cf04f1b6a48ef92",
+        "android_client_info": {
+          "package_name": "com.townhelpers.keepers_note"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvAeN5IIzR-7mZDAueX8E6w4QbOgka-P8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

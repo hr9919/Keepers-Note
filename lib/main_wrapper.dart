@@ -28,6 +28,7 @@ import 'services/community_tag_api_service.dart';
 import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/push_service.dart';
 
 
 class MainWrapper extends StatefulWidget {
@@ -549,8 +550,9 @@ class _MainWrapperState extends State<MainWrapper> {
 
         await prefs.setString('userId', serverUserId);
 
+        final gameUid = data['gameUid']?.toString().trim() ?? '';
+
         setState(() {
-          final gameUid = data['gameUid']?.toString().trim() ?? '';
           _serverUserId = serverUserId;
           _userUid = gameUid.isNotEmpty ? gameUid : 'UID를 입력해보세요';
           _userName = data['nickname'] ?? "사용자";
@@ -571,6 +573,7 @@ class _MainWrapperState extends State<MainWrapper> {
           }
         });
 
+        await _initPush();
         await _loadTodoFromServer(serverUserId);
       } else {
         if (!mounted) return;
@@ -581,6 +584,75 @@ class _MainWrapperState extends State<MainWrapper> {
     } catch (e) {
       debugPrint("_fetchUserInfo 실패: $e");
     }
+  }
+
+  Future<void> _initPush() async {
+    if (_serverUserId.isEmpty) return;
+
+    final push = PushService();
+
+    await push.init(
+      userId: _serverUserId,
+      onRealtimeNotificationRefresh: () async {
+        debugPrint('🔔 실시간 알림 도착');
+      },
+      onTapNavigate: (data) async {
+        final target = data['target']?.toString();
+
+        if (target == 'community_post') {
+          final postId = int.tryParse(data['postId']?.toString() ?? '');
+
+          if (postId != null) {
+            if (!mounted) return;
+
+            setState(() {
+              _selectedIndex = 2;
+              _initialCommunityPostId = null;
+            });
+
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+
+              setState(() {
+                _initialCommunityPostId = postId;
+              });
+            });
+            return;
+          }
+        }
+
+        if (target == 'uid_request') {
+          if (!mounted) return;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CommunityUidAdminScreen(userId: _serverUserId),
+            ),
+          );
+          return;
+        }
+
+        if (target == 'uid_rejected') {
+          if (!mounted) return;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CommunityUidVerificationScreen(
+                userId: _serverUserId,
+              ),
+            ),
+          );
+          return;
+        }
+
+        if (target == 'uid_approved') {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('UID 인증이 완료되었어요.')),
+          );
+        }
+      },
+    );
   }
 
   Future<void> _loadTodoFromServer([String? userId]) async {

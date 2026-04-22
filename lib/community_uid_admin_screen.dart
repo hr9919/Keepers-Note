@@ -69,6 +69,134 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
     }
   }
 
+  Future<bool> _showUidReviewConfirmDialog({
+    required bool approve,
+    required String nickname,
+    required String submittedUid,
+  }) async {
+    final bool isApprove = approve;
+
+    return await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFF0E3DD)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isApprove
+                        ? const Color(0xFFEFF8F1)
+                        : const Color(0xFFFFF3F1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    isApprove
+                        ? Icons.verified_rounded
+                        : Icons.warning_amber_rounded,
+                    color: isApprove
+                        ? const Color(0xFF46A36A)
+                        : const Color(0xFFE46C6C),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  isApprove ? 'UID 인증을 승인할까요?' : 'UID 인증을 반려할까요?',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF3E332F),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '$nickname\n제출 UID: $submittedUid',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6F7B88),
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isApprove
+                      ? '승인하면 해당 UID로 잠기고, 바로 글쓰기가 가능해져요.'
+                      : '반려하면 인게임 UID가 보이는 스크린샷을 첨부해 다시 신청하도록 안내돼요.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 12.3,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF8A94A6),
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF7B8794),
+                          side: const BorderSide(color: Color(0xFFD9E2EC)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text('취소'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isApprove
+                              ? const Color(0xFFFF8E7C)
+                              : const Color(0xFFE46C6C),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: Text(isApprove ? '승인' : '반려'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ) ??
+        false;
+  }
+
   Future<void> _reviewReport(
       int reportId,
       String action, {
@@ -213,26 +341,59 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => _review(item['requestId'] as int, false), // ❗ 반려
+                  onPressed: () async {
+                    final confirmed = await _showUidReviewConfirmDialog(
+                      approve: false,
+                      nickname: item['nickname']?.toString() ?? '사용자',
+                      submittedUid: item['submittedUid']?.toString() ?? '-',
+                    );
+                    if (!confirmed) return;
+                    await _review(item['requestId'] as int, false);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFE46C6C),
+                    side: const BorderSide(color: Color(0xFFFFD4CC)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                   child: const Text('반려'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () => _review(item['requestId'] as int, true), // ❗ 승인
+                  onPressed: () async {
+                    final confirmed = await _showUidReviewConfirmDialog(
+                      approve: true,
+                      nickname: item['nickname']?.toString() ?? '사용자',
+                      submittedUid: item['submittedUid']?.toString() ?? '-',
+                    );
+                    if (!confirmed) return;
+                    await _review(item['requestId'] as int, true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8E7C),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                   child: const Text('승인'),
                 ),
               ),
             ],
-          ),
+          )
         ],
       ),
     );
   }
 
   Future<void> _review(int requestId, bool approve) async {
-    final action = approve ? 'approve' : 'reject';  // approve 또는 reject 액션 선택
+    final action = approve ? 'approve' : 'reject';
 
     final uri = Uri.parse(
       '$_baseUrl/api/community/uid-verification/requests/$requestId/$action',
@@ -240,12 +401,20 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
       queryParameters: {'userId': widget.userId},
     );
 
-    final response = await http.post(uri);  // 서버에 요청 보내기
+    final response = await http.post(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('처리 실패');  // 처리 실패 시 예외 발생
+      throw Exception('처리 실패');
     }
 
-    _fetchAdminData();  // 처리 후 데이터를 다시 불러옵니다.
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(approve ? '승인 완료' : '반려 완료'),
+        ),
+      );
+    }
+
+    await _fetchAdminData();
   }
 
   Widget _buildReportCard(Map<String, dynamic> item) {
