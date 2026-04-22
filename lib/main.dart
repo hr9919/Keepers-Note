@@ -45,6 +45,28 @@ void main() async {
       android: androidSettings,
       iOS: iosSettings,
     ),
+    onDidReceiveNotificationResponse: (NotificationResponse response) async {
+      final payload = response.payload;
+      if (payload == null || payload.isEmpty) return;
+
+      try {
+        final Map<String, dynamic> data =
+        jsonDecode(payload) as Map<String, dynamic>;
+        debugPrint('로컬 알림 탭 payload: $data');
+
+        final BuildContext? context = navigatorKey.currentContext;
+        if (context == null) return;
+
+        await Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => const MainWrapper(),
+          ),
+              (route) => false,
+        );
+      } catch (e) {
+        debugPrint('로컬 알림 payload 파싱 실패: $e');
+      }
+    },
   );
 
   KakaoSdk.init(

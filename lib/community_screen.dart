@@ -14,6 +14,7 @@ import 'community_user_profile_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'community_uid_verification_screen.dart';
 import 'community_uid_admin_screen.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class CommunityNotificationItem {
   final int id;
@@ -2729,16 +2730,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     height: 40,
                     child: Row(
                       children: [
-                        _buildIconAppBarButton(
-                          icon: Icons.menu_rounded,
+                        _buildSvgAppBarButton(
+                          assetPath: 'assets/icons/ic_menu.svg', // 홈에서 쓰는 경로랑 동일하게!
                           onTap: widget.openDrawer ?? () {},
-                          isAccent: true,
-                          isActive: false,
                         ),
                         const Spacer(),
                         _buildAppTitle(),
                         const Spacer(),
-                        _buildNotificationButton(),
+                        _buildNotificationButton(), // (이건 나중에 SVG로 바꿔도됨)
                       ],
                     ),
                   ),
@@ -2767,49 +2766,42 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
-  Widget _buildIconAppBarButton({
-    required IconData icon,
-    required VoidCallback onTap,
-    bool isActive = false,
-    bool isAccent = false,
+  Widget _buildSvgAppBarButton({
+    required String assetPath,
+    required VoidCallback? onTap,
   }) {
-    final Color bg = isAccent
-        ? const Color(0xFFFFF3F0)
-        : isActive
-        ? const Color(0xFFFFF1ED)
-        : const Color(0xFFF8FAFC);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: CommunityScreen._kHeaderButtonSize,
+        height: CommunityScreen._kHeaderButtonSize,
+        decoration: BoxDecoration(
+          // 🔥 이게 핵심 (완전히 홈처럼)
+          color: Colors.white.withOpacity(0.85), // 기존 0.92 → 너무 진함
 
-    final Color border = isAccent
-        ? const Color(0xFFFFE2DB)
-        : isActive
-        ? const Color(0xFFFFD8CF)
-        : const Color(0xFFE2E8F0);
-
-    final Color iconColor = isAccent
-        ? const Color(0xFFFF8E7C)
-        : isActive
-        ? const Color(0xFFFF8E7C)
-        : const Color(0xFF64748B);
-
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: border, width: 1),
+          borderRadius: BorderRadius.circular(
+            CommunityScreen._kHeaderButtonRadius,
           ),
-          child: Icon(
-            icon,
-            size: 17,
-            color: iconColor,
+
+          // 🔥 테두리 제거 or 아주 연하게
+          border: Border.all(
+            color: const Color(0xFFF1E3DC).withOpacity(0.5),
           ),
+
+          // 🔥 그림자 완전 동일
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 16,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: SvgPicture.asset(
+          assetPath,
+          width: 17,
+          height: 17,
         ),
       ),
     );
@@ -3126,16 +3118,30 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Widget _buildAppTitle() {
-    return const Text(
-      "Keeper's Feed",
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.w800,
-        color: Color(0xFF2D3436),
-        letterSpacing: -0.3,
-        fontFamily: 'SF Pro',
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          "Keeper's Feed",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF2D3436),
+            letterSpacing: -0.3,
+            fontFamily: 'SF Pro',
+          ),
+        ),
+        const SizedBox(height: 3),
+        Container(
+          width: 12,
+          height: 3,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF8E7C).withOpacity(0.78),
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ],
     );
   }
 
@@ -3162,7 +3168,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
               child: const Icon(
                 Icons.notifications_none_rounded,
-                size: 17,
+                size: 18,
                 color: Color(0xFF4A90E2),
               ),
             ),

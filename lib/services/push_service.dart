@@ -40,6 +40,23 @@ class PushService {
           android: androidSettings,
           iOS: iosSettings,
         ),
+        onDidReceiveNotificationResponse: (NotificationResponse response) async {
+          final payload = response.payload;
+          debugPrint('A. onDidReceiveNotificationResponse payload=$payload');
+
+          if (payload == null || payload.isEmpty) return;
+
+          try {
+            final Map<String, dynamic> data =
+            jsonDecode(payload) as Map<String, dynamic>;
+            debugPrint('A-1. 로컬 알림 클릭 data=$data');
+
+            await onRealtimeNotificationRefresh();
+            await onTapNavigate(data);
+          } catch (e) {
+            debugPrint('로컬 알림 payload 파싱 실패: $e');
+          }
+        },
       );
 
       _localNotificationInitialized = true;
@@ -57,16 +74,24 @@ class PushService {
     });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      debugPrint('B. onMessage data=${message.data}');
+      debugPrint('B-1. onMessage title=${message.notification?.title}');
+      debugPrint('B-2. onMessage body=${message.notification?.body}');
+
       await onRealtimeNotificationRefresh();
       await _showLocalNotification(message);
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+      debugPrint('C. onMessageOpenedApp data=${message.data}');
+
       await onRealtimeNotificationRefresh();
       await onTapNavigate(message.data);
     });
 
     final initialMessage = await _messaging.getInitialMessage();
+    debugPrint('D. initialMessage=${initialMessage?.data}');
+
     if (initialMessage != null) {
       await onTapNavigate(initialMessage.data);
     }
@@ -95,28 +120,30 @@ class PushService {
 
   Future<void> _showLocalNotification(RemoteMessage message) async {
     final notification = message.notification;
+    debugPrint('E. _showLocalNotification data=${message.data}');
+    debugPrint('E-1. _showLocalNotification title=${notification?.title}');
+    debugPrint('E-2. _showLocalNotification body=${notification?.body}');
+
     if (notification == null) return;
 
     const androidDetails = AndroidNotificationDetails(
-      'community_channel',
+      'community_notifications',
       '커뮤니티 알림',
-      channelDescription: '댓글, 좋아요, UID 관련 알림',
+      channelDescription: '커뮤니티 관련 알림',
       importance: Importance.max,
       priority: Priority.high,
     );
 
     const iosDetails = DarwinNotificationDetails();
 
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
     await _localNotifications.show(
       notification.hashCode,
       notification.title,
       notification.body,
-      details,
+      const NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      ),
       payload: jsonEncode(message.data),
     );
   }
