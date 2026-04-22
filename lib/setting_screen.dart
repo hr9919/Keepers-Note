@@ -10,7 +10,9 @@ import 'dart:io';
 import 'main.dart';
 import 'package:path_provider/path_provider.dart';
 import 'image_adjust_screen.dart';
+import 'services/push_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -25,13 +27,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final Color snackBg = const Color(0xFFFFF9F8);
   final Color snackCard = Colors.white;
 
+  final PushService _pushService = PushService();
+
+  static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
+  static const String _pushEnabledKey = 'push_enabled';
+
   String _serverUserId = "";
 
   bool _uidLocked = false;
 
   bool _isPushEnabled = true;
-  bool _isLoading = false;      // 이미지 업로드 등 액션 시 로딩
-  bool _isDataStable = false;   // 데이터 준비 완료 여부 (애니메이션 트리거)
+  bool _isLoading = false; // 이미지 업로드 등 액션 시 로딩
+  bool _isDataStable = false; // 데이터 준비 완료 여부 (애니메이션 트리거)
   bool _didUserInfoChange = false;
 
   String _displayUid = "UID를 입력해보세요";
@@ -44,8 +51,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserInfo();
+    _initializeSettings();
     _recoverLostData();
+  }
+
+  String _resolveImageUrl(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return '';
+
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+
+    if (value.startsWith('/')) {
+      return '$_baseUrl$value';
+    }
+
+    return '$_baseUrl/$value';
+  }
+
+  Future<void> _initializeSettings() async {
+    await _loadPushPreference();
+    await _loadUserInfo();
+  }
+
+  Future<void> _loadPushPreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enabled = prefs.getBool(_pushEnabledKey);
+
+      if (!mounted) return;
+      setState(() {
+        _isPushEnabled = enabled ?? true;
+      });
+    } catch (e) {
+      debugPrint('push preference load error: $e');
+    }
+  }
+
+  void _safePop([Object? result]) {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(result);
+      }
+    });
+  }
+
+  void _safeDialogPop(BuildContext dialogContext) {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (Navigator.of(dialogContext).canPop()) {
+        Navigator.of(dialogContext).pop();
+      }
+    });
   }
 
   Future<void> _recoverLostData() async {
@@ -77,25 +140,112 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       final response = await http.get(
-        Uri.parse('https://api.keepers-note.o-r.kr/api/user/$userId'),
+        Uri.parse('$_baseUrl/api/user/$userId'),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final ts = DateTime.now().millisecondsSinceEpoch;
+
+        final profileResolved =
+        _resolveImageUrl(data['profileImageUrl']?.toString());
+        final headerResolved =
+        _resolveImageUrl(data['headerImageUrl']?.toString());
+
+        if (!mounted) return;
 
         setState(() {
           _serverUserId = userId;
           _nickname = data['nickname'] ?? '';
           _displayUid = data['gameUid'] ?? "UID를 입력해보세요";
-          _profileImageUrl = data['profileImageUrl'];
-          _headerImageUrl = data['headerImageUrl'];
+          _profileImageUrl =
+          profileResolved.isNotEmpty ? '$profileResolved?t=$ts' : null;
+          _headerImageUrl =
+          headerResolved.isNotEmpty ? '$headerResolved?t=$ts' : null;
           _isDataStable = true;
         });
+      } else {
+        if (!mounted) return;
+        setState(() => _isDataStable = true);
       }
     } catch (e) {
       debugPrint("User load error: $e");
+      if (!mounted) return;
       setState(() => _isDataStable = true);
     }
+  }
+
+  Future<void> _setPushEnabled(bool enabled) async {
+    final previous = _isPushEnabled;
+
+    if (!mounted) return;
+    setState(() {
+      _isPushEnabled = enabled;
+    });
+
+    try {
+      if (_serverUserId.isEmpty) {
+        _showSnackBar('사용자 정보를 불러온 뒤 다시 시도해주세요.');
+        setState(() {
+          _isPushEnabled = previous;
+        });
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_pushEnabledKey, enabled);
+
+      await _pushService.setPushEnabled(
+        enabled: enabled,
+        userId: _serverUserId,
+      );
+
+      _showSnackBar(
+        enabled ? '푸시 알림이 켜졌어요.' : '푸시 알림이 꺼졌어요.',
+      );
+    } catch (e) {
+      debugPrint('push toggle error: $e');
+
+      if (!mounted) return;
+      setState(() {
+        _isPushEnabled = previous;
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_pushEnabledKey, previous);
+
+      _showSnackBar('푸시 알림 설정 변경에 실패했어요.');
+    }
+  }
+
+  Future<void> _applyPushSetting(bool enabled) async {
+    final messaging = FirebaseMessaging.instance;
+
+    await messaging.setAutoInitEnabled(enabled);
+
+    if (enabled) {
+      await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+
+      await messaging.getToken();
+    } else {
+      await messaging.deleteToken();
+    }
+
+    // 백엔드에 토글 상태를 저장하는 API가 있으면 여기서 같이 호출
+    // 예:
+    // await http.put(
+    //   Uri.parse('$_baseUrl/api/user/push-setting'),
+    //   headers: {'Content-Type': 'application/json'},
+    //   body: jsonEncode({
+    //     'id': int.tryParse(_serverUserId),
+    //     'pushEnabled': enabled,
+    //   }),
+    // );
   }
 
   // 2. 이미지 업로드 로직
@@ -123,6 +273,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (adjusted == null) return;
 
     try {
+      if (!mounted) return;
       setState(() => _isLoading = true);
 
       final tempDir = await getTemporaryDirectory();
@@ -133,7 +284,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('https://api.keepers-note.o-r.kr/api/user/upload-image'),
+        Uri.parse('$_baseUrl/api/user/upload-image'),
       );
 
       request.fields['userId'] = _serverUserId;
@@ -142,20 +293,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await http.MultipartFile.fromPath(
           'file',
           file.path,
-          contentType: MediaType('image', adjusted.extension == 'png' ? 'png' : 'jpeg'),
+          contentType: MediaType(
+            'image',
+            adjusted.extension == 'png' ? 'png' : 'jpeg',
+          ),
         ),
       );
 
       final response = await http.Response.fromStream(await request.send());
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final resolved = _resolveImageUrl(data['url']?.toString());
+        final newUrl = resolved.isNotEmpty
+            ? '$resolved?t=${DateTime.now().millisecondsSinceEpoch}'
+            : '';
+
+        if (!mounted) return;
+
         setState(() {
-          final newUrl =
-              "https://api.keepers-note.o-r.kr${data['url']}?t=${DateTime.now().millisecondsSinceEpoch}";
           if (isProfile) {
-            _profileImageUrl = newUrl;
+            _profileImageUrl = newUrl.isNotEmpty ? newUrl : null;
           } else {
-            _headerImageUrl = newUrl;
+            _headerImageUrl = newUrl.isNotEmpty ? newUrl : null;
           }
           _didUserInfoChange = true;
         });
@@ -164,6 +323,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       _showSnackBar("업로드 중 오류 발생");
     } finally {
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
@@ -186,7 +346,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       canPop: true,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        Navigator.pop(context, _didUserInfoChange);
+        _safePop(_didUserInfoChange);
       },
       child: Scaffold(
         backgroundColor: snackBg,
@@ -194,13 +354,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         body: Stack(
           children: [
             RefreshIndicator(
-              onRefresh: _loadUserInfo, // ⭐ 핵심
+              onRefresh: _loadUserInfo,
               color: snackAccent,
               backgroundColor: Colors.white,
               child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
+                physics: const BouncingScrollPhysics(),
                 child: Column(
                   children: [
                     _buildModernHeader(),
@@ -217,14 +375,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               _buildProfileMainCard(),
                               const SizedBox(height: 24),
                               _buildSnackSection('공식 커뮤니티', [
-                                _buildSnackLinkItem('네이버 공식 카페', 'assets/icons/ic_naver_cafe.png', 'https://cafe.naver.com/heartopia'),
-                                _buildSnackLinkItem('한국 공식 유튜브', 'assets/icons/ic_youtube.png', 'https://www.youtube.com/@Heartopia-KR'),
+                                _buildSnackLinkItem(
+                                  '네이버 공식 카페',
+                                  'assets/icons/ic_naver_cafe.png',
+                                  'https://cafe.naver.com/heartopia',
+                                ),
+                                _buildSnackLinkItem(
+                                  '한국 공식 유튜브',
+                                  'assets/icons/ic_youtube.png',
+                                  'https://www.youtube.com/@Heartopia-KR',
+                                ),
                               ]),
                               const SizedBox(height: 20),
                               _buildSnackSection('이용 안내', [
                                 _buildSnackRowItem('앱 버전', trailingText: '1.0.0'),
-                                _buildSnackRowItem('버그 리포트 보내기', isLink: true, onTap: _sendEmail),
-                                _buildSnackRowItem('저작권 및 법적 고지', isLink: true, onTap: _showCopyrightDialog),
+                                _buildSnackRowItem(
+                                  '버그 리포트 보내기',
+                                  isLink: true,
+                                  onTap: _sendEmail,
+                                ),
+                                _buildSnackRowItem(
+                                  '저작권 및 법적 고지',
+                                  isLink: true,
+                                  onTap: _showCopyrightDialog,
+                                ),
                               ]),
                               const SizedBox(height: 24),
                               _buildWithdrawLink(),
@@ -238,7 +412,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-
             if (_isLoading) _buildLoadingOverlay(),
           ],
         ),
@@ -254,14 +427,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         height: 240,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: snackBg,
           image: DecorationImage(
-            image: _headerImageUrl != null
+            image: _headerImageUrl != null && _headerImageUrl!.isNotEmpty
                 ? NetworkImage(_headerImageUrl!)
-                : const AssetImage('assets/images/profile_header.png') as ImageProvider,
+                : const AssetImage('assets/images/profile_header.png')
+            as ImageProvider,
             fit: BoxFit.cover,
           ),
-          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
+          borderRadius:
+          const BorderRadius.vertical(bottom: Radius.circular(40)),
         ),
         child: Container(
           decoration: BoxDecoration(
@@ -327,12 +502,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _buildSnackRowItem(
                   '푸시 알림 설정',
-                  trailing: _buildCustomSwitch(_isPushEnabled),
+                  onTap: () => _setPushEnabled(!_isPushEnabled),
+                  trailing: _buildCustomSwitch(
+                    _isPushEnabled,
+                    onChanged: _setPushEnabled,
+                  ),
                 ),
               ],
             ),
           ),
-
           Positioned(
             top: -50,
             left: 0,
@@ -354,7 +532,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                     image: DecorationImage(
-                      image: _profileImageUrl != null
+                      image: _profileImageUrl != null &&
+                          _profileImageUrl!.isNotEmpty
                           ? NetworkImage(_profileImageUrl!)
                           : const AssetImage('assets/images/profile_image.png')
                       as ImageProvider,
@@ -365,7 +544,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-
           Positioned(
             top: 14,
             right: 14,
@@ -467,13 +645,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 10, bottom: 10),
-          child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF636E72))),
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF636E72),
+            ),
+          ),
         ),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(28),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
           child: Column(children: items),
         ),
@@ -482,7 +673,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // 공통 로우 아이템
-  Widget _buildSnackRowItem(String label, {String? trailingText, Widget? trailing, bool isLink = false, VoidCallback? onTap}) {
+  Widget _buildSnackRowItem(
+      String label, {
+        String? trailingText,
+        Widget? trailing,
+        bool isLink = false,
+        VoidCallback? onTap,
+      }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(28),
@@ -490,11 +687,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         child: Row(
           children: [
-            Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF2D3436))),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2D3436),
+              ),
+            ),
             const Spacer(),
-            if (trailingText != null) Text(trailingText, style: const TextStyle(fontSize: 15, color: Color(0xFFB2BEC3), fontWeight: FontWeight.w500)),
+            if (trailingText != null)
+              Text(
+                trailingText,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: Color(0xFFB2BEC3),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             if (trailing != null) trailing,
-            if (isLink) const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFFD1D1D6)),
+            if (isLink)
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: Color(0xFFD1D1D6),
+              ),
           ],
         ),
       ),
@@ -511,9 +728,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Image.asset(iconPath, width: 32, height: 32),
             const SizedBox(width: 14),
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF2D3436))),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2D3436),
+              ),
+            ),
             const Spacer(),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFFD1D1D6)),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: Color(0xFFD1D1D6),
+            ),
           ],
         ),
       ),
@@ -522,38 +750,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   PreferredSizeWidget _buildSnackAppBar(BuildContext context) {
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: snackBg,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      automaticallyImplyLeading: false,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF2D3436), size: 20),
-        onPressed: () => Navigator.pop(context, _didUserInfoChange),
+        icon: const Icon(
+          Icons.arrow_back_ios_new_rounded,
+          color: Color(0xFF2D3436),
+          size: 20,
+        ),
+        onPressed: () => _safePop(_didUserInfoChange),
       ),
-      title: const Text('설정', style: TextStyle(color: Color(0xFF2D3436), fontSize: 18, fontWeight: FontWeight.w900)),
+      title: const Text(
+        '설정',
+        style: TextStyle(
+          color: Color(0xFF2D3436),
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
       centerTitle: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(24))),
     );
   }
 
-  Widget _buildCustomSwitch(bool isActive) {
+  Widget _buildCustomSwitch(
+      bool isActive, {
+        required ValueChanged<bool> onChanged,
+      }) {
     return GestureDetector(
-      onTap: () => setState(() => _isPushEnabled = !_isPushEnabled),
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        FocusManager.instance.primaryFocus?.unfocus();
+        onChanged(!isActive);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         width: 54,
         height: 30,
         decoration: BoxDecoration(
-          color: isActive ? snackAccent.withOpacity(0.6) : const Color(0xFFDFE6E9),
+          color: isActive
+              ? snackAccent.withOpacity(0.6)
+              : const Color(0xFFDFE6E9),
           borderRadius: BorderRadius.circular(20),
         ),
         child: AnimatedAlign(
           duration: const Duration(milliseconds: 250),
-          alignment: isActive ? Alignment.centerRight : Alignment.centerLeft,
+          alignment:
+          isActive ? Alignment.centerRight : Alignment.centerLeft,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: Container(
               width: 24,
               height: 24,
-              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
             ),
           ),
         ),
@@ -564,7 +818,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildLoadingOverlay() {
     return Container(
       color: Colors.black.withOpacity(0.12),
-      child: Center(child: CircularProgressIndicator(color: snackAccent)),
+      child: Center(
+        child: CircularProgressIndicator(color: snackAccent),
+      ),
     );
   }
 
@@ -644,7 +900,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     borderRadius: BorderRadius.circular(12),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: () => Navigator.pop(dialogContext),
+                      onTap: () => _safeDialogPop(dialogContext),
                       child: const SizedBox(
                         width: 36,
                         height: 36,
@@ -659,7 +915,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
               const SizedBox(height: 22),
-
               _buildDialogField(
                 '닉네임',
                 nameController,
@@ -679,12 +934,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     : '예: abc123456',
                 enabled: !_uidLocked,
               ),
-
               const SizedBox(height: 22),
-
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF8F6),
                   borderRadius: BorderRadius.circular(16),
@@ -717,14 +971,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 22),
-
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(dialogContext),
+                      onPressed: () => _safeDialogPop(dialogContext),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         side: const BorderSide(
@@ -760,8 +1012,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           return;
                         }
 
-                        Navigator.pop(dialogContext);
-                        _updateUserInfoOnServer(name, _uidLocked ? '' : uid);
+                        FocusManager.instance.primaryFocus?.unfocus();
+
+                        WidgetsBinding.instance.addPostFrameCallback((_) async {
+                          if (!mounted) return;
+                          if (Navigator.of(dialogContext).canPop()) {
+                            Navigator.of(dialogContext).pop();
+                          }
+                          await _updateUserInfoOnServer(
+                            name,
+                            _uidLocked ? '' : uid,
+                          );
+                        });
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: snackAccent,
@@ -900,11 +1162,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _updateUserInfoOnServer(String name, String uid) async {
     try {
+      if (!mounted) return;
       setState(() => _isLoading = true);
 
       if (name.isNotEmpty) {
         await http.put(
-          Uri.parse('https://api.keepers-note.o-r.kr/api/user/update-nickname'),
+          Uri.parse('$_baseUrl/api/user/update-nickname'),
           headers: {"Content-Type": "application/json"},
           body: jsonEncode({
             "id": int.tryParse(_serverUserId),
@@ -915,7 +1178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (uid.isNotEmpty && !_uidLocked) {
         await http.put(
-          Uri.parse('https://api.keepers-note.o-r.kr/api/user/update-uid'),
+          Uri.parse('$_baseUrl/api/user/update-uid'),
           headers: {"Content-Type": "application/json"},
           body: jsonEncode({
             "id": int.tryParse(_serverUserId),
@@ -930,6 +1193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       _showSnackBar("수정 실패");
     } finally {
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
@@ -937,7 +1201,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showCopyrightDialog() {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
+      builder: (dialogContext) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 24),
         child: Container(
@@ -951,10 +1215,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const Text(
                 '저작권 안내',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF2D3436)),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF2D3436),
+                ),
               ),
               const SizedBox(height: 16),
-              // 긴 텍스트를 스크롤 가능하게 하고 줄바꿈을 자연스럽게 유도
               Flexible(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
@@ -962,10 +1229,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     '키퍼노트는 XD와 공식적인 관계가 없는 팬 메이드 비영리 가이드 앱이며, 게임사의 지적 재산권을 존중합니다.\n\n'
                         '본 앱에 사용된 모든 게임 이미지, 데이터 등의 저작권은 모두 XD Interactive Entertainment Co., Ltd.에 있습니다.\n\n'
                         '사용된 이미지 및 데이터는 오직 유저 가이드 목적으로만 사용되며, 상업적으로 절대 이용되지 않습니다.',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 14,
                       height: 1.6,
-                      color: const Color(0xFF636E72), // 눈이 편안한 다크 그레이
+                      color: Color(0xFF636E72),
                     ),
                     textAlign: TextAlign.start,
                   ),
@@ -975,15 +1242,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => _safeDialogPop(dialogContext),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: snackAccent,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     elevation: 0,
                   ),
-                  child: const Text('확인', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  child: const Text(
+                    '확인',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -994,16 +1269,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _sendEmail() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
     final Uri emailLaunchUri = Uri(
       scheme: 'mailto',
       path: 'mintblue1078@gmail.com',
       query: 'subject=[키퍼노트 버그 리포트]&body=닉네임: $_nickname\nUID: $_displayUid\n내용:',
     );
-    if (await canLaunchUrl(emailLaunchUri)) await launchUrl(emailLaunchUri);
+    if (await canLaunchUrl(emailLaunchUri)) {
+      await launchUrl(emailLaunchUri);
+    }
   }
 
   Future<void> _launchURL(String url) async {
-    if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) _showSnackBar("링크 열기 실패");
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    if (!await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    )) {
+      _showSnackBar("링크 열기 실패");
+    }
   }
 
   Widget _buildWithdrawLink() {
@@ -1090,7 +1376,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 16),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFFBFA),
                   borderRadius: BorderRadius.circular(18),
@@ -1115,7 +1402,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 18),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF8F6),
                   borderRadius: BorderRadius.circular(18),
@@ -1164,7 +1452,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(dialogContext),
+                      onPressed: () => _safeDialogPop(dialogContext),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         side: const BorderSide(
@@ -1190,8 +1478,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
-                        Navigator.pop(dialogContext);
-                        await _withdrawAccount();
+                        FocusManager.instance.primaryFocus?.unfocus();
+
+                        WidgetsBinding.instance.addPostFrameCallback((_) async {
+                          if (!mounted) return;
+                          if (Navigator.of(dialogContext).canPop()) {
+                            Navigator.of(dialogContext).pop();
+                          }
+                          await _withdrawAccount();
+                        });
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFE88778),
@@ -1263,6 +1558,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _withdrawAccount() async {
     try {
+      if (!mounted) return;
       setState(() => _isLoading = true);
 
       if (_serverUserId.isEmpty) {
@@ -1271,16 +1567,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       final response = await http.delete(
-        Uri.parse('https://api.keepers-note.o-r.kr/api/user/withdraw')
+        Uri.parse('$_baseUrl/api/user/withdraw')
             .replace(queryParameters: {'userId': _serverUserId}),
       );
 
       if (response.statusCode == 200) {
-        // ✅ userId 삭제
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('userId');
 
-        // ✅ 소셜 토큰 정리 (공통)
         try {
           await TokenManagerProvider.instance.manager.clear();
         } catch (_) {}
@@ -1299,17 +1593,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       _showSnackBar('회원탈퇴 중 오류가 발생했어요.');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
     }
   }
 
   void _copyToClipboard(String text) {
     if (text == "UID를 입력해보세요") return;
-    Clipboard.setData(ClipboardData(text: text)).then((_) => _showSnackBar("UID가 복사되었습니다."));
+    Clipboard.setData(ClipboardData(text: text)).then(
+          (_) => _showSnackBar("UID가 복사되었습니다."),
+    );
   }
 
   void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2)));
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 }
 
@@ -1323,8 +1631,8 @@ class _WithdrawGuideRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
+        const Padding(
+          padding: EdgeInsets.only(top: 2),
           child: Icon(
             Icons.check_rounded,
             size: 15,

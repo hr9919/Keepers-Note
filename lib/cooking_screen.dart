@@ -20,6 +20,14 @@ int _parseLevel(Map<String, dynamic> json) {
   return int.tryParse(raw?.toString() ?? '') ?? 1;
 }
 
+bool _isLuckyShopItem(String nameKo) {
+  final normalized = nameKo.replaceAll(' ', '');
+
+  return normalized.contains('사탕') ||
+      normalized.contains('슈가') ||
+      normalized.contains('sugar');
+}
+
 bool _parseHiddenRecipe(Map<String, dynamic> json) {
   final dynamic raw =
       json['is_hidden_recipe'] ??
@@ -1165,8 +1173,10 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    _selectedFilter == '상점구매'
-                        ? '상점 재료는 준비중이에요'
+                    _selectedFilter == '마시모 구매'
+                        ? '마시모 구매 재료는 준비중이에요'
+                        : _selectedFilter == '행운상점 구매'
+                        ? '행운상점 재료는 준비중이에요'
                         : '표시할 재료가 없어요',
                     style: const TextStyle(
                       fontSize: 16,
@@ -1176,8 +1186,10 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _selectedFilter == '상점구매'
-                        ? '상점 재료 데이터가 추가되면 여기에서 볼 수 있어요.'
+                    _selectedFilter == '마시모 구매'
+                        ? '마시모 구매 재료 데이터가 추가되면 여기에서 볼 수 있어요.'
+                        : _selectedFilter == '행운상점 구매'
+                        ? '행운상점 재료 데이터가 추가되면 여기에서 볼 수 있어요.'
                         : '검색어나 필터를 다시 확인해보세요.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
@@ -1773,8 +1785,12 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     final isFavorite = _favoriteIds.contains(item.id);
     final isHighlighted = _highlightedId == item.id;
 
-    final bool isShopItem = _isShopMaterial(item);
-    final String typeLabel = isShopItem ? '상점구매' : '작물';
+    final bool isLucky = _isLuckyShopItem(item.nameKo);
+    final bool isShopItem = _isShopMaterial(item) && !isLucky;
+
+    final String typeLabel = isLucky
+        ? '행운상점 구매'
+        : (isShopItem ? '마시모 구매' : '작물');
     final int purchasePrice = _shopPurchasePrice(item.prices);
 
     return Padding(
@@ -1897,9 +1913,13 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                               spacing: 4,
                               runSpacing: 4,
                               children: [
-                                if (!isShopItem)
+                                if (!isShopItem && !isLucky)
                                   _buildSmallTag('원예 ${item.level}레벨'),
-                                _buildSmallTag(typeLabel, isEvent: isShopItem),
+                                _buildSmallTag(
+                                  typeLabel,
+                                  isLuckyShop: isLucky,
+                                  isEvent: isShopItem,
+                                ),
                               ],
                             ),
                             const Spacer(),
@@ -2035,9 +2055,21 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     }
 
     if (_selectedFilter == '작물') {
-      filtered = filtered.where((item) => item.isCultivable).toList();
-    } else if (_selectedFilter == '상점구매') {
-      filtered = filtered.where((item) => !item.isCultivable).toList();
+      filtered = filtered.where((item) =>
+      item.isCultivable &&
+          !_isLuckyShopItem(item.nameKo)
+      ).toList();
+
+    } else if (_selectedFilter == '마시모 구매') {
+      filtered = filtered.where((item) =>
+      !item.isCultivable &&
+          !_isLuckyShopItem(item.nameKo)
+      ).toList();
+
+    } else if (_selectedFilter == '행운상점 구매') {
+      filtered = filtered.where((item) =>
+          _isLuckyShopItem(item.nameKo)
+      ).toList();
     }
 
     switch (_selectedSort) {
@@ -2163,27 +2195,44 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     return widgets;
   }
 
-  Widget _buildSmallTag(String text, {bool isEvent = false}) {
+  Widget _buildSmallTag(
+      String text, {
+        bool isEvent = false,
+        bool isLuckyShop = false,
+      }) {
     final rawText = text.trim();
-    final lowerText = rawText.toLowerCase();
 
-    // 기본값 (회색)
     Color bg = const Color(0xFFF5F5F5);
     Color border = const Color(0xFFE0E0E0);
     Color textColor = const Color(0xFF757575);
 
-    bool isHiddenActive = text.contains('있음');
+    final bool isHiddenActive = rawText.contains('있음');
 
-    // 1. 이벤트 또는 히든 레시피 태그 (주황/분홍 톤)
-    if (isHiddenActive || isEvent) {
+    // 1. 행운상점 (보라)
+    if (isLuckyShop) {
+      bg = const Color(0xFFF3E8FF);
+      border = const Color(0xFFD8B4FE);
+      textColor = const Color(0xFF7E22CE);
+    }
+
+    // ⭐ 2. 작물 (초록)
+    else if (rawText == '작물') {
+      bg = const Color(0xFFE8F5E9);
+      border = const Color(0xFFC8E6C9);
+      textColor = const Color(0xFF2E7D32);
+    }
+
+    // 3. 이벤트 / 히든
+    else if (isHiddenActive || isEvent) {
       bg = const Color(0xFFFFEDE1);
       border = const Color(0xFFFFCCBC);
       textColor = const Color(0xFFD84315);
     }
 
-    // 2. ★ 요리 레벨별 무지개 색상 로직 (채집 코드 규격 이식)
+    // 4. 레벨칩 (기존 유지)
     if (rawText.contains('레벨')) {
-      int level = int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
+      int level =
+          int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
 
       if (level == 1) {
         bg = const Color(0xFFEEEEEE); border = const Color(0xFFBDBDBD); textColor = const Color(0xFF616161);
@@ -2203,23 +2252,28 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         bg = const Color(0xFFF3E5F5); border = const Color(0xFFE1BEE7); textColor = const Color(0xFF7B1FA2);
       } else if (level == 9) {
         bg = const Color(0xFFFCE4EC); border = const Color(0xFFF8BBD0); textColor = const Color(0xFFC2185B);
-      } else { // 10레벨 이상 마스터
+      } else {
         textColor = const Color(0xFF424242);
         border = const Color(0xFFBDBDBD).withOpacity(0.5);
       }
     }
 
-    final bool isMasterLevel = rawText.contains('레벨') && (int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0) >= 10;
+    final bool isMasterLevel =
+        rawText.contains('레벨') &&
+            (int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0) >= 10;
 
     return Container(
-      // [교정] 채집 화면과 동일한 콤팩트 패딩 (가로 7, 세로 2.5)
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
       decoration: BoxDecoration(
         gradient: isMasterLevel
             ? const LinearGradient(
-          colors: [Color(0xFFFFD1D1), Color(0xFFFFF4D1), Color(0xFFD1FFDA), Color(0xFFD1E3FF), Color(0xFFE5D1FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFFD1D1),
+            Color(0xFFFFF4D1),
+            Color(0xFFD1FFDA),
+            Color(0xFFD1E3FF),
+            Color(0xFFE5D1FF),
+          ],
         )
             : null,
         color: isMasterLevel ? null : bg,
@@ -2227,14 +2281,15 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         border: Border.all(color: border.withOpacity(0.5), width: 0.8),
       ),
       child: Transform.translate(
-        // [교정] 폰트 크기와 수직 정렬을 채집 화면 기준으로 통일
         offset: const Offset(0, -0.5),
         child: Text(
           rawText,
           style: TextStyle(
-            fontSize: 9.5, // 9 -> 9.5로 미세 조정
+            fontSize: 9.5,
             color: textColor,
-            fontWeight: (isMasterLevel || isHiddenActive || isEvent) ? FontWeight.w700 : FontWeight.w600,
+            fontWeight: (isMasterLevel || isHiddenActive || isEvent || isLuckyShop)
+                ? FontWeight.w700
+                : FontWeight.w600,
             height: 1.0,
             fontFamily: 'SF Pro',
           ),
@@ -2715,7 +2770,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   List<String> _currentFilters() => _tabController.index == 0
       ? const ['전체', '일반 레시피', '히든 레시피']
-      : const ['전체', '작물', '상점구매'];
+      : const ['전체', '작물', '마시모 구매', '행운상점 구매'];
 
   void _onSortSelected(String sort) { setState(() => _selectedSort = sort); _applyFilters(); }
 

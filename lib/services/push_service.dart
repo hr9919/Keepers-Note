@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PushService {
   static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
@@ -20,6 +21,14 @@ class PushService {
     required Future<void> Function() onRealtimeNotificationRefresh,
     required Future<void> Function(Map<String, dynamic> data) onTapNavigate,
   }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('push_enabled') ?? true;
+
+    if (!enabled) {
+      debugPrint('푸시 OFF 상태 → init 스킵');
+      return;
+    }
+
     if (_initialized) return;
     _initialized = true;
 
@@ -52,9 +61,18 @@ class PushService {
             debugPrint('A-1. 로컬 알림 클릭 data=$data');
 
             await onRealtimeNotificationRefresh();
-            await onTapNavigate(data);
-          } catch (e) {
+
+            try {
+              debugPrint('A-2. onTapNavigate 호출 직전');
+              await onTapNavigate(data);
+              debugPrint('A-3. onTapNavigate 호출 완료');
+            } catch (e, s) {
+              debugPrint('A-ERR. onTapNavigate 실패: $e');
+              debugPrint('$s');
+            }
+          } catch (e, s) {
             debugPrint('로컬 알림 payload 파싱 실패: $e');
+            debugPrint('$s');
           }
         },
       );
@@ -94,6 +112,38 @@ class PushService {
 
     if (initialMessage != null) {
       await onTapNavigate(initialMessage.data);
+    }
+  }
+
+  Future<void> setPushEnabled({
+    required bool enabled,
+    required String userId,
+  }) async {
+    if (enabled) {
+      debugPrint('푸시 ON');
+
+      final token = await _messaging.getToken();
+      if (token != null) {
+        await _registerToken(userId: userId, token: token);
+      }
+    } else {
+      debugPrint('푸시 OFF');
+
+      final token = await _messaging.getToken();
+
+      // 👉 서버에서 토큰 삭제 API 필요
+      if (token != null) {
+        await http.delete(
+          Uri.parse('$_baseUrl/api/push/token'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'userId': int.tryParse(userId),
+            'token': token,
+          }),
+        );
+      }
+
+      await _messaging.deleteToken();
     }
   }
 

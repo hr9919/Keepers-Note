@@ -60,6 +60,7 @@ class _MainWrapperState extends State<MainWrapper> {
   String _serverUserId = "";
 
   int? _initialCommunityPostId;
+  int? _initialCommunityCommentId;
 
   int _communityOpenMyProfileSignal = 0;
 
@@ -273,23 +274,35 @@ class _MainWrapperState extends State<MainWrapper> {
 
       if (!mounted) return;
 
-      // ⭐ 1. 먼저 null로 초기화
       setState(() {
         _selectedIndex = 2;
         _initialCommunityPostId = null;
+        _initialCommunityCommentId = null;
       });
 
-      // ⭐ 2. 다음 프레임에서 다시 넣기
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
 
         setState(() {
           _initialCommunityPostId = postId;
+          _initialCommunityCommentId = null;
+        });
+
+        Future.delayed(const Duration(seconds: 2), () {
+          _clearPendingCommunityOpen();
         });
       });
 
       return;
     }
+  }
+
+  void _clearPendingCommunityOpen() {
+    if (!mounted) return;
+    setState(() {
+      _initialCommunityPostId = null;
+      _initialCommunityCommentId = null;
+    });
   }
 
   Future<void> _confirmAndSendMail() async {
@@ -597,10 +610,29 @@ class _MainWrapperState extends State<MainWrapper> {
         debugPrint('🔔 실시간 알림 도착');
       },
       onTapNavigate: (data) async {
+        debugPrint('F. onTapNavigate data=$data');
+
         final target = data['target']?.toString();
 
         if (target == 'community_post') {
           final postId = int.tryParse(data['postId']?.toString() ?? '');
+          final commentId = int.tryParse(data['commentId']?.toString() ?? '');
+          final notificationId = int.tryParse(
+            data['notificationId']?.toString() ?? '',
+          );
+
+          if (notificationId != null) {
+            try {
+              await http.post(
+                Uri.parse(
+                  'https://api.keepers-note.o-r.kr/api/community/notifications/$notificationId/read',
+                ),
+              );
+              if (mounted) {
+                await _refreshCommunityUnreadCount();
+              }
+            } catch (_) {}
+          }
 
           if (postId != null) {
             if (!mounted) return;
@@ -608,6 +640,7 @@ class _MainWrapperState extends State<MainWrapper> {
             setState(() {
               _selectedIndex = 2;
               _initialCommunityPostId = null;
+              _initialCommunityCommentId = null;
             });
 
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -615,6 +648,11 @@ class _MainWrapperState extends State<MainWrapper> {
 
               setState(() {
                 _initialCommunityPostId = postId;
+                _initialCommunityCommentId = commentId;
+              });
+
+              Future.delayed(const Duration(seconds: 2), () {
+                _clearPendingCommunityOpen();
               });
             });
             return;
@@ -653,6 +691,12 @@ class _MainWrapperState extends State<MainWrapper> {
         }
       },
     );
+  }
+
+  Future<void> _refreshCommunityUnreadCount() async {
+    setState(() {
+      _communityRefreshSignal++;
+    });
   }
 
   Future<void> _loadTodoFromServer([String? userId]) async {
@@ -1174,11 +1218,14 @@ class _MainWrapperState extends State<MainWrapper> {
         resetSearchSignal: _searchResetSignal,
       ),
       CommunityScreen(
-        key: ValueKey('community_${_initialCommunityPostId ?? 'none'}'),
+        key: ValueKey(
+          'community_${_initialCommunityPostId ?? 'none'}_${_initialCommunityCommentId ?? 'none'}',
+        ),
         openDrawer: _openDrawerSmooth,
         userId: _serverUserId,
         isAdmin: _isAdmin,
         initialPostId: _selectedIndex == 2 ? _initialCommunityPostId : null,
+        initialCommentId: _selectedIndex == 2 ? _initialCommunityCommentId : null,
         refreshSignal: _communityRefreshSignal,
         openMyProfileSignal: _communityOpenMyProfileSignal,
       ),
