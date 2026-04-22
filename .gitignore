@@ -47,3 +47,4 @@ app.*.map.json
 *.jks
 *.keystore
 android/key.properties
+lib/firebase_options.dart
