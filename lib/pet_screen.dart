@@ -165,6 +165,25 @@ class _PetScreenState extends State<PetScreen>
   late TabController _tabController;
   final ImagePicker _picker = ImagePicker();
 
+  void _showFloatingSnackBarMessage(String message, {BuildContext? targetContext}) {
+    if (!mounted) return;
+    final BuildContext effectiveContext = targetContext ?? context;
+    final messenger = ScaffoldMessenger.of(effectiveContext);
+    final media = MediaQuery.of(effectiveContext);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, media.padding.bottom + 76),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   ScrollController _getCurrentPetScrollController() {
     final index = _tabController.index.clamp(0, 1);
     return index == 0 ? _catScrollController : _dogScrollController;
@@ -783,11 +802,7 @@ class _PetScreenState extends State<PetScreen>
 
       if (_serverUserId == null || _serverUserId!.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('사용자 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.'),
-            ),
-          );
+          _showFloatingSnackBarMessage('사용자 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.');
         }
         return;
       }
@@ -881,9 +896,7 @@ class _PetScreenState extends State<PetScreen>
       debugPrint('펫 저장 에러: $e');
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('펫 저장 중 오류가 발생했어요.')),
-      );
+      _showFloatingSnackBarMessage('펫 저장 중 오류가 발생했어요.');
       rethrow;
     }
   }
@@ -3391,9 +3404,7 @@ class _PetScreenState extends State<PetScreen>
         }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('좋아요 처리 중 오류가 발생했어요.')),
-      );
+      _showFloatingSnackBarMessage('좋아요 처리 중 오류가 발생했어요.');
     } finally {
       if (mounted) {
         setState(() {
@@ -4693,9 +4704,7 @@ class _PetScreenState extends State<PetScreen>
 
       await _fetchPetData();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("삭제되었습니다 🗑️")),
-      );
+      _showFloatingSnackBarMessage("삭제되었습니다 🗑️");
     }
   }
 
@@ -5256,20 +5265,14 @@ class _PetScreenState extends State<PetScreen>
               final String name = nameController.text.trim();
 
               if (name.isEmpty) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(content: Text('이름을 입력해 주세요.')),
-                );
+                _showFloatingSnackBarMessage('이름을 입력해 주세요.', targetContext: dialogContext);
                 return;
               }
 
               await syncSelectedVariant();
 
               if (selectedVariant == null) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(
-                    content: Text('선택한 종과 색상에 맞는 외형 데이터를 찾을 수 없어요.'),
-                  ),
-                );
+                _showFloatingSnackBarMessage('선택한 종과 색상에 맞는 외형 데이터를 찾을 수 없어요.', targetContext: dialogContext);
                 return;
               }
 

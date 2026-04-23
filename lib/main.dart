@@ -258,13 +258,6 @@ void main() async {
     nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0',
   );
 
-  runApp(const KeepersNoteApp());
-
-  // ❗ 앱 실행 후 비동기로 돌림
-  _postInit();
-}
-
-Future<void> _postInit() async {
   try {
     await _configureLocalNotifications();
     await _configureFirebaseMessaging();
@@ -272,6 +265,8 @@ Future<void> _postInit() async {
     debugPrint('post init error: $e');
     debugPrint('$s');
   }
+
+  runApp(const KeepersNoteApp());
 }
 
 class KeepersNoteApp extends StatelessWidget {

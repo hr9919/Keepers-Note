@@ -193,14 +193,18 @@ class _CommunityUidVerificationScreenState
 
   void _showMessage(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    final media = MediaQuery.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(text),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF3B3F45),
+        margin: EdgeInsets.fromLTRB(16, 0, 16, media.padding.bottom + 76),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
         ),
+        duration: const Duration(seconds: 2),
       ),
     );
   }

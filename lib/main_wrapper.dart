@@ -692,9 +692,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
         if (target == 'uid_approved') {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('UID 인증이 완료되었어요.')),
-          );
+          _showFloatingSnackBar('UID 인증이 완료되었어요.');
         }
       },
     );
@@ -863,9 +861,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
     if (_serverUserId.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.')),
-      );
+      _showFloatingSnackBar('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.');
       return;
     }
 
@@ -2116,9 +2112,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
     if (_serverUserId.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.')),
-      );
+      _showFloatingSnackBar('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.');
       return;
     }
 
@@ -2145,11 +2139,7 @@ class _MainWrapperState extends State<MainWrapper> {
         await _fetchUserInfo();
 
         if (requested == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('UID 인증 요청이 접수되었어요. 승인 후 글쓰기를 이용할 수 있어요.'),
-            ),
-          );
+          _showFloatingSnackBar('UID 인증 요청이 접수되었어요. 승인 후 글쓰기를 이용할 수 있어요.');
         }
         return;
       }
@@ -2179,18 +2169,39 @@ class _MainWrapperState extends State<MainWrapper> {
           _communityRefreshSignal++;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('게시글이 등록되었어요.')),
-        );
+        _showFloatingSnackBar('게시글이 등록되었어요.');
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('글쓰기 화면을 여는 중 문제가 발생했어요. $e')),
-      );
+      _showFloatingSnackBar('글쓰기 화면을 여는 중 문제가 발생했어요. $e');
     } finally {
       _isOpeningCommunityRoute = false;
     }
+  }
+
+  void _showFloatingSnackBar(String message) {
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final media = MediaQuery.of(context);
+
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          media.padding.bottom + 76,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _openCommunityAdmin() async {
@@ -2202,17 +2213,13 @@ class _MainWrapperState extends State<MainWrapper> {
 
     if (_serverUserId.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.')),
-      );
+      _showFloatingSnackBar('로그인 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.');
       return;
     }
 
     if (!_isAdmin) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('관리자만 접근할 수 있어요.')),
-      );
+      _showFloatingSnackBar('관리자만 접근할 수 있어요.');
       return;
     }
 
@@ -2369,11 +2376,11 @@ class _MainWrapperState extends State<MainWrapper> {
                                   ..showSnackBar(
                                     SnackBar(
                                       behavior: SnackBarBehavior.floating,
-                                      margin: const EdgeInsets.fromLTRB(
+                                      margin: EdgeInsets.fromLTRB(
                                         16,
                                         0,
                                         16,
-                                        18,
+                                        MediaQuery.of(context).padding.bottom + 76,
                                       ),
                                       backgroundColor: const Color(0xFF2B3440),
                                       shape: RoundedRectangleBorder(

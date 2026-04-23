@@ -22,6 +22,25 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
   List<Map<String, dynamic>> _uidItems = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _reportItems = <Map<String, dynamic>>[];
 
+  void _showFloatingSnackBarMessage(String message, {BuildContext? targetContext}) {
+    if (!mounted) return;
+    final BuildContext effectiveContext = targetContext ?? context;
+    final messenger = ScaffoldMessenger.of(effectiveContext);
+    final media = MediaQuery.of(effectiveContext);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, media.padding.bottom + 76),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   void initState() {
     debugPrint('[CommunityUidAdminScreen] serverUserId=${widget.userId}');
@@ -407,11 +426,7 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(approve ? '승인 완료' : '반려 완료'),
-        ),
-      );
+      _showFloatingSnackBarMessage(approve ? '승인 완료' : '반려 완료');
     }
 
     await _fetchAdminData();

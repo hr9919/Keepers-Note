@@ -1580,14 +1580,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
+    final media = MediaQuery.of(context);
 
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.fromLTRB(16, 0, 16, media.padding.bottom + 76),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 }
 

@@ -85,6 +85,26 @@ class _HomeScreenState extends State<HomeScreen>
   int _currentEventIndex = 0;
   String _userId = "";
 
+
+  void _showFloatingSnackBarMessage(String message) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final media = MediaQuery.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, media.padding.bottom + 76),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+
   static const Set<String> _previewDefaultResourceKeys = {
     'roaming_oak',
     'fluorite',
@@ -95,19 +115,9 @@ class _HomeScreenState extends State<HomeScreen>
       Navigator.pop(context);
     }
 
-    if (_voterId.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다.')),
-      );
-      return;
-    }
-
     if (res.alreadyVotedSameType) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('이미 ${res.koName}에 투표했어요.')),
-      );
+      _showFloatingSnackBarMessage('이미 ${res.koName}에 투표했어요.');
       return;
     }
 
@@ -132,35 +142,19 @@ class _HomeScreenState extends State<HomeScreen>
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${res.koName}에 투표했습니다!')),
-        );
+        _showFloatingSnackBarMessage('${res.koName}에 투표했습니다!');
         return;
       }
 
       if (response.statusCode == 409) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              response.body.isNotEmpty ? response.body : '이미 이 자원 종류에 투표했어요.',
-            ),
-          ),
-        );
+        _showFloatingSnackBarMessage(response.body.isNotEmpty ? response.body : '이미 이 자원 종류에 투표했어요.');
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            response.body.isNotEmpty ? response.body : '투표 실패',
-          ),
-        ),
-      );
+      _showFloatingSnackBarMessage(response.body.isNotEmpty ? response.body : '투표 실패');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('오류: $e')),
-      );
+      _showFloatingSnackBarMessage('오류: $e');
     }
   }
 
@@ -186,22 +180,81 @@ class _HomeScreenState extends State<HomeScreen>
     return raw;
   }
 
+
+  String _resolveSpawnPointVisualIconPath(SpawnPointModel point) {
+    final oak = point.oak;
+    final fluorite = point.fluorite;
+
+    final bool oakFocused = oak != null &&
+        (point.isOakVerified || oak.isVerified || oak.isFixed || oak.votedByMe);
+    final bool fluoriteFocused = fluorite != null &&
+        (point.isFluoriteVerified ||
+            fluorite.isVerified ||
+            fluorite.isFixed ||
+            fluorite.votedByMe);
+
+    if (fluoriteFocused && !oakFocused) {
+      return fluorite.iconPath;
+    }
+
+    if (oakFocused && !fluoriteFocused) {
+      return oak.iconPath;
+    }
+
+    if (oak != null && fluorite == null) {
+      return oak.iconPath;
+    }
+
+    if (fluorite != null && oak == null) {
+      return fluorite.iconPath;
+    }
+
+    return oak?.iconPath ??
+        fluorite?.iconPath ??
+        'assets/images/default.png';
+  }
+
+  Color _resolveSpawnPointVisualBorderColor(SpawnPointModel point) {
+    final oak = point.oak;
+    final fluorite = point.fluorite;
+
+    final bool hasOak = oak != null;
+    final bool hasFluorite = fluorite != null;
+
+    final bool oakFocused = oak != null &&
+        (point.isOakVerified || oak.isVerified || oak.isFixed || oak.votedByMe);
+    final bool fluoriteFocused = fluorite != null &&
+        (point.isFluoriteVerified ||
+            fluorite.isVerified ||
+            fluorite.isFixed ||
+            fluorite.votedByMe);
+
+    if (fluoriteFocused && !oakFocused) {
+      return const Color(0xFF8ED6FF);
+    }
+
+    if (oakFocused && !fluoriteFocused) {
+      return const Color(0xFFFF8E7C);
+    }
+
+    if (hasOak && hasFluorite) {
+      return const Color(0xFFBFA2FF);
+    }
+
+    if (hasOak) {
+      return const Color(0xFFFF8E7C);
+    }
+
+    return const Color(0xFF8ED6FF);
+  }
+
   Widget _buildPreviewSpawnPin(SpawnPointModel point) {
     final bool hasOak = point.oak != null;
     final bool hasFluorite = point.fluorite != null;
     final bool isVerified = point.isOakVerified || point.isFluoriteVerified;
 
-    final Color borderColor = hasOak && hasFluorite
-        ? const Color(0xFFBFA2FF) // 둘다 (연보라)
-        : hasOak
-        ? const Color(0xFFFF8E7C) // 🌳 참나무 (코랄/주황)
-        : const Color(0xFF8ED6FF); // 💎 형광석 (파스텔 하늘)
-
-    final String iconPath = hasOak
-        ? point.oak!.iconPath
-        : hasFluorite
-        ? point.fluorite!.iconPath
-        : 'assets/images/default.png';
+    final Color borderColor = _resolveSpawnPointVisualBorderColor(point);
+    final String iconPath = _resolveSpawnPointVisualIconPath(point);
 
     return IgnorePointer(
       child: isVerified
@@ -704,26 +757,26 @@ class _HomeScreenState extends State<HomeScreen>
       Navigator.pop(context);
     }
 
-    if (_userId.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다.')),
-      );
-      return;
-    }
-
     if (res.alreadyVotedSameType) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('이미 이 자원 종류에 투표했어요.')),
-      );
+      _showFloatingSnackBarMessage('이미 이 자원 종류에 투표했어요.');
       return;
     }
 
     try {
+      final String voteUserId = widget.userId.trim();
+
+      if (voteUserId.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다.')),
+        );
+        return;
+      }
+
       final response = await ApiService.voteResource(
         id: res.id,
-        userId: widget.userId,
+        userId: voteUserId,
       );
 
       await _loadMapPreviewResources();
@@ -731,31 +784,19 @@ class _HomeScreenState extends State<HomeScreen>
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${res.koName}에 투표했습니다!')),
-        );
+        _showFloatingSnackBarMessage('${res.koName}에 투표했습니다!');
         return;
       }
 
       if (response.statusCode == 409) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response.body.isNotEmpty
-                ? response.body
-                : '이미 투표했어요'),
-          ),
-        );
+        _showFloatingSnackBarMessage(response.body.isNotEmpty ? response.body : '이미 투표했어요');
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('투표 실패')),
-      );
+      _showFloatingSnackBarMessage('투표 실패');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('오류: $e')),
-      );
+      _showFloatingSnackBarMessage('오류: $e');
     }
   }
 

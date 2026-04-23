@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'data/place_labels.dart';
@@ -65,6 +66,26 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   int? _selectedSpawnPointId;
 
   String _voterId = "";
+
+
+  void _showFloatingSnackBarMessage(String message) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final media = MediaQuery.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, media.padding.bottom + 76),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
 
   TapDownDetails? _doubleTapDetails;
   AnimationController? _zoomAnimationController;
@@ -235,17 +256,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     if (_voterId.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다. 다시 시도해주세요.')),
-      );
+      _showFloatingSnackBarMessage('로그인 정보를 불러올 수 없습니다. 다시 시도해주세요.');
       return;
     }
 
     if (res.alreadyVotedSameType) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('이미 ${res.koName}에 투표했어요.')),
-      );
+      _showFloatingSnackBarMessage('이미 ${res.koName}에 투표했어요.');
       return;
     }
 
@@ -260,36 +277,262 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${res.koName}에 투표했습니다!')),
-        );
+        _showFloatingSnackBarMessage('${res.koName}에 투표했습니다!');
         return;
       }
 
       if (response.statusCode == 409) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              response.body.isNotEmpty ? response.body : '이미 이 자원 종류에 투표했어요.',
-            ),
-          ),
-        );
+        _showFloatingSnackBarMessage(response.body.isNotEmpty ? response.body : '이미 이 자원 종류에 투표했어요.');
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            response.body.isNotEmpty ? response.body : '투표에 실패했습니다.',
-          ),
-        ),
-      );
+      _showFloatingSnackBarMessage(response.body.isNotEmpty ? response.body : '투표에 실패했습니다.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('투표 중 오류가 발생했습니다: $e')),
-      );
+      _showFloatingSnackBarMessage('투표 중 오류가 발생했습니다: $e');
     }
+  }
+
+  Future<void> _confirmAdminLocation(
+      double x,
+      double y,
+      String resourceType,
+      ) async {
+    if (!widget.isAdmin) return;
+
+    final String userId = widget.userId.trim();
+    if (userId.isEmpty) {
+      _showFloatingSnackBarMessage('로그인 정보를 불러올 수 없습니다. 다시 시도해주세요.');
+      return;
+    }
+
+    final double safeX = x.clamp(0.0, 1.0).toDouble();
+    final double safeY = y.clamp(0.0, 1.0).toDouble();
+
+    try {
+      final uri = Uri.parse(
+        'https://api.keepers-note.o-r.kr/api/map/admin/confirm-location',
+      ).replace(
+        queryParameters: <String, String>{
+          'userId': userId,
+        },
+      );
+
+      final response = await http
+          .post(
+        uri,
+        headers: const <String, String>{
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'lng': safeX * 1024.0,
+          'lat': -(safeY * 1024.0),
+          'resourceType': resourceType,
+        }),
+      )
+          .timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final String label = resourceType == 'roaming_oak' ? '참나무' : '형광석';
+        _showFloatingSnackBarMessage('오늘 $label 위치가 확정되었어요.');
+        await _loadResources();
+        return;
+      }
+
+      final String body = utf8.decode(response.bodyBytes).trim();
+      _showFloatingSnackBarMessage(
+        body.isNotEmpty ? body : '위치 확정에 실패했어요. (${response.statusCode})',
+      );
+    } on TimeoutException {
+      if (!mounted) return;
+      _showFloatingSnackBarMessage('서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요.');
+    } catch (e) {
+      if (!mounted) return;
+      _showFloatingSnackBarMessage('위치 확정 중 오류가 발생했어요: $e');
+    }
+  }
+
+  void _showAdminLocationConfirmSheet(double x, double y) {
+    if (!widget.isAdmin) return;
+
+    final double safeX = x.clamp(0.0, 1.0).toDouble();
+    final double safeY = y.clamp(0.0, 1.0).toDouble();
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return _buildUnifiedSheet(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSheetHandle(),
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF1ED),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFFFD8CF)),
+                    ),
+                    child: const Icon(
+                      Icons.add_location_alt_rounded,
+                      color: Color(0xFFFF8E7C),
+                      size: 23,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '오늘 위치로 지정',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF2D3436),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'x ${safeX.toStringAsFixed(4)} · y ${safeY.toStringAsFixed(4)}',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '지정할 자원을 선택하면 해당 좌표가 오늘의 확정 위치로 등록돼요.',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildAdminLocationSelectButton(
+                      title: '참나무',
+                      subtitle: '그 자리 참나무',
+                      iconPath: 'assets/images/resources/roaming-oak.png',
+                      accent: const Color(0xFFFF8E7C),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _confirmAdminLocation(safeX, safeY, 'roaming_oak');
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildAdminLocationSelectButton(
+                      title: '형광석',
+                      subtitle: '완벽한 형광석',
+                      iconPath: 'assets/images/resources/fluorite.png',
+                      accent: const Color(0xFF5DBFEA),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _confirmAdminLocation(safeX, safeY, 'fluorite');
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAdminLocationSelectButton({
+    required String title,
+    required String subtitle,
+    required String iconPath,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 13),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: accent.withOpacity(0.35)),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withOpacity(0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.10),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: accent.withOpacity(0.28)),
+                ),
+                child: Image.asset(
+                  iconPath,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.help_outline_rounded,
+                    color: accent,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF2D3436),
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF94A3B8),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showVoteNoticeTemporarily() {
@@ -1796,56 +2039,56 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-    Widget _buildSpawnPointPinImage(SpawnPointModel point) {
-      // 둘 다 확정
-      if (point.isBothVerified) {
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            const Icon(
-              Icons.location_on_rounded,
-              size: 30,
-              color: Color(0xFFFF8E7C),
+  Widget _buildSpawnPointPinImage(SpawnPointModel point) {
+    // 둘 다 확정
+    if (point.isBothVerified) {
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          const Icon(
+            Icons.location_on_rounded,
+            size: 30,
+            color: Color(0xFFFF8E7C),
+          ),
+          Positioned(
+            left: 1,
+            bottom: 2,
+            child: Image.asset(
+              'assets/images/resources/roaming-oak.png',
+              width: 16,
+              height: 16,
             ),
-            Positioned(
-              left: 1,
-              bottom: 2,
-              child: Image.asset(
-                'assets/images/resources/roaming-oak.png',
-                width: 16,
-                height: 16,
-              ),
+          ),
+          Positioned(
+            right: 1,
+            top: 2,
+            child: Image.asset(
+              'assets/images/resources/fluorite.png',
+              width: 16,
+              height: 16,
             ),
-            Positioned(
-              right: 1,
-              top: 2,
-              child: Image.asset(
-                'assets/images/resources/fluorite.png',
-                width: 16,
-                height: 16,
-              ),
-            ),
-          ],
-        );
-      }
-
-      // 참나무 확정
-      if (point.isOakVerified && point.oak != null) {
-        return Image.asset(point.oak!.iconPath, width: 28, height: 28);
-      }
-
-      // 형광석 확정
-      if (point.isFluoriteVerified && point.fluorite != null) {
-        return Image.asset(point.fluorite!.iconPath, width: 28, height: 28);
-      }
-
-      // ⭐ 투표 전 (물음표 아이콘)
-      return const Icon(
-        Icons.question_mark_rounded,
-        size: 26,
-        color: Color(0xFFFF8E7C),
+          ),
+        ],
       );
     }
+
+    // 참나무 확정
+    if (point.isOakVerified && point.oak != null) {
+      return Image.asset(point.oak!.iconPath, width: 28, height: 28);
+    }
+
+    // 형광석 확정
+    if (point.isFluoriteVerified && point.fluorite != null) {
+      return Image.asset(point.fluorite!.iconPath, width: 28, height: 28);
+    }
+
+    // ⭐ 투표 전 (물음표 아이콘)
+    return const Icon(
+      Icons.question_mark_rounded,
+      size: 26,
+      color: Color(0xFFFF8E7C),
+    );
+  }
 
   Widget _buildFloatingMapHeader() {
     return Column(
@@ -2302,6 +2545,74 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
+
+  String _resolveSpawnPointVisualIconPath(SpawnPointModel point) {
+    final oak = point.oak;
+    final fluorite = point.fluorite;
+
+    final bool oakFocused = oak != null &&
+        (point.isOakVerified || oak.isVerified || oak.isFixed || oak.votedByMe);
+    final bool fluoriteFocused = fluorite != null &&
+        (point.isFluoriteVerified ||
+            fluorite.isVerified ||
+            fluorite.isFixed ||
+            fluorite.votedByMe);
+
+    if (fluoriteFocused && !oakFocused) {
+      return fluorite.iconPath;
+    }
+
+    if (oakFocused && !fluoriteFocused) {
+      return oak.iconPath;
+    }
+
+    if (oak != null && fluorite == null) {
+      return oak.iconPath;
+    }
+
+    if (fluorite != null && oak == null) {
+      return fluorite.iconPath;
+    }
+
+    return oak?.iconPath ??
+        fluorite?.iconPath ??
+        'assets/images/default.png';
+  }
+
+  Color _resolveSpawnPointVisualBorderColor(SpawnPointModel point) {
+    final oak = point.oak;
+    final fluorite = point.fluorite;
+
+    final bool hasOak = oak != null;
+    final bool hasFluorite = fluorite != null;
+
+    final bool oakFocused = oak != null &&
+        (point.isOakVerified || oak.isVerified || oak.isFixed || oak.votedByMe);
+    final bool fluoriteFocused = fluorite != null &&
+        (point.isFluoriteVerified ||
+            fluorite.isVerified ||
+            fluorite.isFixed ||
+            fluorite.votedByMe);
+
+    if (fluoriteFocused && !oakFocused) {
+      return const Color(0xFF8ED6FF);
+    }
+
+    if (oakFocused && !fluoriteFocused) {
+      return const Color(0xFFFF8E7C);
+    }
+
+    if (hasOak && hasFluorite) {
+      return const Color(0xFFBFA2FF);
+    }
+
+    if (hasOak) {
+      return const Color(0xFFFF8E7C);
+    }
+
+    return const Color(0xFF8ED6FF);
+  }
+
   Widget _buildSpawnPointMarker(SpawnPointModel point, double mapSize) {
     const double markerSize = 36;
     final double markerScale = (1 / _currentScale).clamp(0.3, 1.0);
@@ -2313,17 +2624,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     final Color borderColor = isSelected
         ? accentColor
-        : hasOak && hasFluorite
-        ? const Color(0xFFBFA2FF) // 둘다 있을 때 (연보라, 중간톤)
-        : hasOak
-        ? const Color(0xFFFF8E7C) // 🌳 참나무 (코랄 주황)
-        : const Color(0xFF8ED6FF); // 💎 형광석 (파스텔 하늘색)
+        : _resolveSpawnPointVisualBorderColor(point);
 
-    final String iconPath = hasOak
-        ? point.oak!.iconPath
-        : hasFluorite
-        ? point.fluorite!.iconPath
-        : 'assets/images/default.png';
+    final String iconPath = _resolveSpawnPointVisualIconPath(point);
 
     return Positioned(
       left: (point.x * mapSize) - (markerSize / 2),
@@ -2521,6 +2824,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
                       onDoubleTap: () => _handleDoubleTap(constraints, mapSize),
 
+                      onLongPressStart: (details) {
+                        if (!widget.isAdmin) return;
+
+                        final Offset scenePoint =
+                        _transformationController.toScene(details.localPosition);
+
+                        final double x = (scenePoint.dx / mapSize).clamp(0.0, 1.0).toDouble();
+                        final double y = (scenePoint.dy / mapSize).clamp(0.0, 1.0).toDouble();
+
+                        _showAdminLocationConfirmSheet(x, y);
+                      },
+
                       child: InteractiveViewer(
                         transformationController: _transformationController,
                         minScale: _minMapScale,
@@ -2599,6 +2914,34 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   bottom: bottomPadding + 20,
                   child: _buildZoomButtons(constraints, mapSize),
                 ),
+                if (widget.isAdmin)
+                  Positioned(
+                    left: 20,
+                    bottom: bottomPadding + 24,
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.28),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.18),
+                          ),
+                        ),
+                        child: const Text(
+                          '관리자: 길게 눌러 오늘 위치 지정',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned.fill(
                   child: IgnorePointer(
                     ignoring: !_isFilterPanelOpen,

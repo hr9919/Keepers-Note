@@ -565,10 +565,18 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
   }
 
   void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final media = MediaQuery.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, media.padding.bottom + 76),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -737,68 +745,66 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
                 Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: displayUid.isNotEmpty
-                        ? () {
-                      Clipboard.setData(ClipboardData(text: displayUid));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('UID가 복사되었어요.')),
-                      );
-                    }
-                        : null,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: displayUid.isNotEmpty
-                            ? const Color(0xFFFFF7F4)
-                            : const Color(0xFFFDF7F5),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: displayUid.isNotEmpty
+                          ? () {
+                        Clipboard.setData(ClipboardData(text: displayUid));
+                        _showSnackBar('UID가 복사되었어요.');
+                      }
+                          : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
                           color: displayUid.isNotEmpty
-                              ? const Color(0xFFF5D8CF)
-                              : const Color(0xFFF2E4DE),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            displayUid.isNotEmpty
-                                ? Icons.badge_rounded
-                                : Icons.schedule_rounded,
-                            size: 15,
+                              ? const Color(0xFFFFF7F4)
+                              : const Color(0xFFFDF7F5),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
                             color: displayUid.isNotEmpty
-                                ? const Color(0xFFD88C77)
-                                : const Color(0xFFCDA79C),
+                                ? const Color(0xFFF5D8CF)
+                                : const Color(0xFFF2E4DE),
                           ),
-                          const SizedBox(width: 7),
-                          Flexible(
-                            child: Text(
-                              displayUid.isNotEmpty ? displayUid : 'UID를 입력해보세요',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12.8,
-                                fontWeight: FontWeight.w700,
-                                color: displayUid.isNotEmpty
-                                    ? const Color(0xFFD88C77)
-                                    : const Color(0xFFBE9A90),
-                                letterSpacing: -0.1,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              displayUid.isNotEmpty
+                                  ? Icons.badge_rounded
+                                  : Icons.schedule_rounded,
+                              size: 15,
+                              color: displayUid.isNotEmpty
+                                  ? const Color(0xFFD88C77)
+                                  : const Color(0xFFCDA79C),
+                            ),
+                            const SizedBox(width: 7),
+                            Flexible(
+                              child: Text(
+                                displayUid.isNotEmpty ? displayUid : 'UID를 입력해보세요',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12.8,
+                                  fontWeight: FontWeight.w700,
+                                  color: displayUid.isNotEmpty
+                                      ? const Color(0xFFD88C77)
+                                      : const Color(0xFFBE9A90),
+                                  letterSpacing: -0.1,
+                                ),
                               ),
                             ),
-                          ),
-                          if (displayUid.isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            Icon(
-                              Icons.content_copy_rounded,
-                              size: 13,
-                              color: const Color(0xFFE2B3A4),
-                            ),
+                            if (displayUid.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.content_copy_rounded,
+                                size: 13,
+                                color: const Color(0xFFE2B3A4),
+                              ),
+                            ],
                           ],
-                        ],
-                      ),
-                    )
+                        ),
+                      )
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -1093,8 +1099,8 @@ class _CommunityUserProfileScreenState extends State<CommunityUserProfileScreen>
                 children: [
                   Expanded(
                     child: _buildImageChangeButton(
-                      label: '프로필 사진 변경',
-                      icon: Icons.account_circle_rounded,
+                        label: '프로필 사진 변경',
+                        icon: Icons.account_circle_rounded,
                         onTap: () async {
                           Navigator.pop(dialogContext);
                           await _pickAndUploadImage(true);

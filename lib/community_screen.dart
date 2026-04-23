@@ -588,9 +588,9 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     final userId = (widget.userId ?? '').trim();
     if (userId.isEmpty) return;
 
-    _notificationPollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+    _notificationPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!mounted) return;
-      _fetchUnreadNotificationCount();
+      unawaited(_fetchUnreadNotificationCount(silent: true));
     });
   }
 
@@ -814,7 +814,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     }
   }
 
-  Future<void> _fetchUnreadNotificationCount() async {
+  Future<void> _fetchUnreadNotificationCount({bool silent = false}) async {
     final userId = (widget.userId ?? '').trim();
     if (userId.isEmpty) return;
 
@@ -843,7 +843,9 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         });
       }
     } catch (e) {
-      debugPrint('알림 카운트 조회 실패: $e');
+      if (!silent) {
+        debugPrint('알림 카운트 조회 실패: $e');
+      }
     }
   }
 
@@ -856,6 +858,27 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       await http.post(uri).timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('알림 읽음 처리 실패: $e');
+    }
+  }
+
+
+  Future<void> _markAllNotificationsRead(
+      List<CommunityNotificationItem> items,
+      ) async {
+    final unreadIds = items.where((e) => !e.isRead).map((e) => e.id).toList();
+    if (unreadIds.isEmpty) return;
+
+    try {
+      await Future.wait(
+        unreadIds.map((id) {
+          final uri = Uri.parse(
+            '$_baseUrl/api/community/notifications/$id/read',
+          );
+          return http.post(uri).timeout(const Duration(seconds: 10));
+        }),
+      );
+    } catch (e) {
+      debugPrint('알림 일괄 읽음 처리 실패: $e');
     }
   }
 
@@ -2964,17 +2987,159 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                         ),
                       ),
                       const SizedBox(height: 14),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 18),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
                         child: Row(
                           children: [
-                            Expanded(
+                            const Expanded(
                               child: Text(
                                 '알림',
                                 style: TextStyle(
                                   fontSize: 15.5,
                                   fontWeight: FontWeight.w900,
                                   color: Color(0xFF3E332F),
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () async {
+                                final bool hasUnread =
+                                sheetNotifications.any((e) => !e.isRead);
+
+                                if (sheetLoading) return;
+
+                                final messenger = ScaffoldMessenger.of(this.context);
+                                messenger.hideCurrentSnackBar();
+
+                                // ❌ 읽을 거 없음
+                                if (!hasUnread) {
+                                  Navigator.pop(context); // 👉 시트 먼저 닫기
+
+                                  await Future.delayed(const Duration(milliseconds: 200));
+
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: const Text('이미 다 읽었어요.'),
+                                      behavior: SnackBarBehavior.floating,
+                                      margin: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(this.context).padding.bottom + 76),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                // ✅ 모두 읽음 처리
+                                await _markAllNotificationsRead(sheetNotifications);
+
+                                final updated = sheetNotifications
+                                    .map(
+                                      (e) => CommunityNotificationItem(
+                                    id: e.id,
+                                    type: e.type,
+                                    title: e.title,
+                                    body: e.body,
+                                    targetId: e.targetId,
+                                    targetCommentId: e.targetCommentId,
+                                    isRead: true,
+                                    createdAt: e.createdAt,
+                                  ),
+                                )
+                                    .toList();
+
+                                sheetSetState(() {
+                                  sheetNotifications = updated;
+                                });
+
+                                if (mounted) {
+                                  setState(() {
+                                    _notifications = updated;
+                                    _unreadNotificationCount = 0;
+                                  });
+                                }
+
+                                Navigator.pop(context); // 👉 시트 닫기
+
+                                await Future.delayed(const Duration(milliseconds: 200));
+
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: const Text('모두 읽음 처리했어요.'),
+                                    behavior: SnackBarBehavior.floating,
+                                    margin: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(this.context).padding.bottom + 76),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                );
+
+                                unawaited(_fetchUnreadNotificationCount());
+                              },
+                              child: Container(
+                                height: 34,
+                                constraints: const BoxConstraints(minWidth: 86),
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: sheetLoading
+                                      ? null
+                                      : const LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Color(0xFFFFF8F4),
+                                      Color(0xFFFFEEE7),
+                                    ],
+                                  ),
+                                  color: sheetLoading
+                                      ? const Color(0xFFF5F1EF)
+                                      : null,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: sheetLoading
+                                        ? const Color(0xFFE7DFDB)
+                                        : const Color(0xFFFFD6CC),
+                                  ),
+                                  boxShadow: sheetLoading
+                                      ? null
+                                      : [
+                                    BoxShadow(
+                                      color: const Color(0xFFFF8E7C)
+                                          .withOpacity(0.10),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.done_all_rounded,
+                                      size: 15,
+                                      color: sheetLoading
+                                          ? const Color(0xFFB7AAA3)
+                                          : const Color(0xFFFF8E7C),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      '모두읽음',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 11.8,
+                                        fontWeight: FontWeight.w900,
+                                        height: 1.0,
+                                        color: sheetLoading
+                                            ? const Color(0xFFB7AAA3)
+                                            : const Color(0xFFFF8E7C),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -3794,7 +3959,20 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
   void _showSnackBar(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    final messenger = ScaffoldMessenger.of(context);
+    final media = MediaQuery.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(text),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, media.padding.bottom + 76),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   List<CommunityProfilePostSeed> _recentSeedsForComment(CommunityComment comment) {
@@ -5570,60 +5748,65 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                           crossAxisAlignment: CrossAxisAlignment.end,
                                           children: [
                                             Expanded(
-                                              child: TextField(
-                                                controller: commentController,
-                                                focusNode: commentFocusNode,
-                                                cursorColor: const Color(0xFFFF8E7C),
-                                                minLines: 1,
-                                                maxLines: 4,
-                                                textInputAction: TextInputAction.newline,
-                                                onTap: () {
-                                                  scrollToCommentSectionTop();
-                                                  Future.delayed(const Duration(milliseconds: 120), () {
-                                                    if (!sheetAlive || isSheetClosing) return;
+                                              child: ConstrainedBox(
+                                                constraints: const BoxConstraints(
+                                                  minHeight: 50,
+                                                ),
+                                                child: TextField(
+                                                  controller: commentController,
+                                                  focusNode: commentFocusNode,
+                                                  cursorColor: const Color(0xFFFF8E7C),
+                                                  minLines: 1,
+                                                  maxLines: 4,
+                                                  textInputAction: TextInputAction.newline,
+                                                  onTap: () {
                                                     scrollToCommentSectionTop();
-                                                  });
-                                                  Future.delayed(const Duration(milliseconds: 260), () {
-                                                    if (!sheetAlive || isSheetClosing) return;
-                                                    scrollToCommentSectionTop();
-                                                  });
-                                                },
-                                                decoration: InputDecoration(
-                                                  hintText: replyTarget == null
-                                                      ? '댓글을 입력해주세요.'
-                                                      : '답글을 입력해주세요.',
-                                                  hintStyle: const TextStyle(
-                                                    color: Color(0xFFADB5C2),
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 13,
-                                                  ),
-                                                  filled: true,
-                                                  fillColor: const Color(0xFFFFFBFA),
-                                                  contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 14,
-                                                    vertical: 12,
-                                                  ),
-                                                  border: OutlineInputBorder(
-                                                    borderRadius:
-                                                    BorderRadius.circular(16),
-                                                    borderSide: const BorderSide(
-                                                      color: Color(0xFFF1E4DE),
+                                                    Future.delayed(const Duration(milliseconds: 120), () {
+                                                      if (!sheetAlive || isSheetClosing) return;
+                                                      scrollToCommentSectionTop();
+                                                    });
+                                                    Future.delayed(const Duration(milliseconds: 260), () {
+                                                      if (!sheetAlive || isSheetClosing) return;
+                                                      scrollToCommentSectionTop();
+                                                    });
+                                                  },
+                                                  decoration: InputDecoration(
+                                                    hintText: replyTarget == null
+                                                        ? '댓글을 입력해주세요.'
+                                                        : '답글을 입력해주세요.',
+                                                    hintStyle: const TextStyle(
+                                                      color: Color(0xFFADB5C2),
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 13,
                                                     ),
-                                                  ),
-                                                  enabledBorder: OutlineInputBorder(
-                                                    borderRadius:
-                                                    BorderRadius.circular(16),
-                                                    borderSide: const BorderSide(
-                                                      color: Color(0xFFF1E4DE),
+                                                    filled: true,
+                                                    fillColor: const Color(0xFFFFFBFA),
+                                                    contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 14,
+                                                      vertical: 13,
                                                     ),
-                                                  ),
-                                                  focusedBorder: OutlineInputBorder(
-                                                    borderRadius:
-                                                    BorderRadius.circular(16),
-                                                    borderSide: const BorderSide(
-                                                      color: Color(0xFFFFCFC5),
-                                                      width: 1.2,
+                                                    border: OutlineInputBorder(
+                                                      borderRadius:
+                                                      BorderRadius.circular(16),
+                                                      borderSide: const BorderSide(
+                                                        color: Color(0xFFF1E4DE),
+                                                      ),
+                                                    ),
+                                                    enabledBorder: OutlineInputBorder(
+                                                      borderRadius:
+                                                      BorderRadius.circular(16),
+                                                      borderSide: const BorderSide(
+                                                        color: Color(0xFFF1E4DE),
+                                                      ),
+                                                    ),
+                                                    focusedBorder: OutlineInputBorder(
+                                                      borderRadius:
+                                                      BorderRadius.circular(16),
+                                                      borderSide: const BorderSide(
+                                                        color: Color(0xFFFFCFC5),
+                                                        width: 1.2,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
@@ -5635,14 +5818,13 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                   ? null
                                                   : submitLocalComment,
                                               child: Container(
-                                                width: 44,
-                                                height: 44,
+                                                width: 50,
+                                                height: 50,
                                                 decoration: BoxDecoration(
                                                   color: localSubmitting
                                                       ? const Color(0xFFFFD9D1)
                                                       : const Color(0xFFFFEEE9),
-                                                  borderRadius:
-                                                  BorderRadius.circular(15),
+                                                  shape: BoxShape.circle,
                                                   border: Border.all(
                                                     color: const Color(0xFFFFD8CF),
                                                   ),
@@ -5652,22 +5834,16 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                   width: 18,
                                                   height: 18,
                                                   child: Center(
-                                                    child:
-                                                    CircularProgressIndicator(
+                                                    child: CircularProgressIndicator(
                                                       strokeWidth: 2.2,
-                                                      color:
-                                                      Color(0xFFFF8E7C),
+                                                      color: Color(0xFFFF8E7C),
                                                     ),
                                                   ),
                                                 )
-                                                    : const Padding(
-                                                  padding:
-                                                  EdgeInsets.only(left: 2.5),
-                                                  child: Icon(
-                                                    Icons.send_rounded,
-                                                    size: 19,
-                                                    color: Color(0xFFFF7E69),
-                                                  ),
+                                                    : const Icon(
+                                                  Icons.send_rounded,
+                                                  size: 20,
+                                                  color: Color(0xFFFF7E69),
                                                 ),
                                               ),
                                             ),
