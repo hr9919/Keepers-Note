@@ -2773,7 +2773,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                       children: [
                         _buildIconAppBarButton(
                           iconAsset: 'assets/icons/ic_menu.svg',
-                          onTap: widget.openDrawer ?? () {},
+                          onTap: _toggleFilterPanel,
                           isAccent: false,
                           isActive: true,
                         ),
@@ -4900,7 +4900,22 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                             // 🔥 뒤로가기 버튼 추가
                                             _buildDetailActionButton(
                                               icon: Icons.arrow_back_ios_new_rounded,
-                                              onTap: () {
+                                              onTap: () async {
+                                                if (isSheetClosing) return;
+                                                isSheetClosing = true;
+                                                sheetAlive = false;
+
+                                                try {
+                                                  if (commentFocusNode.hasFocus) {
+                                                    commentFocusNode.unfocus();
+                                                  }
+                                                } catch (_) {}
+
+                                                FocusManager.instance.primaryFocus?.unfocus();
+
+                                                await Future.delayed(const Duration(milliseconds: 120));
+
+                                                if (!context.mounted) return;
                                                 Navigator.pop(context);
                                               },
                                             ),
@@ -5359,80 +5374,80 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                                 ),
                                                                 const SizedBox(height: 7),
                                                                 AnimatedContainer(
-                                                                  duration: const Duration(milliseconds: 320),
-                                                                  curve: Curves.easeOutCubic,
-                                                                  width: double.infinity,
-                                                                  padding: const EdgeInsets.fromLTRB(
-                                                                    12,
-                                                                    10,
-                                                                    12,
-                                                                    10,
-                                                                  ),
-                                                                  decoration: BoxDecoration(
-                                                                    color: isHighlighted
-                                                                        ? (highlightVisible
-                                                                        ? const Color(0xFFFFF8E8)
-                                                                        : const Color(0xFFFFFBFA))
-                                                                        : const Color(0xFFFFFBFA),
-                                                                    borderRadius: BorderRadius.circular(16),
-                                                                    border: Border.all(
+                                                                    duration: const Duration(milliseconds: 320),
+                                                                    curve: Curves.easeOutCubic,
+                                                                    width: double.infinity,
+                                                                    padding: const EdgeInsets.fromLTRB(
+                                                                      12,
+                                                                      10,
+                                                                      12,
+                                                                      10,
+                                                                    ),
+                                                                    decoration: BoxDecoration(
                                                                       color: isHighlighted
                                                                           ? (highlightVisible
-                                                                          ? const Color(0xFFFFE0A3)
-                                                                          : const Color(0xFFF1E4DE))
-                                                                          : const Color(0xFFF1E4DE),
-                                                                    ),
-                                                                    boxShadow: isHighlighted && highlightVisible
-                                                                        ? [
-                                                                      BoxShadow(
-                                                                        color: const Color(0xFFFFD98A)
-                                                                            .withOpacity(0.12),
-                                                                        blurRadius: 8,
-                                                                        offset: const Offset(0, 2),
+                                                                          ? const Color(0xFFFFF8E8)
+                                                                          : const Color(0xFFFFFBFA))
+                                                                          : const Color(0xFFFFFBFA),
+                                                                      borderRadius: BorderRadius.circular(16),
+                                                                      border: Border.all(
+                                                                        color: isHighlighted
+                                                                            ? (highlightVisible
+                                                                            ? const Color(0xFFFFE0A3)
+                                                                            : const Color(0xFFF1E4DE))
+                                                                            : const Color(0xFFF1E4DE),
                                                                       ),
-                                                                    ]
-                                                                        : null,
-                                                                  ),
-                                                                  child: RichText(
-                                                                    text: TextSpan(
-                                                                      children: () {
-                                                                        final List<InlineSpan> spans = [];
-
-                                                                        final baseStyle = const TextStyle(
-                                                                          color: Color(0xFF4A4A4A),
-                                                                          fontSize: 14,
-                                                                          height: 1.45,
-                                                                        );
-
-                                                                        final mentionStyle = baseStyle.copyWith(
-                                                                          color: const Color(0xFF9C8CFF), // 👈 색 연하게 변경
-                                                                          fontWeight: FontWeight.w700,
-                                                                        );
-
-                                                                        comment.content.splitMapJoin(
-                                                                          RegExp(r'@[가-힣a-zA-Z0-9_]+(?: [가-힣a-zA-Z0-9_]+)*'),
-                                                                          onMatch: (Match match) {
-                                                                            final mention = match[0] ?? '';
-
-                                                                            spans.add(
-                                                                              TextSpan(
-                                                                                text: mention,
-                                                                                style: mentionStyle,
-                                                                              ),
-                                                                            );
-
-                                                                            return '';
-                                                                          },
-                                                                          onNonMatch: (text) {
-                                                                            spans.add(TextSpan(text: text, style: baseStyle));
-                                                                            return '';
-                                                                          },
-                                                                        );
-
-                                                                        return spans;
-                                                                      }(),
+                                                                      boxShadow: isHighlighted && highlightVisible
+                                                                          ? [
+                                                                        BoxShadow(
+                                                                          color: const Color(0xFFFFD98A)
+                                                                              .withOpacity(0.12),
+                                                                          blurRadius: 8,
+                                                                          offset: const Offset(0, 2),
+                                                                        ),
+                                                                      ]
+                                                                          : null,
                                                                     ),
-                                                                  )
+                                                                    child: RichText(
+                                                                      text: TextSpan(
+                                                                        children: () {
+                                                                          final List<InlineSpan> spans = [];
+
+                                                                          final baseStyle = const TextStyle(
+                                                                            color: Color(0xFF4A4A4A),
+                                                                            fontSize: 14,
+                                                                            height: 1.45,
+                                                                          );
+
+                                                                          final mentionStyle = baseStyle.copyWith(
+                                                                            color: const Color(0xFF9C8CFF), // 👈 색 연하게 변경
+                                                                            fontWeight: FontWeight.w700,
+                                                                          );
+
+                                                                          comment.content.splitMapJoin(
+                                                                            RegExp(r'@[가-힣a-zA-Z0-9_]+(?: [가-힣a-zA-Z0-9_]+)*'),
+                                                                            onMatch: (Match match) {
+                                                                              final mention = match[0] ?? '';
+
+                                                                              spans.add(
+                                                                                TextSpan(
+                                                                                  text: mention,
+                                                                                  style: mentionStyle,
+                                                                                ),
+                                                                              );
+
+                                                                              return '';
+                                                                            },
+                                                                            onNonMatch: (text) {
+                                                                              spans.add(TextSpan(text: text, style: baseStyle));
+                                                                              return '';
+                                                                            },
+                                                                          );
+
+                                                                          return spans;
+                                                                        }(),
+                                                                      ),
+                                                                    )
                                                                 ),
                                                               ],
                                                             ),
@@ -5705,7 +5720,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       }
 
       try {
-        commentController.dispose();
+        sheetScrollController.dispose();
       } catch (_) {}
     }
   }
