@@ -48,3 +48,18 @@ app.*.map.json
 *.keystore
 android/key.properties
 lib/firebase_options.dart
+
+# iOS build & Xcode
+ios/build/
+ios/DerivedData/
+ios/Pods/
+ios/.symlinks/
+
+# Xcode workspace user data
+*.xcworkspace
+*.xcuserdata
+*.xcuserstate
+
+# Swift Package Manager
+ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+ios/Runner.xcworkspace/xcshareddata/swiftpm/
