@@ -112,12 +112,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _recoverLostData() async {
+    if (!Platform.isAndroid) return;
+
     try {
       if (!mounted) return;
 
-      // iOS에서 미구현 예외가 나는 경우가 있어 우선 무시
       final response = await _picker.retrieveLostData();
-
       if (response.isEmpty) return;
 
       final XFile? file = response.file;
@@ -216,36 +216,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       _showSnackBar('푸시 알림 설정 변경에 실패했어요.');
     }
-  }
-
-  Future<void> _applyPushSetting(bool enabled) async {
-    final messaging = FirebaseMessaging.instance;
-
-    await messaging.setAutoInitEnabled(enabled);
-
-    if (enabled) {
-      await messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-      );
-
-      await messaging.getToken();
-    } else {
-      await messaging.deleteToken();
-    }
-
-    // 백엔드에 토글 상태를 저장하는 API가 있으면 여기서 같이 호출
-    // 예:
-    // await http.put(
-    //   Uri.parse('$_baseUrl/api/user/push-setting'),
-    //   headers: {'Content-Type': 'application/json'},
-    //   body: jsonEncode({
-    //     'id': int.tryParse(_serverUserId),
-    //     'pushEnabled': enabled,
-    //   }),
-    // );
   }
 
   // 2. 이미지 업로드 로직

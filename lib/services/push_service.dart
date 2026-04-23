@@ -39,9 +39,16 @@ class PushService {
       provisional: false,
     );
 
+    await _messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
     if (!_localNotificationInitialized) {
       const androidSettings =
       AndroidInitializationSettings('@mipmap/ic_launcher');
+
       const iosSettings = DarwinInitializationSettings();
 
       await _localNotifications.initialize(
@@ -61,15 +68,7 @@ class PushService {
             debugPrint('A-1. 로컬 알림 클릭 data=$data');
 
             await onRealtimeNotificationRefresh();
-
-            try {
-              debugPrint('A-2. onTapNavigate 호출 직전');
-              await onTapNavigate(data);
-              debugPrint('A-3. onTapNavigate 호출 완료');
-            } catch (e, s) {
-              debugPrint('A-ERR. onTapNavigate 실패: $e');
-              debugPrint('$s');
-            }
+            await onTapNavigate(data);
           } catch (e, s) {
             debugPrint('로컬 알림 payload 파싱 실패: $e');
             debugPrint('$s');
@@ -80,7 +79,7 @@ class PushService {
       _localNotificationInitialized = true;
     }
 
-    final token = await _messaging.getToken();
+    final token = await _getSafeFcmToken();
     if (token != null && userId.isNotEmpty) {
       await _registerToken(userId: userId, token: token);
     }
@@ -102,7 +101,6 @@ class PushService {
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       debugPrint('C. onMessageOpenedApp data=${message.data}');
-
       await onRealtimeNotificationRefresh();
       await onTapNavigate(message.data);
     });
@@ -115,6 +113,68 @@ class PushService {
     }
   }
 
+  Future<void> _showLocalNotification(RemoteMessage message) async {
+    final notification = message.notification;
+    final title = message.notification?.title ?? message.data['title'];
+    final body = message.notification?.body ?? message.data['body'];
+
+    if (title == null || body == null) return;
+
+    const androidDetails = AndroidNotificationDetails(
+      'community_notifications',
+      '커뮤니티 알림',
+      channelDescription: '커뮤니티 관련 알림',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      presentBanner: true,
+      presentList: true,
+    );
+
+    await _localNotifications.show(
+      title.hashCode,
+      title,
+      body,
+      const NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      ),
+      payload: jsonEncode(message.data),
+    );
+  }
+
+  Future<String?> _getSafeFcmToken() async {
+    await _messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+
+    if (Platform.isIOS) {
+      String? apnsToken = await _messaging.getAPNSToken();
+
+      int retry = 0;
+      while (apnsToken == null && retry < 12) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        apnsToken = await _messaging.getAPNSToken();
+        retry++;
+      }
+
+      if (apnsToken == null) {
+        debugPrint('APNs token 미준비');
+        return null;
+      }
+    }
+
+    return await _messaging.getToken();
+  }
+
   Future<void> setPushEnabled({
     required bool enabled,
     required String userId,
@@ -122,29 +182,30 @@ class PushService {
     if (enabled) {
       debugPrint('푸시 ON');
 
-      final token = await _messaging.getToken();
+      final token = await _getSafeFcmToken();
       if (token != null) {
         await _registerToken(userId: userId, token: token);
       }
-    } else {
-      debugPrint('푸시 OFF');
+      return;
+    }
 
-      final token = await _messaging.getToken();
+    debugPrint('푸시 OFF');
 
-      // 👉 서버에서 토큰 삭제 API 필요
-      if (token != null) {
+    try {
+      final existingToken = await _messaging.getToken();
+      if (existingToken != null) {
         await http.delete(
           Uri.parse('$_baseUrl/api/push/token'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'userId': int.tryParse(userId),
-            'token': token,
+            'token': existingToken,
           }),
         );
       }
+    } catch (_) {}
 
-      await _messaging.deleteToken();
-    }
+    await _messaging.deleteToken();
   }
 
   Future<void> _registerToken({
@@ -166,35 +227,5 @@ class PushService {
     } else {
       debugPrint('푸시 토큰 등록 완료');
     }
-  }
-
-  Future<void> _showLocalNotification(RemoteMessage message) async {
-    final notification = message.notification;
-    debugPrint('E. _showLocalNotification data=${message.data}');
-    debugPrint('E-1. _showLocalNotification title=${notification?.title}');
-    debugPrint('E-2. _showLocalNotification body=${notification?.body}');
-
-    if (notification == null) return;
-
-    const androidDetails = AndroidNotificationDetails(
-      'community_notifications',
-      '커뮤니티 알림',
-      channelDescription: '커뮤니티 관련 알림',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-
-    const iosDetails = DarwinNotificationDetails();
-
-    await _localNotifications.show(
-      notification.hashCode,
-      notification.title,
-      notification.body,
-      const NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      ),
-      payload: jsonEncode(message.data),
-    );
   }
 }

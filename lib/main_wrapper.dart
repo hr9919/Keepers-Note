@@ -280,7 +280,7 @@ class _MainWrapperState extends State<MainWrapper> {
         _initialCommunityCommentId = null;
       });
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 300), () {
         if (!mounted) return;
 
         setState(() {
@@ -288,7 +288,7 @@ class _MainWrapperState extends State<MainWrapper> {
           _initialCommunityCommentId = null;
         });
 
-        Future.delayed(const Duration(seconds: 2), () {
+        Future.delayed(const Duration(seconds: 3), () {
           _clearPendingCommunityOpen();
         });
       });
@@ -643,7 +643,7 @@ class _MainWrapperState extends State<MainWrapper> {
               _initialCommunityCommentId = null;
             });
 
-            WidgetsBinding.instance.addPostFrameCallback((_) {
+            Future.delayed(const Duration(milliseconds: 300), () {
               if (!mounted) return;
 
               setState(() {
@@ -651,10 +651,11 @@ class _MainWrapperState extends State<MainWrapper> {
                 _initialCommunityCommentId = commentId;
               });
 
-              Future.delayed(const Duration(seconds: 2), () {
+              Future.delayed(const Duration(seconds: 3), () {
                 _clearPendingCommunityOpen();
               });
             });
+
             return;
           }
         }

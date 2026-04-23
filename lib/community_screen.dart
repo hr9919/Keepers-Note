@@ -1930,32 +1930,6 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     );
   }
 
-  void _openProfileImageViewer(CommunityPost post) {
-    final resolved = _resolveProfileImagePath(post.profileImageUrl);
-    if (resolved.isEmpty) return;
-
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.black.withOpacity(0.94),
-        pageBuilder: (_, __, ___) => CommunityProfileImageViewerScreen(
-          imageUrl: resolved,
-          author: post.author,
-          heroTag: 'profile_${post.id}',
-        ),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            ),
-            child: child,
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildFilterChip(
       String text,
       bool selected,
@@ -4917,6 +4891,17 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                         Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
+                                            // 🔥 뒤로가기 버튼 추가
+                                            _buildDetailActionButton(
+                                              icon: Icons.arrow_back_ios_new_rounded,
+                                              onTap: () {
+                                                Navigator.pop(context);
+                                              },
+                                            ),
+
+                                            const SizedBox(width: 6),
+
+                                            // 🔥 기존 프로필 영역
                                             Expanded(
                                               child: Material(
                                                 color: Colors.transparent,
@@ -4972,6 +4957,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                 ),
                                               ),
                                             ),
+
+                                            // 🔥 기존 버튼들 유지
                                             _buildDetailActionButton(
                                               icon: Icons.ios_share_rounded,
                                               onTap: () async {
@@ -5402,37 +5389,44 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                                   ),
                                                                   child: RichText(
                                                                     text: TextSpan(
-                                                                      style: const TextStyle(
-                                                                        fontSize: 13.2,
-                                                                        height: 1.45,
-                                                                        fontWeight: FontWeight.w600,
-                                                                        color: Color(0xFF5E6975),
-                                                                      ),
                                                                       children: () {
                                                                         final List<InlineSpan> spans = [];
+
+                                                                        final baseStyle = const TextStyle(
+                                                                          color: Color(0xFF4A4A4A),
+                                                                          fontSize: 14,
+                                                                          height: 1.45,
+                                                                        );
+
+                                                                        final mentionStyle = baseStyle.copyWith(
+                                                                          color: const Color(0xFF9C8CFF), // 👈 색 연하게 변경
+                                                                          fontWeight: FontWeight.w700,
+                                                                        );
+
                                                                         comment.content.splitMapJoin(
-                                                                          RegExp(r'(@[^\s]+)'),
+                                                                          RegExp(r'@[가-힣a-zA-Z0-9_]+(?: [가-힣a-zA-Z0-9_]+)*'),
                                                                           onMatch: (Match match) {
+                                                                            final mention = match[0] ?? '';
+
                                                                             spans.add(
                                                                               TextSpan(
-                                                                                text: match[0],
-                                                                                style: const TextStyle(
-                                                                                  color: Color(0xFF7D67B8),
-                                                                                  fontWeight: FontWeight.w700,
-                                                                                ),
+                                                                                text: mention,
+                                                                                style: mentionStyle,
                                                                               ),
                                                                             );
+
                                                                             return '';
                                                                           },
-                                                                          onNonMatch: (String text) {
-                                                                            spans.add(TextSpan(text: text));
+                                                                          onNonMatch: (text) {
+                                                                            spans.add(TextSpan(text: text, style: baseStyle));
                                                                             return '';
                                                                           },
                                                                         );
+
                                                                         return spans;
                                                                       }(),
                                                                     ),
-                                                                  ),
+                                                                  )
                                                                 ),
                                                               ],
                                                             ),
