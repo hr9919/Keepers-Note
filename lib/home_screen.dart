@@ -112,9 +112,19 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     try {
+      final String voteUserId = widget.userId.trim();
+
+      if (voteUserId.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('로그인 정보를 불러올 수 없습니다.')),
+        );
+        return;
+      }
+
       final response = await ApiService.voteResource(
         id: res.id,
-        userId: widget.userId,
+        userId: voteUserId,
       );
 
       await _loadMapPreviewResources();

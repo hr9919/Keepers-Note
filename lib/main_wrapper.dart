@@ -201,10 +201,25 @@ class _MainWrapperState extends State<MainWrapper> {
 
         final String? target = uri.queryParameters['target'];
         final String? postId = uri.queryParameters['postId'];
+        final String? commentId = uri.queryParameters['commentId'];
+        final String? notificationId = uri.queryParameters['notificationId'];
 
         if (target == 'community_post' && postId != null) {
-          final converted = Uri.parse(
-            'https://keepersnote.app/community/post/$postId',
+          final Map<String, String> query = <String, String>{
+            'target': 'community_post',
+            'postId': postId,
+          };
+          if (commentId != null && commentId.isNotEmpty) {
+            query['commentId'] = commentId;
+          }
+          if (notificationId != null && notificationId.isNotEmpty) {
+            query['notificationId'] = notificationId;
+          }
+
+          final converted = Uri.https(
+            'keepersnote.app',
+            '/community/post/$postId',
+            query,
           );
           debugPrint('MainWrapper 카카오 공유 링크 변환: $converted');
           _handleDeepLink(converted);
@@ -222,15 +237,18 @@ class _MainWrapperState extends State<MainWrapper> {
     debugPrint('딥링크 처리: $uri');
 
     int? postId;
+    int? commentId;
     String? eventId;
 
     // 1) 카카오 execution params 우선 처리
     final target = uri.queryParameters['target'];
     final queryPostId = uri.queryParameters['postId'];
+    final queryCommentId = uri.queryParameters['commentId'];
     final queryEventId = uri.queryParameters['eventId'];
 
     if (target == 'community_post' && queryPostId != null) {
       postId = int.tryParse(queryPostId);
+      commentId = int.tryParse(queryCommentId ?? '');
     }
 
     if (target == 'event' && queryEventId != null && queryEventId.isNotEmpty) {
@@ -245,6 +263,7 @@ class _MainWrapperState extends State<MainWrapper> {
           uri.pathSegments.length >= 2 &&
           uri.pathSegments[0] == 'post') {
         postId = int.tryParse(uri.pathSegments[1]);
+        commentId = int.tryParse(uri.queryParameters['commentId'] ?? '');
       }
 
       if (host == 'event' && uri.pathSegments.isNotEmpty) {
@@ -262,6 +281,7 @@ class _MainWrapperState extends State<MainWrapper> {
           segments[0] == 'community' &&
           segments[1] == 'post') {
         postId = int.tryParse(segments[2]);
+        commentId = int.tryParse(uri.queryParameters['commentId'] ?? '');
       }
 
       if (segments.length >= 2 && segments[0] == 'event') {
@@ -285,7 +305,7 @@ class _MainWrapperState extends State<MainWrapper> {
 
         setState(() {
           _initialCommunityPostId = postId;
-          _initialCommunityCommentId = null;
+          _initialCommunityCommentId = commentId;
         });
       });
 
