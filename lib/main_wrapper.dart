@@ -270,8 +270,6 @@ class _MainWrapperState extends State<MainWrapper> {
     }
 
     if (postId != null) {
-      debugPrint('게시글 이동: $postId');
-
       if (!mounted) return;
 
       setState(() {
@@ -280,29 +278,19 @@ class _MainWrapperState extends State<MainWrapper> {
         _initialCommunityCommentId = null;
       });
 
-      Future.delayed(const Duration(milliseconds: 300), () {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await Future.delayed(const Duration(milliseconds: 100));
+
         if (!mounted) return;
 
         setState(() {
           _initialCommunityPostId = postId;
           _initialCommunityCommentId = null;
         });
-
-        Future.delayed(const Duration(seconds: 3), () {
-          _clearPendingCommunityOpen();
-        });
       });
 
       return;
     }
-  }
-
-  void _clearPendingCommunityOpen() {
-    if (!mounted) return;
-    setState(() {
-      _initialCommunityPostId = null;
-      _initialCommunityCommentId = null;
-    });
   }
 
   Future<void> _confirmAndSendMail() async {
@@ -643,16 +631,14 @@ class _MainWrapperState extends State<MainWrapper> {
               _initialCommunityCommentId = null;
             });
 
-            Future.delayed(const Duration(milliseconds: 300), () {
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              await Future.delayed(const Duration(milliseconds: 100));
+
               if (!mounted) return;
 
               setState(() {
                 _initialCommunityPostId = postId;
                 _initialCommunityCommentId = commentId;
-              });
-
-              Future.delayed(const Duration(seconds: 3), () {
-                _clearPendingCommunityOpen();
               });
             });
 
@@ -1220,7 +1206,7 @@ class _MainWrapperState extends State<MainWrapper> {
       ),
       CommunityScreen(
         key: ValueKey(
-          'community_${_initialCommunityPostId ?? 'none'}_${_initialCommunityCommentId ?? 'none'}',
+          'community_${_initialCommunityPostId}_${DateTime.now().millisecondsSinceEpoch}',
         ),
         openDrawer: _openDrawerSmooth,
         userId: _serverUserId,

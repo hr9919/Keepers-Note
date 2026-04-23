@@ -1277,11 +1277,17 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       await Future.delayed(const Duration(milliseconds: 120));
       if (!mounted) return;
 
-      await _openPostDetailSheet(targetPost!);
+      final opened = await _openPostDetailSheet(targetPost!);
+
+      // ❗ 실패하면 다시 시도
+      if (!opened && mounted) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) _tryOpenInitialPost();
+        });
+      }
 
       if (!mounted) return;
 
-      _didOpenInitialPost = false;
       setState(() {
         _pendingHighlightCommentId = null;
       });
@@ -4458,7 +4464,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     );
   }
 
-  Future<void> _openPostDetailSheet(
+  Future<bool> _openPostDetailSheet(
       CommunityPost post, {
         bool focusCommentInput = false,
       }) async {
@@ -5669,6 +5675,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
           );
         },
       );
+      return true;
+    } catch (e) {
+      debugPrint('_openPostDetailSheet 실패: $e');
+      return false;
     } finally {
       isSheetClosing = true;
       sheetAlive = false;
@@ -5693,6 +5703,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       } else {
         _isPostDetailSheetOpen = false;
       }
+
+      try {
+        commentController.dispose();
+      } catch (_) {}
     }
   }
 
@@ -6803,28 +6817,47 @@ class _AnimatedCommunityLikeButtonState
     );
   }
 }
-// @태그를 찾아서 보라색으로 하이라이트해주는 커스텀 컨트롤러
+
 class TaggingTextController extends TextEditingController {
   @override
-  TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
     final List<InlineSpan> children = [];
+    final TextStyle baseStyle = style ?? const TextStyle();
 
-    // @로 시작하고 공백 전까지의 단어를 찾는 정규식
+    final TextStyle mentionStyle = baseStyle.copyWith(
+      color: const Color(0xFF9C8CFF), // 더 연한 보라
+      fontWeight: FontWeight.w600,    // 너무 두껍지 않게
+    );
+
     text.splitMapJoin(
-      RegExp(r'(@[^\s]+)'),
+      RegExp(r'@[가-힣a-zA-Z0-9_]+(?: [가-힣a-zA-Z0-9_]+)*'),
       onMatch: (Match match) {
-        children.add(TextSpan(
-          text: match[0],
-          style: style?.copyWith(color: const Color(0xFF7D67B8), fontWeight: FontWeight.w700),
-        ));
+        children.add(
+          TextSpan(
+            text: match[0],
+            style: mentionStyle,
+          ),
+        );
         return '';
       },
-      onNonMatch: (String text) {
-        children.add(TextSpan(text: text, style: style));
+      onNonMatch: (String value) {
+        children.add(
+          TextSpan(
+            text: value,
+            style: baseStyle,
+          ),
+        );
         return '';
       },
     );
 
-    return TextSpan(style: style, children: children);
+    return TextSpan(
+      style: baseStyle,
+      children: children,
+    );
   }
 }
