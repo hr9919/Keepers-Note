@@ -98,19 +98,6 @@ class PushService {
       await onRealtimeNotificationRefresh();
       await _showLocalNotification(message);
     });
-
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-      debugPrint('C. onMessageOpenedApp data=${message.data}');
-      await onRealtimeNotificationRefresh();
-      await onTapNavigate(message.data);
-    });
-
-    final initialMessage = await _messaging.getInitialMessage();
-    debugPrint('D. initialMessage=${initialMessage?.data}');
-
-    if (initialMessage != null) {
-      await onTapNavigate(initialMessage.data);
-    }
   }
 
   Future<void> _showLocalNotification(RemoteMessage message) async {

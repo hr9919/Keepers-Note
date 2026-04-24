@@ -601,6 +601,114 @@ class _GatheringScreenState extends State<GatheringScreen>
     final value = raw.trim();
     final compact = value.replaceAll(' ', '').toLowerCase();
 
+    if (compact.isEmpty) {
+      return {
+        'bg': const Color(0xFFF4F6F8),
+        'border': const Color(0xFFE5E7EB),
+        'text': const Color(0xFF6B7280),
+      };
+    }
+
+    // 숲 / 대나무 숲 / 참나무 숲
+    if (compact.contains('대나무숲')) {
+      return {
+        'bg': const Color(0xFFEAF7EE),
+        'border': const Color(0xFFCFE8D7),
+        'text': const Color(0xFF3E8E5A),
+      };
+    }
+
+    if (compact.contains('참나무숲')) {
+      return {
+        'bg': const Color(0xFFF0F7EE),
+        'border': const Color(0xFFDDEBD8),
+        'text': const Color(0xFF5A8A57),
+      };
+    }
+
+    if (compact.contains('숲')) {
+      return {
+        'bg': const Color(0xFFEFF8F1),
+        'border': const Color(0xFFD7EEDC),
+        'text': const Color(0xFF4E9A62),
+      };
+    }
+
+    // 집 앞 / 주거지
+    if (compact.contains('집앞') ||
+        compact.contains('주거지') ||
+        compact.contains('홈') ||
+        compact.contains('가정')) {
+      return {
+        'bg': const Color(0xFFFFF1EC),
+        'border': const Color(0xFFFFD9CF),
+        'text': const Color(0xFFE87963),
+      };
+    }
+
+    // 꽃밭
+    if (compact.contains('꽃밭')) {
+      return {
+        'bg': const Color(0xFFFFF0FA),
+        'border': const Color(0xFFF6D6EC),
+        'text': const Color(0xFFC05A9D),
+      };
+    }
+
+    // 온천산
+    if (compact.contains('온천산') || compact.contains('온천')) {
+      return {
+        'bg': const Color(0xFFFFF1E8),
+        'border': const Color(0xFFFFDDC7),
+        'text': const Color(0xFFD67C4A),
+      };
+    }
+
+    // 도시 / 도심 / 도시 근교
+    if (compact.contains('도심')) {
+      return {
+        'bg': const Color(0xFFF1F5FF),
+        'border': const Color(0xFFDCE6FF),
+        'text': const Color(0xFF6479C8),
+      };
+    }
+
+    if (compact.contains('도시근교') ||
+        compact.contains('도시') ||
+        compact.contains('교외') ||
+        compact.contains('근교')) {
+      return {
+        'bg': const Color(0xFFF4F0FF),
+        'border': const Color(0xFFE3D8FF),
+        'text': const Color(0xFF7A63C7),
+      };
+    }
+
+    // 어촌
+    if (compact.contains('어촌등대')) {
+      return {
+        'bg': const Color(0xFFEAF7FF),
+        'border': const Color(0xFFCFEAFF),
+        'text': const Color(0xFF4A91B8),
+      };
+    }
+
+    if (compact.contains('어촌부두')) {
+      return {
+        'bg': const Color(0xFFEFFBFA),
+        'border': const Color(0xFFD6F0EE),
+        'text': const Color(0xFF4A9B95),
+      };
+    }
+
+    if (compact.contains('어촌광장') || compact.contains('어촌')) {
+      return {
+        'bg': const Color(0xFFE9F7FF),
+        'border': const Color(0xFFCDEBFA),
+        'text': const Color(0xFF3D92B8),
+      };
+    }
+
     // 강
     if (compact.contains('거목강')) {
       return {
@@ -609,6 +717,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         'text': const Color(0xFF3E8E5A),
       };
     }
+
     if (compact.contains('고요한강')) {
       return {
         'bg': const Color(0xFFEAF4FF),
@@ -616,6 +725,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         'text': const Color(0xFF4A7FD1),
       };
     }
+
     if (compact.contains('노을강')) {
       return {
         'bg': const Color(0xFFFFEFE6),
@@ -623,6 +733,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         'text': const Color(0xFFDD7A4A),
       };
     }
+
     if (compact.contains('얕은강')) {
       return {
         'bg': const Color(0xFFF2FBF7),
@@ -630,7 +741,8 @@ class _GatheringScreenState extends State<GatheringScreen>
         'text': const Color(0xFF4AA37C),
       };
     }
-    if (compact.contains('강전체') || compact == '강') {
+
+    if (compact.contains('강전체') || compact == '강' || compact.contains('강가')) {
       return {
         'bg': const Color(0xFFEDF6FF),
         'border': const Color(0xFFD8E9FF),
@@ -638,36 +750,8 @@ class _GatheringScreenState extends State<GatheringScreen>
       };
     }
 
-    // 호수
-    if (compact.contains('숲속호수')) {
-      return {
-        'bg': const Color(0xFFF0F7EE),
-        'border': const Color(0xFFDDEBD8),
-        'text': const Color(0xFF5A8A57),
-      };
-    }
-    if (compact.contains('초원호수')) {
-      return {
-        'bg': const Color(0xFFF3FAEA),
-        'border': const Color(0xFFE0F0C8),
-        'text': const Color(0xFF7AA33C),
-      };
-    }
-    if (compact.contains('근교호수')) {
-      return {
-        'bg': const Color(0xFFF2F6FF),
-        'border': const Color(0xFFDEE7FF),
-        'text': const Color(0xFF6C7FD8),
-      };
-    }
-    if (compact.contains('온천산호수') || compact.contains('온천산수')) {
-      return {
-        'bg': const Color(0xFFFFF1E8),
-        'border': const Color(0xFFFFDDC7),
-        'text': const Color(0xFFD67C4A),
-      };
-    }
-    if (compact.contains('호수전체') || compact == '호수') {
+    // 호수 / 호숫가
+    if (compact.contains('호숫가')) {
       return {
         'bg': const Color(0xFFF2F7FF),
         'border': const Color(0xFFDCE9FF),
@@ -675,7 +759,73 @@ class _GatheringScreenState extends State<GatheringScreen>
       };
     }
 
-    // 바다
+    if (compact.contains('숲속호수')) {
+      return {
+        'bg': const Color(0xFFF0F7EE),
+        'border': const Color(0xFFDDEBD8),
+        'text': const Color(0xFF5A8A57),
+      };
+    }
+
+    if (compact.contains('초원호수')) {
+      return {
+        'bg': const Color(0xFFF3FAEA),
+        'border': const Color(0xFFE0F0C8),
+        'text': const Color(0xFF7AA33C),
+      };
+    }
+
+    if (compact.contains('근교호수')) {
+      return {
+        'bg': const Color(0xFFF2F6FF),
+        'border': const Color(0xFFDEE7FF),
+        'text': const Color(0xFF6C7FD8),
+      };
+    }
+
+    if (compact.contains('화산호')) {
+      return {
+        'bg': const Color(0xFFFFF1E8),
+        'border': const Color(0xFFFFDDC7),
+        'text': const Color(0xFFD67C4A),
+      };
+    }
+
+    if (compact.contains('온천산호수') || compact.contains('온천산수')) {
+      return {
+        'bg': const Color(0xFFFFF1E8),
+        'border': const Color(0xFFFFDDC7),
+        'text': const Color(0xFFD67C4A),
+      };
+    }
+
+    if (compact.contains('호수전체') ||
+        compact == '호수' ||
+        compact.contains('연못')) {
+      return {
+        'bg': const Color(0xFFF2F7FF),
+        'border': const Color(0xFFDCE9FF),
+        'text': const Color(0xFF5C84C9),
+      };
+    }
+
+    // 바다 / 해변
+    if (compact.contains('보라해변')) {
+      return {
+        'bg': const Color(0xFFF4ECFF),
+        'border': const Color(0xFFE0D0FF),
+        'text': const Color(0xFF7C5CCB),
+      };
+    }
+
+    if (compact.contains('고래해변') || compact.contains('고래바다')) {
+      return {
+        'bg': const Color(0xFFEDEBFF),
+        'border': const Color(0xFFD9D3FF),
+        'text': const Color(0xFF6E63C7),
+      };
+    }
+
     if (compact.contains('동해')) {
       return {
         'bg': const Color(0xFFEAF3FF),
@@ -683,6 +833,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         'text': const Color(0xFF4F7ECF),
       };
     }
+
     if (compact.contains('구해')) {
       return {
         'bg': const Color(0xFFE9F7FF),
@@ -690,13 +841,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         'text': const Color(0xFF3D92B8),
       };
     }
-    if (compact.contains('고래바다')) {
-      return {
-        'bg': const Color(0xFFEDEBFF),
-        'border': const Color(0xFFD9D3FF),
-        'text': const Color(0xFF6E63C7),
-      };
-    }
+
     if (compact.contains('잔잔한바다')) {
       return {
         'bg': const Color(0xFFEFFBFA),
@@ -704,6 +849,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         'text': const Color(0xFF4A9B95),
       };
     }
+
     if (compact.contains('바다전체')) {
       return {
         'bg': const Color(0xFFF0F6FF),
@@ -711,6 +857,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         'text': const Color(0xFF5F86C9),
       };
     }
+
     if (compact.contains('바다낚시사건') || compact.contains('바다낚시')) {
       return {
         'bg': const Color(0xFFFFF0F5),
@@ -718,7 +865,11 @@ class _GatheringScreenState extends State<GatheringScreen>
         'text': const Color(0xFFD86A92),
       };
     }
-    if (compact.contains('바다') || compact.contains('해변') || compact.contains('해')) {
+
+    if (compact.contains('바다') ||
+        compact.contains('해변') ||
+        compact.contains('해안') ||
+        compact.contains('해')) {
       return {
         'bg': const Color(0xFFF0F7FF),
         'border': const Color(0xFFD9E9FF),
@@ -726,7 +877,37 @@ class _GatheringScreenState extends State<GatheringScreen>
       };
     }
 
-    // 기본
+    // 들판 / 초원
+    if (compact.contains('들판') ||
+        compact.contains('초원') ||
+        compact.contains('평원')) {
+      return {
+        'bg': const Color(0xFFF3FAEA),
+        'border': const Color(0xFFE0F0C8),
+        'text': const Color(0xFF7AA33C),
+      };
+    }
+
+    // 유인 / 특수 / 이벤트
+    if (compact.contains('유인')) {
+      return {
+        'bg': const Color(0xFFFFF7D6),
+        'border': const Color(0xFFFFE6A3),
+        'text': const Color(0xFFB7791F),
+      };
+    }
+
+    if (compact.contains('특수') ||
+        compact.contains('이벤트') ||
+        compact.contains('사건') ||
+        compact.contains('블랑코')) {
+      return {
+        'bg': const Color(0xFFFFF0F5),
+        'border': const Color(0xFFFFD8E6),
+        'text': const Color(0xFFD86A92),
+      };
+    }
+
     return {
       'bg': const Color(0xFFF4F6F8),
       'border': const Color(0xFFE5E7EB),
@@ -2110,56 +2291,35 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   Widget _buildFlowerColorSummaryBox(FlowerColorSummary color) {
-    return Container(
-      width: 62,
-      height: 58,
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF4C7),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFFFE08A),
-          width: 1,
-        ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showAssetImagePreview(
+        title: color.colorNameKo,
+        image: color.image,
+        fallbackIcon: Icons.local_florist_rounded,
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.72),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.asset(
-                _imageAssetPath(color.image),
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Icon(
-                  Icons.local_florist_rounded,
-                  size: 16,
-                  color: Color(0xFFB08968),
-                ),
+      child: Container(
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xC6FFF8E7),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Image.asset(
+              _imageAssetPath(color.image),
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.local_florist_rounded,
+                size: 16,
+                color: Color(0xFF7C6F57),
               ),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            color.colorNameKo,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF6B5B45),
-              height: 1.1,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2603,7 +2763,11 @@ class _GatheringScreenState extends State<GatheringScreen>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildCardImage(insect.image, Icons.bug_report),
+              _buildCardImage(
+                insect.image,
+                Icons.bug_report,
+                previewTitle: _displayInsectName(insect),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -2690,26 +2854,35 @@ class _GatheringScreenState extends State<GatheringScreen>
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 116,
-                      height: 116,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFFAF8),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
-                        ),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showAssetImagePreview(
+                        title: _displayPlantName(plant),
+                        image: plant.image,
+                        fallbackIcon: Icons.local_florist_rounded,
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Image.asset(
-                            _imageAssetPath(plant.image),
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Icon(
-                              Icons.local_florist,
-                              color: Colors.grey,
+                      child: Container(
+                        width: 116,
+                        height: 116,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFAF8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Image.asset(
+                              _imageAssetPath(plant.image),
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.local_florist_rounded,
+                                color: Colors.grey,
+                                size: 36,
+                              ),
                             ),
                           ),
                         ),
@@ -2786,7 +2959,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                             const SizedBox(height: 8),
                             if (plant.flowerColorSummaries.isNotEmpty)
                               SizedBox(
-                                height: 58,
+                                height: 34,
                                 child: SingleChildScrollView(
                                   scrollDirection: Axis.horizontal,
                                   physics: const BouncingScrollPhysics(),
@@ -2839,7 +3012,11 @@ class _GatheringScreenState extends State<GatheringScreen>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildCardImage(fish.image, Icons.set_meal_rounded),
+              _buildCardImage(
+                fish.image,
+                Icons.set_meal_rounded,
+                previewTitle: _displayName(fish),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -2972,7 +3149,11 @@ class _GatheringScreenState extends State<GatheringScreen>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildCardImage(bird.image, Icons.flutter_dash_rounded),
+              _buildCardImage(
+                bird.image,
+                Icons.flutter_dash_rounded,
+                previewTitle: _displayBirdName(bird),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -3076,31 +3257,45 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
 // 카드 내 이미지 박스
-  Widget _buildCardImage(String image, IconData fallbackIcon) {
-    return Container(
-      width: 110,
-      height: 110,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFAF8),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFFF8E7C).withOpacity(0.15),
-          width: 1,
-        ),
+  Widget _buildCardImage(
+      String image,
+      IconData fallbackIcon, {
+        String? previewTitle,
+      }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: previewTitle == null
+          ? null
+          : () => _showAssetImagePreview(
+        title: previewTitle,
+        image: image,
+        fallbackIcon: fallbackIcon,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-            child: Image.asset(
-              _imageAssetPath(image),
-              fit: BoxFit.contain,
-              alignment: Alignment.center,
-              errorBuilder: (c, e, s) => Icon(
-                fallbackIcon,
-                color: Colors.grey,
-                size: 36,
+      child: Container(
+        width: 110,
+        height: 110,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFAF8),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFFF8E7C).withOpacity(0.15),
+            width: 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              child: Image.asset(
+                _imageAssetPath(image),
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
+                errorBuilder: (c, e, s) => Icon(
+                  fallbackIcon,
+                  color: Colors.grey,
+                  size: 36,
+                ),
               ),
             ),
           ),
@@ -3146,6 +3341,110 @@ class _GatheringScreenState extends State<GatheringScreen>
           ),
         ),
       ],
+    );
+  }
+
+  void _showAssetImagePreview({
+    required String title,
+    required String image,
+    required IconData fallbackIcon,
+  }) {
+    final String imagePath = _imageAssetPath(image);
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'preview',
+      barrierColor: Colors.black.withOpacity(0.4),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (_, __, ___) {
+        return SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.none,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: 1,
+                        child: Image.asset(
+                          imagePath,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Icon(
+                            fallbackIcon,
+                            color: Colors.white.withOpacity(0.85),
+                            size: 72,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 82,
+                        right: 82,
+                        bottom: -48,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.14),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.22),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                title,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13.2,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF2D3436),
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      transitionBuilder: (_, animation, __, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.97, end: 1.0).animate(animation),
+            child: child,
+          ),
+        );
+      },
     );
   }
 

@@ -1540,11 +1540,138 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     }
   }
 
-  // 2. [교정] 레시피 카드 내 판매가 위치 (채집 탭 레이아웃 이식)
+  void _showCookingImagePreview({
+    required String title,
+    required Widget imageWidget,
+  }) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'preview',
+      barrierColor: Colors.black.withOpacity(0.4),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (_, __, ___) {
+        return SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 20,
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.none,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: 1,
+                        child: imageWidget,
+                      ),
+                      Positioned(
+                        left: 82,
+                        right: 82,
+                        bottom: -48,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.14),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.22),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                title,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13.2,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF2D3436),
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      transitionBuilder: (_, animation, __, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.97, end: 1.0).animate(animation),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildRecipeCard(Gourmet item) {
     final isFavorite = _favoriteIds.contains(item.id);
     final isHighlighted = _highlightedId == item.id;
     final recipeImagePath = _resolveIngredientImagePath(item.image);
+
+    Widget recipeImageWidget({
+      double padding = 8,
+      Color iconColor = Colors.grey,
+      double iconSize = 28,
+    }) {
+      return Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: padding,
+          vertical: padding,
+        ),
+        child: item.image != null && item.image!.trim().isNotEmpty
+            ? Image.asset(
+          recipeImagePath,
+          fit: BoxFit.contain,
+          alignment: Alignment.center,
+          errorBuilder: (c, e, s) => Icon(
+            Icons.restaurant_menu,
+            color: iconColor,
+            size: iconSize,
+          ),
+        )
+            : Icon(
+          Icons.restaurant_menu,
+          color: iconColor,
+          size: iconSize,
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1584,40 +1711,32 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 116,
-                      height: 116,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFFAF8),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showCookingImagePreview(
+                        title: _displayRecipeName(item),
+                        imageWidget: Center(
+                          child: recipeImageWidget(
+                            padding: 18,
+                            iconColor: Colors.white.withOpacity(0.85),
+                            iconSize: 72,
+                          ),
                         ),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          alignment: Alignment.center,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 8,
-                            ),
-                            child: item.image != null &&
-                                item.image!.trim().isNotEmpty
-                                ? Image.asset(
-                              recipeImagePath,
-                              fit: BoxFit.contain,
-                              alignment: Alignment.center,
-                              errorBuilder: (c, e, s) => const Icon(
-                                Icons.restaurant_menu,
-                                color: Colors.grey,
-                              ),
-                            )
-                                : const Icon(
-                              Icons.restaurant_menu,
-                              color: Colors.grey,
-                            ),
+                      child: Container(
+                        width: 116,
+                        height: 116,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFAF8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Center(
+                            child: recipeImageWidget(),
                           ),
                         ),
                       ),
@@ -1791,6 +1910,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     final String typeLabel = isLucky
         ? '행운상점 구매'
         : (isShopItem ? '마시모 구매' : '작물');
+
     final int purchasePrice = _shopPurchasePrice(item.prices);
 
     return Padding(
@@ -1832,24 +1952,38 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 88,
-                        height: 88,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFAF8),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: const Color(0xFFFF8E7C).withOpacity(0.15),
-                            width: 1,
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _showCookingImagePreview(
+                          title: item.nameKo,
+                          imageWidget: Center(
+                            child: _buildIngredientImage(
+                              ingredientNameKo: item.nameKo,
+                              imagePath: item.image,
+                              padding: 18,
+                              iconSize: 72,
+                            ),
                           ),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: _buildIngredientImage(
-                            ingredientNameKo: item.nameKo,
-                            imagePath: item.image,
-                            padding: 8,
-                            iconSize: 28,
+                        child: Container(
+                          width: 88,
+                          height: 88,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFAF8),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                              width: 1,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: _buildIngredientImage(
+                              ingredientNameKo: item.nameKo,
+                              imagePath: item.image,
+                              padding: 8,
+                              iconSize: 28,
+                            ),
                           ),
                         ),
                       ),
@@ -3007,7 +3141,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _pendingSearchItem = null;
     _highlightedId = null;
     _selectedFilter = '전체';
-    _selectedSort = '이름순';
+    _selectedSort = '레벨순';
 
     if (_searchController.text.isNotEmpty) {
       _searchController.clear();

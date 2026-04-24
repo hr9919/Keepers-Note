@@ -5464,12 +5464,15 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
 
-    // Column 내부에서 제목 제거하고 PageView 영역만 남김
+    final media = MediaQuery.of(context);
+    final bool isTablet = media.size.shortestSide >= 600;
+    final double eventBannerHeight = isTablet ? 230 : 170;
+
     return Column(
       children: [
         const SizedBox(height: 4),
         SizedBox(
-          height: 170,
+          height: eventBannerHeight,
           child: PageView.builder(
             controller: _eventPageController,
             itemCount: 10000,

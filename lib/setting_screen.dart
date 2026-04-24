@@ -358,7 +358,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ]),
                               const SizedBox(height: 20),
                               _buildSnackSection('이용 안내', [
-                                _buildSnackRowItem('앱 버전', trailingText: '1.0.0'),
+                                _buildSnackRowItem('앱 버전', trailingText: '1.0.2'),
                                 _buildSnackRowItem(
                                   '버그 리포트 보내기',
                                   isLink: true,
@@ -391,10 +391,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // 상단 헤더 (배경 사진)
   Widget _buildModernHeader() {
+    const double headerHeight = 240;
+    const double cardOverlap = 45;
+    const double profileRadius = 58;
+
     return GestureDetector(
-      onTap: () => _pickAndUploadImage(false),
+      behavior: HitTestBehavior.opaque,
+      onTapUp: (details) {
+        final size = MediaQuery.of(context).size;
+
+        final Offset profileCenter = Offset(
+          size.width / 2,
+          headerHeight - cardOverlap,
+        );
+
+        final double distance =
+            (details.localPosition - profileCenter).distance;
+
+        if (distance <= profileRadius) {
+          _pickAndUploadImage(true); // 프로필 사진 우선
+        } else {
+          _pickAndUploadImage(false); // 배경 사진
+        }
+      },
       child: Container(
-        height: 240,
+        height: headerHeight,
         width: double.infinity,
         decoration: BoxDecoration(
           color: snackBg,
@@ -405,15 +426,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             as ImageProvider,
             fit: BoxFit.cover,
           ),
-          borderRadius:
-          const BorderRadius.vertical(bottom: Radius.circular(40)),
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(40),
+          ),
         ),
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Colors.black.withOpacity(0.15), Colors.transparent],
+              colors: [
+                Colors.black.withOpacity(0.15),
+                Colors.transparent,
+              ],
             ),
           ),
         ),
@@ -470,12 +495,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: Color(0xFFF1F2F6),
                   thickness: 1.2,
                 ),
-                _buildSnackRowItem(
-                  '푸시 알림 설정',
-                  onTap: () => _setPushEnabled(!_isPushEnabled),
-                  trailing: _buildCustomSwitch(
-                    _isPushEnabled,
-                    onChanged: _setPushEnabled,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            '푸시 알림 설정',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF2D3436),
+                            ),
+                          ),
+                          const Spacer(),
+                          _buildCustomSwitch(
+                            _isPushEnabled,
+                            onChanged: _setPushEnabled,
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 2), // 👈 간격 최소화
+
+                      const Text(
+                        '좋아요 · 댓글 알림',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFFB8C0CC),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -1266,12 +1319,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Center(
       child: GestureDetector(
         onTap: _showWithdrawDialog,
-        child: const Text(
+        child: Text(
           '회원탈퇴',
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12,
-            color: Color(0xFFB0B8C1),
+            color: Color(0xFF9AA4B2),
+            fontWeight: FontWeight.w600,
             decoration: TextDecoration.underline,
+            decorationColor: Color(0xFF9AA4B2),
+            decorationThickness: 1.2,
+            height: 1.4, //
           ),
         ),
       ),

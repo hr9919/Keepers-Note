@@ -104,11 +104,25 @@ class _TipGuideScreenState extends State<TipGuideScreen> {
                   isExpanded: _expandedIndexes.contains(4),
                   onTap: () => _toggleExpanded(4),
                   emoji: '🐾',
-                  title: '애완동물',
-                  summary: '애완동물 등록·관리 및 간식 실험실 기능',
+                  title: '반려동물 관리 / 도감',
+                  summary: '반려동물 관리·도감 및 간식 실험실 기능',
                   details: const [
                     '애완동물을 등록하고 관리할 수 있어요.',
                     '최애 간식을 찾기 위한 간식 실험실 기능을 사용할 수 있어요.',
+                    '고양이와 강아지 도감에서 종류 정보를 확인할 수 있어요.',
+                  ],
+                ),
+                _ExpandableGuideCard(
+                  isExpanded: _expandedIndexes.contains(5),
+                  onTap: () => _toggleExpanded(5),
+                  emoji: '💬',
+                  title: '미니 커뮤니티',
+                  summary: '가구 배치, 코디, 공략, 반려동물 공유',
+                  details: const [
+                    '다른 타운키퍼들과 게시글로 소통할 수 있어요.',
+                    '가구 배치, 코디, 공략, 반려동물 사진 등을 공유할 수 있어요.',
+                    '좋아요, 댓글, 알림 기능으로 편하게 소통할 수 있어요.',
+                    '팔로워 전용 글로 공개 범위를 조절할 수 있어요.',
                   ],
                 ),
 
@@ -132,17 +146,6 @@ class _TipGuideScreenState extends State<TipGuideScreen> {
                   badgeText: '준비중',
                 ),
                 _ExpandableGuideCard(
-                  isExpanded: _expandedIndexes.contains(6),
-                  onTap: () => _toggleExpanded(6),
-                  emoji: '💬',
-                  title: '미니 커뮤니티',
-                  summary: '가구 배치 및 코디 공유',
-                  details: const [
-                    '가구 배치와 코디를 가볍게 자랑할 수 있는 미니 커뮤니티 기능을 준비 중이에요.',
-                  ],
-                  badgeText: '준비중',
-                ),
-                _ExpandableGuideCard(
                   isExpanded: _expandedIndexes.contains(7),
                   onTap: () => _toggleExpanded(7),
                   emoji: '⏰',
@@ -154,19 +157,6 @@ class _TipGuideScreenState extends State<TipGuideScreen> {
                   ],
                   badgeText: '준비중',
                 ),
-                _ExpandableGuideCard(
-                  isExpanded: _expandedIndexes.contains(8),
-                  onTap: () => _toggleExpanded(8),
-                  emoji: '🐶',
-                  title: '애완동물 도감',
-                  summary: '고양이 / 강아지 데이터 수집 중',
-                  details: const [
-                    '고양이와 강아지 종류 데이터가 모이면 도감 기능이 추가 될 예정이에요.',
-                    '성격 데이터도 추가될 예정이에요.',
-                  ],
-                  badgeText: '준비중',
-                ),
-
                 const SizedBox(height: 80),
               ],
             ),

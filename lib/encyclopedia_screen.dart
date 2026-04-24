@@ -2279,11 +2279,10 @@ class _AchievementPressableCardState extends State<_AchievementPressableCard> {
             ),
             boxShadow: [
               BoxShadow(
-                color: _isPressed
-                    ? accent.withOpacity(0.14)
-                    : Colors.black.withOpacity(0.05),
-                blurRadius: _isPressed ? 16 : 12,
-                offset: Offset(0, _isPressed ? 6 : 4),
+                color: accent.withOpacity(_isPressed ? 0.10 : 0.06),
+                blurRadius: _isPressed ? 22 : 18,
+                spreadRadius: -2,
+                offset: Offset(0, _isPressed ? 8 : 6),
               ),
             ],
           ),

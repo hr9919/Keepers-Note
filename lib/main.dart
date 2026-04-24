@@ -19,6 +19,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
 
+String? _lastHandledDeepLinkKey;
+DateTime? _lastHandledDeepLinkAt;
+
 const AndroidNotificationChannel _defaultNotificationChannel =
 AndroidNotificationChannel(
   'keepers_note_default_channel',
@@ -130,11 +133,26 @@ Future<void> _showForegroundLocalNotification(RemoteMessage message) async {
 }
 
 void _navigateToDeepLink(Uri uri) {
+  final now = DateTime.now();
+  final key = uri.toString();
+
+  if (_lastHandledDeepLinkKey == key &&
+      _lastHandledDeepLinkAt != null &&
+      now.difference(_lastHandledDeepLinkAt!) < const Duration(seconds: 2)) {
+    debugPrint('중복 딥링크 무시: $uri');
+    return;
+  }
+
+  _lastHandledDeepLinkKey = key;
+  _lastHandledDeepLinkAt = now;
+
   final navigator = navigatorKey.currentState;
   if (navigator == null) {
     _initialPushDeepLink = uri;
     return;
   }
+
+  _initialPushDeepLink = null;
 
   navigator.pushAndRemoveUntil(
     MaterialPageRoute(
@@ -246,21 +264,19 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  try {
+    await _configureLocalNotifications();
+    await _configureFirebaseMessaging();
+  } catch (e, s) {
+    debugPrint('push init error: $e');
+    debugPrint('$s');
+  }
+
   KakaoSdk.init(
     nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0',
   );
 
   runApp(const KeepersNoteApp());
-
-  Future.microtask(() async {
-    try {
-      await _configureLocalNotifications();
-      await _configureFirebaseMessaging();
-    } catch (e, s) {
-      debugPrint('post init error: $e');
-      debugPrint('$s');
-    }
-  });
 }
 
 class KeepersNoteApp extends StatelessWidget {
@@ -421,11 +437,29 @@ class _SplashScreenState extends State<SplashScreen>
 
       final String? target = uri.queryParameters['target'];
       final String? postId = uri.queryParameters['postId'];
+      final String? commentId = uri.queryParameters['commentId'];
+      final String? notificationId = uri.queryParameters['notificationId'];
 
       if (target == 'community_post' && postId != null) {
-        final converted = Uri.parse(
-          'https://keepersnote.app/community/post/$postId',
+        final query = <String, String>{
+          'target': 'community_post',
+          'postId': postId,
+        };
+
+        if (commentId != null && commentId.isNotEmpty) {
+          query['commentId'] = commentId;
+        }
+
+        if (notificationId != null && notificationId.isNotEmpty) {
+          query['notificationId'] = notificationId;
+        }
+
+        final converted = Uri.https(
+          'keepersnote.app',
+          '/community/post/$postId',
+          query,
         );
+
         debugPrint('카카오 공유 링크 변환: $converted');
         _pendingDeepLink = converted;
       }

@@ -98,7 +98,9 @@ class PetCatalogVariant {
       id: (json['id'] ?? '').toString(),
       isCat: false,
       breedId: (json['dogTypeId'] ?? '').toString(),
-      breedName: (json['dogTypeNameKo'] ?? json['dogTypeId'] ?? '').toString(),
+      breedName: _normalizeDogBreedName(
+        (json['dogTypeNameKo'] ?? json['dogTypeId'] ?? '').toString(),
+      ),
       colorId: (json['colorId'] ?? '').toString(),
       colorName: (json['colorNameKo'] ?? json['colorId'] ?? '').toString(),
       eyeId: (json['eyeId'] ?? '').toString(),
@@ -119,6 +121,29 @@ class PetCatalogVariant {
       fixedEyeColorId: json['fixedEyeColorId']?.toString(),
       fixedEyeColorNameKo: json['fixedEyeColorNameKo']?.toString(),
     );
+  }
+
+  static String _normalizeDogBreedName(String value) {
+    final raw = value.trim();
+    final key = raw.toLowerCase().replaceAll(' ', '').replaceAll('_', '-');
+
+    switch (key) {
+      case 'golden-retriever':
+      case 'goldenretriever':
+      case '골든리트리버':
+        return '골든 리트리버';
+
+      case 'labrador-retriever':
+      case 'labradorretriever':
+      case 'labrador':
+      case 'retriever':
+      case '리트리버':
+      case '래브라도리트리버':
+        return '래브라도 리트리버';
+
+      default:
+        return raw;
+    }
   }
 
   String get miniLabel {
@@ -984,7 +1009,15 @@ class _PetScreenState extends State<PetScreen>
       return color.isEmpty ? '선택 안됨' : color;
     }
 
-    final variantList = pet.isCat ? _catVariants : _dogVariants;
+    final variantList = pet.isCat
+        ? <PetCatalogVariant>[
+      ..._catVariants,
+      ..._catPickerVariants,
+    ]
+        : <PetCatalogVariant>[
+      ..._dogVariants,
+      ..._dogPickerVariants,
+    ];
 
     try {
       final variant = variantList.firstWhere((v) => v.id == variantId);
@@ -997,37 +1030,65 @@ class _PetScreenState extends State<PetScreen>
       if (breed.isEmpty && color.isEmpty) return '선택 안됨';
       if (breed.isEmpty) return color;
 
-      final normalizedBreed = breed.replaceAll(' ', '');
-      final normalizedColor = color.replaceAll(' ', '');
+      final normalizedBreed = breed.replaceAll(' ', '').replaceAll('_', '');
+      final normalizedColor = color.replaceAll(' ', '').replaceAll('_', '');
 
-      if (normalizedColor.isNotEmpty &&
-          normalizedBreed.contains(normalizedColor)) {
+      String normalizedBreedLabel() {
+        if (normalizedBreed.contains('러시안블루')) {
+          return '러시안 블루';
+        }
+        if (normalizedBreed.contains('골든리트리버') ||
+            normalizedBreed.toLowerCase().contains('goldenretriever')) {
+          return '골든 리트리버';
+        }
+        if (normalizedBreed.contains('래브라도리트리버') ||
+            normalizedBreed.toLowerCase().contains('labradorretriever') ||
+            normalizedBreed.toLowerCase() == 'labrador' ||
+            normalizedBreed.toLowerCase() == 'retriever') {
+          return '래브라도';
+        }
         return breed;
       }
 
-      const fixedBreedOnlyKeywords = [
+      final displayBreed = normalizedBreedLabel();
+      final displayBreedKey = displayBreed.replaceAll(' ', '');
+
+      // 래브라도 리트리버는 단색 처리하지 않고, 카드에 색 + 종 이름으로 표시
+      if (!pet.isCat && displayBreedKey.contains('래브라도리트리버')) {
+        return color.isEmpty ? displayBreed : '$color $displayBreed';
+      }
+
+      const catSingleColorBreedKeywords = [
         '올블랙',
         '올화이트',
         '올그레이',
         '올브라운',
         '러시안블루',
+        '브리티시숏헤어',
       ];
 
-      if (fixedBreedOnlyKeywords.any((e) => normalizedBreed.contains(e))) {
-        if (normalizedBreed.contains('러시안블루')) {
-          return '러시안 블루';
-        }
-        return breed;
+      const dogSingleColorBreedKeywords = [
+        '골든리트리버',
+      ];
+
+      final bool isSingleColorBreed = variant.isColorFixed ||
+          (pet.isCat
+              ? catSingleColorBreedKeywords
+              .any((e) => normalizedBreed.contains(e))
+              : dogSingleColorBreedKeywords
+              .any((e) => displayBreedKey.contains(e)));
+
+      // 단색 종은 무조건 종 이름만 표시
+      if (isSingleColorBreed) {
+        return displayBreed;
       }
 
-      if (normalizedBreed.contains('골든리트리버')) {
-        return '골든 리트리버';
-      }
-      if (normalizedBreed.contains('래브라도리트리버')) {
-        return '래브라도 리트리버';
+      if (normalizedColor.isNotEmpty &&
+          normalizedBreed.contains(normalizedColor)) {
+        return displayBreed;
       }
 
-      return color.isEmpty ? breed : '$color $breed';
+      return color.isEmpty ? displayBreed : '$color $displayBreed';
     } catch (_) {
       final color = (pet.color ?? '').trim();
       return color.isEmpty ? '선택 안됨' : color;
@@ -1328,8 +1389,9 @@ class _PetScreenState extends State<PetScreen>
 
   List<String> _availableEyeColorFilters({required bool isCat}) {
     final items = _currentVariantList(isCat)
-        .map((e) => (e.eyeColorNameKo ?? '미지정').trim())
+        .map((e) => (e.eyeColorNameKo ?? '').trim())
         .where((e) => e.isNotEmpty)
+        .where((e) => e != '미지정')
         .toSet()
         .toList()
       ..sort();
@@ -4080,13 +4142,13 @@ class _PetScreenState extends State<PetScreen>
                     errorBuilder: (_, __, ___) => const Icon(
                       Icons.favorite_rounded,
                       size: 22,
-                      color: Color(0xFFFFB938),
+                      color: Color(0xFFFF8E7C),
                     ),
                   )
                       : const Icon(
                     Icons.favorite_rounded,
                     size: 22,
-                    color: Color(0xFFFFB938),
+                    color: Color(0xFFFF8E7C),
                   ),
                 ),
                 const Positioned(
@@ -4095,7 +4157,7 @@ class _PetScreenState extends State<PetScreen>
                   child: Icon(
                     Icons.favorite_rounded,
                     size: 14,
-                    color: Color(0xFFFF6B81),
+                    color: Color(0xFFFF8E7C),
                   ),
                 ),
               ],
@@ -4179,54 +4241,84 @@ class _PetScreenState extends State<PetScreen>
     Color activeColor = const Color(0xFFFF8E7C),
     Color activeBgColor = const Color(0xFFFFF1EE),
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          width: 56,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: active ? activeBgColor : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: active
-                  ? activeColor.withOpacity(0.28)
-                  : const Color(0xFFEAECEF),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: active ? activeColor : const Color(0xFF98A2B3),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: active ? activeColor : const Color(0xFF98A2B3),
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        bool isPressed = false;
+
+        void setPressed(bool value) {
+          setLocalState(() => isPressed = value);
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => setPressed(true),
+          onTapCancel: () => setPressed(false),
+          onTapUp: (_) {
+            setPressed(false);
+            onTap();
+          },
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 95),
+            curve: Curves.easeOutCubic,
+            scale: isPressed ? 0.94 : 1.0,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              width: 56,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: active
+                    ? activeBgColor
+                    : isPressed
+                    ? const Color(0xFFF8FAFC)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: active
+                      ? activeColor.withOpacity(0.28)
+                      : isPressed
+                      ? const Color(0xFFD0D5DD)
+                      : const Color(0xFFEAECEF),
+                  width: 1,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: active
+                        ? activeColor.withOpacity(isPressed ? 0.08 : 0.12)
+                        : Colors.black.withOpacity(isPressed ? 0.015 : 0.03),
+                    blurRadius: isPressed ? 4 : 7,
+                    offset: Offset(0, isPressed ? 1 : 2),
+                  ),
+                ],
               ),
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedScale(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOutBack,
+                    scale: active ? 1.08 : 1.0,
+                    child: Icon(
+                      icon,
+                      size: 16,
+                      color: active ? activeColor : const Color(0xFF98A2B3),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: active ? activeColor : const Color(0xFF98A2B3),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -5855,13 +5947,22 @@ class _PetScreenState extends State<PetScreen>
             );
 
             final nextFavorites = Set<PetSnackChoice>.from(pet.favoriteSnacks);
+            final nextDisliked = Set<PetSnackChoice>.from(pet.dislikedSnacks);
+            final nextTried = Set<PetSnackChoice>.from(pet.triedSnacks);
+
             if (nextFavorites.contains(target)) {
               nextFavorites.remove(target);
             } else {
               nextFavorites.add(target);
+              nextDisliked.remove(target);
+              nextTried.add(target);
             }
 
-            final updatedPet = pet.copyWith(favoriteSnacks: nextFavorites);
+            final updatedPet = pet.copyWith(
+              favoriteSnacks: nextFavorites,
+              dislikedSnacks: nextDisliked,
+              triedSnacks: nextTried,
+            );
             await applyUpdatedPet(updatedPet);
           }
 
@@ -5872,13 +5973,22 @@ class _PetScreenState extends State<PetScreen>
             );
 
             final nextDisliked = Set<PetSnackChoice>.from(pet.dislikedSnacks);
+            final nextFavorites = Set<PetSnackChoice>.from(pet.favoriteSnacks);
+            final nextTried = Set<PetSnackChoice>.from(pet.triedSnacks);
+
             if (nextDisliked.contains(target)) {
               nextDisliked.remove(target);
             } else {
               nextDisliked.add(target);
+              nextFavorites.remove(target);
+              nextTried.add(target);
             }
 
-            final updatedPet = pet.copyWith(dislikedSnacks: nextDisliked);
+            final updatedPet = pet.copyWith(
+              favoriteSnacks: nextFavorites,
+              dislikedSnacks: nextDisliked,
+              triedSnacks: nextTried,
+            );
             await applyUpdatedPet(updatedPet);
           }
 
@@ -5892,39 +6002,72 @@ class _PetScreenState extends State<PetScreen>
             required Color inactiveColor,
             double size = 34,
           }) {
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(11),
-                onTap: onTap,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  width: size,
-                  height: size,
-                  decoration: BoxDecoration(
-                    color: selected ? activeBg : Colors.white,
-                    borderRadius: BorderRadius.circular(11),
-                    border: Border.all(
-                      color: selected ? activeBorder : const Color(0xFFE7E7E7),
-                      width: 1,
-                    ),
-                    boxShadow: selected
-                        ? [
-                      BoxShadow(
-                        color: activeColor.withOpacity(0.12),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+            return StatefulBuilder(
+              builder: (context, setButtonState) {
+                bool isPressed = false;
+
+                void setPressed(bool value) {
+                  setButtonState(() => isPressed = value);
+                }
+
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (_) => setPressed(true),
+                  onTapCancel: () => setPressed(false),
+                  onTapUp: (_) {
+                    setPressed(false);
+                    onTap();
+                  },
+                  child: AnimatedScale(
+                    duration: const Duration(milliseconds: 95),
+                    curve: Curves.easeOutCubic,
+                    scale: isPressed ? 0.90 : 1.0,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      width: size,
+                      height: size,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? activeBg
+                            : isPressed
+                            ? const Color(0xFFF8FAFC)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: selected
+                              ? activeBorder
+                              : isPressed
+                              ? const Color(0xFFD0D5DD)
+                              : const Color(0xFFE7E7E7),
+                          width: 1,
+                        ),
+                        boxShadow: selected
+                            ? [
+                          BoxShadow(
+                            color: activeColor.withOpacity(
+                              isPressed ? 0.08 : 0.14,
+                            ),
+                            blurRadius: isPressed ? 5 : 9,
+                            offset: Offset(0, isPressed ? 1 : 3),
+                          ),
+                        ]
+                            : null,
                       ),
-                    ]
-                        : null,
+                      child: AnimatedScale(
+                        duration: const Duration(milliseconds: 160),
+                        curve: Curves.easeOutBack,
+                        scale: selected ? 1.08 : 1.0,
+                        child: Icon(
+                          icon,
+                          size: 17,
+                          color: selected ? activeColor : inactiveColor,
+                        ),
+                      ),
+                    ),
                   ),
-                  child: Icon(
-                    icon,
-                    size: 17,
-                    color: selected ? activeColor : inactiveColor,
-                  ),
-                ),
-              ),
+                );
+              },
             );
           }
 
@@ -6026,8 +6169,8 @@ class _PetScreenState extends State<PetScreen>
                         icon: Icons.favorite_rounded,
                         label: '좋아해요',
                         value: favoriteLabel.isEmpty ? '아직 없음' : favoriteLabel,
-                        color: const Color(0xFFFFB545),
-                        bgColor: const Color(0xFFFFF7E8),
+                        color: const Color(0xFFFF8E7C),
+                        bgColor: const Color(0xFFFFF1EE),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -6036,8 +6179,8 @@ class _PetScreenState extends State<PetScreen>
                         icon: Icons.heart_broken_rounded,
                         label: '싫어해요',
                         value: dislikedLabel.isEmpty ? '아직 없음' : dislikedLabel,
-                        color: const Color(0xFFFF8A8A),
-                        bgColor: const Color(0xFFFFF1F1),
+                        color: const Color(0xFF98A2B3),
+                        bgColor: const Color(0xFFF2F4F7),
                       ),
                     ),
                   ],
@@ -6139,16 +6282,20 @@ class _PetScreenState extends State<PetScreen>
                           color: isHighlighted
                               ? const Color(0xFFFFF4E8)
                               : isFav
-                              ? const Color(0xFFFFFBF2)
+                              ? const Color(0xFFFFF1EE)
+                              : isDisliked
+                              ? const Color(0xFFF2F4F7)
                               : Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: isHighlighted
                                 ? const Color(0xFFFFC8A2)
                                 : isFav
-                                ? const Color(0xFFFFD67A)
+                                ? const Color(0xFFFFB8AE)
+                                : isDisliked
+                                ? const Color(0xFFD0D5DD)
                                 : isTried
-                                ? const Color(0xFFFFD8D1)
+                                ? const Color(0xFFFFD98A)
                                 : const Color(0xFFF0F0F0),
                             width: 1.2,
                           ),
@@ -6215,7 +6362,7 @@ class _PetScreenState extends State<PetScreen>
                                               vertical: 4,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFFFFF1D6),
+                                              color: const Color(0xFFFFE8E2),
                                               borderRadius: BorderRadius.circular(999),
                                             ),
                                             child: const Text(
@@ -6223,7 +6370,7 @@ class _PetScreenState extends State<PetScreen>
                                               style: TextStyle(
                                                 fontSize: 10,
                                                 fontWeight: FontWeight.w700,
-                                                color: Color(0xFFE0A100),
+                                                color: Color(0xFFFF8E7C),
                                               ),
                                             ),
                                           ),
@@ -6235,7 +6382,7 @@ class _PetScreenState extends State<PetScreen>
                                               vertical: 4,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFFFFE7E7),
+                                              color: const Color(0xFFEFF1F5),
                                               borderRadius: BorderRadius.circular(999),
                                             ),
                                             child: const Text(
@@ -6243,7 +6390,7 @@ class _PetScreenState extends State<PetScreen>
                                               style: TextStyle(
                                                 fontSize: 10,
                                                 fontWeight: FontWeight.w700,
-                                                color: Color(0xFFFF6B6B),
+                                                color: Color(0xFF667085),
                                               ),
                                             ),
                                           ),
@@ -6261,9 +6408,9 @@ class _PetScreenState extends State<PetScreen>
                                             ? Icons.check_rounded
                                             : Icons.check_outlined,
                                         selected: isTried,
-                                        activeColor: const Color(0xFFFF8E7C),
-                                        activeBg: const Color(0xFFFFF1EC),
-                                        activeBorder: const Color(0xFFFFD8CF),
+                                        activeColor: const Color(0xFFFFB545),
+                                        activeBg: const Color(0xFFFFF7E8),
+                                        activeBorder: const Color(0xFFFFD98A),
                                         inactiveColor: const Color(0xFFB5B5B5),
                                         size: 34,
                                       ),
@@ -6274,9 +6421,9 @@ class _PetScreenState extends State<PetScreen>
                                             ? Icons.favorite_rounded
                                             : Icons.favorite_border_rounded,
                                         selected: isFav,
-                                        activeColor: const Color(0xFFFFB545),
-                                        activeBg: const Color(0xFFFFF7E8),
-                                        activeBorder: const Color(0xFFFFD67A),
+                                        activeColor: const Color(0xFFFF8E7C),
+                                        activeBg: const Color(0xFFFFF1EE),
+                                        activeBorder: const Color(0xFFFFB8AE),
                                         inactiveColor: const Color(0xFFB5B5B5),
                                         size: 34,
                                       ),
@@ -6287,9 +6434,9 @@ class _PetScreenState extends State<PetScreen>
                                             ? Icons.heart_broken_rounded
                                             : Icons.heart_broken_outlined,
                                         selected: isDisliked,
-                                        activeColor: const Color(0xFFFF6B6B),
-                                        activeBg: const Color(0xFFFFF1F1),
-                                        activeBorder: const Color(0xFFFFD6D6),
+                                        activeColor: const Color(0xFF667085),
+                                        activeBg: const Color(0xFFF2F4F7),
+                                        activeBorder: const Color(0xFFD0D5DD),
                                         inactiveColor: const Color(0xFFB5B5B5),
                                         size: 34,
                                       ),

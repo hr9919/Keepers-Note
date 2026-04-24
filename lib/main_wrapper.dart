@@ -2715,30 +2715,43 @@ class _MainWrapperState extends State<MainWrapper> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _buildNavItem(
-                  index: 0,
-                  label: '홈',
-                  outlinedIcon: Icons.home_outlined,
-                  filledIcon: Icons.home_rounded,
+                Expanded(
+                  child: _buildNavItem(
+                    index: 0,
+                    label: '홈',
+                    outlinedIcon: Icons.home_outlined,
+                    filledIcon: Icons.home_rounded,
+                  ),
                 ),
-                _buildNavItem(
-                  index: 1,
-                  label: '채집',
-                  outlinedIcon: Icons.phishing_outlined,
-                  filledIcon: Icons.phishing_rounded,
+                Expanded(
+                  child: _buildNavItem(
+                    index: 1,
+                    label: '채집',
+                    outlinedIcon: Icons.phishing_outlined,
+                    filledIcon: Icons.phishing_rounded,
+                  ),
                 ),
-                const SizedBox(width: 90),
-                _buildNavItem(
-                  index: 3,
-                  label: '요리',
-                  outlinedIcon: Icons.soup_kitchen_outlined,
-                  filledIcon: Icons.soup_kitchen,
+
+                // 가운데 커뮤니티 버튼 자리
+                const Expanded(
+                  child: SizedBox.shrink(),
                 ),
-                _buildNavItem(
-                  index: 4,
-                  label: '펫',
-                  outlinedIcon: Icons.pets_outlined,
-                  filledIcon: Icons.pets,
+
+                Expanded(
+                  child: _buildNavItem(
+                    index: 3,
+                    label: '요리',
+                    outlinedIcon: Icons.soup_kitchen_outlined,
+                    filledIcon: Icons.soup_kitchen,
+                  ),
+                ),
+                Expanded(
+                  child: _buildNavItem(
+                    index: 4,
+                    label: '펫',
+                    outlinedIcon: Icons.pets_outlined,
+                    filledIcon: Icons.pets,
+                  ),
                 ),
               ],
             ),
@@ -3104,63 +3117,61 @@ class _MainWrapperState extends State<MainWrapper> {
     const Color selectedColor = Color(0xFFFF8E7C);
     const Color unselectedColor = Color(0xFF98A2B3);
 
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () async {
-          await _onMenuSelect(index);
-        },
-        child: Center(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.symmetric(
-              horizontal: isSelected ? 12 : 0,
-              vertical: isSelected ? 8 : 0,
-            ),
-            decoration: BoxDecoration(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () async {
+        await _onMenuSelect(index);
+      },
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            horizontal: isSelected ? 12 : 0,
+            vertical: isSelected ? 8 : 0,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Colors.white.withOpacity(0.92)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
               color: isSelected
-                  ? Colors.white.withOpacity(0.92)
+                  ? const Color(0xFFFFD8D2)
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFFFFD8D2)
-                    : Colors.transparent,
-                width: 1,
+              width: 1,
+            ),
+            boxShadow: isSelected
+                ? [
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(0.10),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              boxShadow: isSelected
-                  ? [
-                BoxShadow(
-                  color: const Color(0xFFFF8E7C).withOpacity(0.10),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-                  : [],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isSelected ? filledIcon : outlinedIcon,
-                  size: 22,
+            ]
+                : [],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isSelected ? filledIcon : outlinedIcon,
+                size: 22,
+                color: isSelected ? selectedColor : unselectedColor,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                   color: isSelected ? selectedColor : unselectedColor,
+                  height: 1.0,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                    color: isSelected ? selectedColor : unselectedColor,
-                    height: 1.0,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

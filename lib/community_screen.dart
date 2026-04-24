@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import 'community_uid_verification_screen.dart';
 import 'community_uid_admin_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'community_notice_screen.dart';
 
 class CommunityNotificationItem {
   final int id;
@@ -138,7 +139,7 @@ class CommunityScreen extends StatefulWidget {
   State<CommunityScreen> createState() => _CommunityScreenState();
 }
 
-enum CommunitySortType { latest, popular }
+enum CommunitySortType { latest, popular, comment }
 
 class CommunityPost {
   final int id;
@@ -485,6 +486,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   List<CommunityPost> _posts = <CommunityPost>[];
   List<CommunityTagItem> _tagItems = const <CommunityTagItem>[];
   final Map<int, List<CommunityComment>> _commentsByPostId = <int, List<CommunityComment>>{};
+  final List<CommunityNotice> _communityNotices = CommunityNotice.defaultNotices;
   @override
   void initState() {
     super.initState();
@@ -1039,7 +1041,11 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     try {
       final uri = Uri.parse('$_baseUrl/api/community/posts').replace(
         queryParameters: <String, String>{
-          'sort': _sortType == CommunitySortType.popular ? 'POPULAR' : 'LATEST',
+          'sort': _sortType == CommunitySortType.popular
+              ? 'POPULAR'
+              : _sortType == CommunitySortType.comment
+              ? 'COMMENT'
+              : 'LATEST',
           if (!_selectedTags.contains('전체') && _selectedTags.isNotEmpty)
             'tag': _selectedTags.join(','),
           if (_showLikedOnly) 'likedOnly': 'true',
@@ -1341,6 +1347,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   Future<void> _onRefresh() => _fetchPosts();
 
   void _handleScroll() {
+    if (!_scrollController.hasClients || _scrollController.positions.length != 1) {
+      return;
+    }
+
     final show = _scrollController.offset > 160;
     if (show != _showTopButton) {
       setState(() {
@@ -1957,6 +1967,11 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     );
   }
 
+  bool _shouldShowAdminPickStyle(CommunityPost post) {
+    return post.isAdminPick &&
+        (post.tags.contains('꿀팁 영상') || post.tags.contains('공략'));
+  }
+
   void _openImageViewer(CommunityPost post, {int initialIndex = 0}) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -2086,6 +2101,120 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   }
 
   List<CommunityPost> _filteredPosts() => List<CommunityPost>.from(_posts);
+
+
+  void _openCommunityNoticeScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CommunityNoticeScreen(notices: _communityNotices),
+      ),
+    );
+  }
+
+  Widget _buildCommunityNoticeHeader() {
+    if (_communityNotices.isEmpty) return const SizedBox.shrink();
+    final notice = _communityNotices.first;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          splashColor: const Color(0xFFFFD9D1).withOpacity(0.28),
+          highlightColor: const Color(0xFFFFEEE9).withOpacity(0.55),
+          onTap: _openCommunityNoticeScreen,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.90),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFFFDDD4), width: 1.1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF8E7C).withOpacity(0.09),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFFFFF3EE), Color(0xFFFFE1D8)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFFFD5CA)),
+                      ),
+                      child: const Icon(Icons.campaign_rounded, size: 21, color: Color(0xFFFF8E7C)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6), // 🔥 핵심
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center, // 🔥 중앙 정렬
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              notice.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14.2,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF3E332F),
+                                letterSpacing: -0.15,
+                                height: 1.1,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              notice.summary,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11.8,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF8C7C74),
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8F5),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFFFE1D9)),
+                      ),
+                      child: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFFFF8E7C)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2325,6 +2454,14 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                           _sortType == CommunitySortType.popular,
                               () {
                             setState(() => _sortType = CommunitySortType.popular);
+                            _fetchPosts();
+                          },
+                        ),
+                        _buildSortChip(
+                          '댓글순',
+                          _sortType == CommunitySortType.comment,
+                              () {
+                            setState(() => _sortType = CommunitySortType.comment);
                             _fetchPosts();
                           },
                         ),
@@ -3212,8 +3349,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                               onTap: () async {
                                 await _markNotificationRead(item.id);
 
-                                final updated =
-                                sheetNotifications.map((e) {
+                                final updated = sheetNotifications.map((e) {
                                   if (e.id == item.id) {
                                     return CommunityNotificationItem(
                                       id: e.id,
@@ -3236,9 +3372,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                 if (mounted) {
                                   setState(() {
                                     _notifications = updated;
-                                    _unreadNotificationCount = updated
-                                        .where((e) => !e.isRead)
-                                        .length;
+                                    _unreadNotificationCount =
+                                        updated.where((e) => !e.isRead).length;
                                   });
                                 }
 
@@ -3249,48 +3384,36 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                 if (!mounted) return;
 
                                 if (item.type == 'uid_request') {
-                                  if (!mounted) return;
-
                                   await Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          CommunityUidAdminScreen(
-                                            userId: widget.userId ?? '',
-                                          ),
+                                      builder: (_) => CommunityUidAdminScreen(
+                                        userId: widget.userId ?? '',
+                                      ),
                                     ),
                                   );
                                   return;
                                 }
 
                                 if (item.type == 'uid_approved') {
-                                  if (!mounted) return;
-                                  _showSnackBar(
-                                    'UID 인증이 완료되었어요. 이제 글쓰기를 이용할 수 있어요.',
-                                  );
+                                  _showSnackBar('UID 인증이 완료되었어요. 이제 글쓰기를 이용할 수 있어요.');
                                   return;
                                 }
 
                                 if (item.type == 'uid_rejected') {
-                                  if (!mounted) return;
-
-                                  final bool? requested =
-                                  await Navigator.push<bool>(
+                                  final bool? requested = await Navigator.push<bool>(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          CommunityUidVerificationScreen(
-                                            userId: widget.userId ?? '',
-                                          ),
+                                      builder: (_) => CommunityUidVerificationScreen(
+                                        userId: widget.userId ?? '',
+                                      ),
                                     ),
                                   );
 
                                   if (!mounted) return;
 
                                   if (requested == true) {
-                                    _showSnackBar(
-                                      'UID 인증 요청이 다시 접수되었어요.',
-                                    );
+                                    _showSnackBar('UID 인증 요청이 다시 접수되었어요.');
                                   }
                                   return;
                                 }
@@ -3310,6 +3433,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                   if (target == null) {
                                     await _fetchPosts();
                                     if (!mounted) return;
+
                                     for (final post in _posts) {
                                       if (post.id == item.targetId) {
                                         target = post;
@@ -3319,11 +3443,19 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                   }
 
                                   if (target != null && mounted) {
-                                    _didOpenInitialPost = false;
-                                    _pendingHighlightCommentId = item.targetCommentId;
+
                                     await Future.delayed(const Duration(milliseconds: 60));
                                     if (!mounted) return;
-                                    await _openPostDetailSheet(target);
+
+                                    await _openPostDetailSheet(
+                                      target,
+                                      initialHighlightCommentId: item.targetCommentId,
+                                    );
+
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _pendingHighlightCommentId = null;
+                                    });
                                   }
                                 }
                               },
@@ -3555,7 +3687,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       return ListView(
         controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 132),
-        children: <Widget>[_buildErrorState()],
+        children: <Widget>[
+          _buildCommunityNoticeHeader(),
+          _buildErrorState(),
+        ],
       );
     }
 
@@ -3566,6 +3701,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       ),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 132),
       children: <Widget>[
+        _buildCommunityNoticeHeader(),
         if (posts.isEmpty)
           _buildEmptyState() // 위에서 만든 height가 지정된 위젯이 들어감
         else
@@ -3579,7 +3715,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       return ListView(
         controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 132),
-        children: <Widget>[_buildErrorState()],
+        children: <Widget>[
+          _buildCommunityNoticeHeader(),
+          _buildErrorState(),
+        ],
       );
     }
 
@@ -3590,7 +3729,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
           parent: BouncingScrollPhysics(),
         ),
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 132),
-        children: <Widget>[_buildEmptyState()],
+        children: <Widget>[
+          _buildCommunityNoticeHeader(),
+          _buildEmptyState(),
+        ],
       );
     }
 
@@ -3637,33 +3779,52 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       }
     }
 
+    final bool isTablet = MediaQuery.of(context).size.shortestSide >= 600;
+
     return SingleChildScrollView(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 132),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: <Widget>[
-          Expanded(
-            child: Column(
-              children: leftColumn
-                  .asMap()
-                  .entries
-                  .map<Widget>((e) => _buildGridCard(e.value, e.key))
-                  .toList(),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              children: rightColumn
-                  .asMap()
-                  .entries
-                  .map<Widget>((e) => _buildGridCard(e.value, e.key + 1))
-                  .toList(),
-            ),
+          _buildCommunityNoticeHeader(),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  children: leftColumn
+                      .asMap()
+                      .entries
+                      .map<Widget>(
+                        (e) => _buildGridCard(
+                      e.value,
+                      e.key,
+                      isTablet: isTablet,
+                    ),
+                  )
+                      .toList(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  children: rightColumn
+                      .asMap()
+                      .entries
+                      .map<Widget>(
+                        (e) => _buildGridCard(
+                      e.value,
+                      e.key + 1,
+                      isTablet: isTablet,
+                    ),
+                  )
+                      .toList(),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -3695,8 +3856,23 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     return score;
   }
 
-  double _gridAspectRatioForIndex(int index, CommunityPost post) {
-    const baseRatios = <double>[
+  double _gridAspectRatioForIndex(
+      int index,
+      CommunityPost post, {
+        bool isTablet = false,
+      }) {
+    final baseRatios = isTablet
+        ? <double>[
+      0.48,
+      0.66,
+      0.86,
+      1.12,
+      1.36,
+      0.56,
+      1.24,
+      0.74,
+    ]
+        : <double>[
       0.62,
       0.74,
       0.88,
@@ -3710,20 +3886,23 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     double seed = baseRatios[(post.id + index) % baseRatios.length];
 
     if (post.hasYoutube) {
-      return 0.68;
+      return isTablet ? 0.56 : 0.68;
     }
 
     if (post.imageUrls.length >= 3) {
-      seed -= 0.12;
+      seed -= isTablet ? 0.18 : 0.12;
     } else if (post.imageUrls.length == 2) {
-      seed -= 0.06;
+      seed -= isTablet ? 0.10 : 0.06;
     }
 
     if (post.body.length > 70) {
-      seed -= 0.08;
+      seed -= isTablet ? 0.12 : 0.08;
     }
 
-    return seed.clamp(0.58, 1.38);
+    return seed.clamp(
+      isTablet ? 0.44 : 0.58,
+      isTablet ? 1.48 : 1.38,
+    );
   }
 
   Widget _buildPostCard(CommunityPost post) {
@@ -3785,7 +3964,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                           ),
                                         ),
                                       ),
-                                      if (post.isAdminPick) ...[
+                                      if (_shouldShowAdminPickStyle(post)) ...[
                                         const SizedBox(width: 6),
                                         _buildVerifiedBadge(),
                                       ],
@@ -3812,8 +3991,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                       baseUrl: _baseUrl,
                       showLeadingTag: false,
                       useIntrinsicAspectRatio: true,
-                      onTapImage: (index) {
-                        _openImageViewer(post, initialIndex: index);
+                      onTapImage: (_) {
+                        _openPostDetailSheet(post);
                       },
                     ),
                   ),
@@ -3897,7 +4076,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
 
   Color _postBorderColor(CommunityPost post) {
-    if (post.isAdminPick) return const Color(0xFFFFB3A4);
+    if (_shouldShowAdminPickStyle(post)) return const Color(0xFFFFB3A4);
     if (post.mine) return const Color(0xFFF1E4DE);
     if (post.isFollowingAuthor) return const Color(0xFFF3D36B);
     return const Color(0xFFCFE59A);
@@ -4571,9 +4750,17 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     );
   }
 
-  Widget _buildGridCard(CommunityPost post, int index) {
+  Widget _buildGridCard(
+      CommunityPost post,
+      int index, {
+        bool isTablet = false,
+      }) {
     final bool liked = post.likedByMe;
-    final double aspectRatio = _gridAspectRatioForIndex(index, post);
+    final double aspectRatio = _gridAspectRatioForIndex(
+      index,
+      post,
+      isTablet: isTablet,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -4612,8 +4799,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                           fixedAspectRatio: aspectRatio,
                           showLeadingTag: false,
                           useIntrinsicAspectRatio: false,
-                          onTapImage: (imageIndex) {
-                            _openImageViewer(post, initialIndex: imageIndex);
+                          onTapImage: (_) {
+                            _openPostDetailSheet(post);
                           },
                         ),
                         Positioned(
@@ -4651,7 +4838,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                               : const SizedBox.shrink(),
                         ),
                       ),
-                      if (post.isAdminPick) _buildVerifiedBadge(),
+                      if (_shouldShowAdminPickStyle(post)) _buildVerifiedBadge(),
                     ],
                   ),
                 ),
@@ -4666,7 +4853,21 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   Future<bool> _openPostDetailSheet(
       CommunityPost post, {
         bool focusCommentInput = false,
+        int? initialHighlightCommentId,
       }) async {
+    if (_isPostDetailSheetOpen) {
+      debugPrint('게시글 바텀시트 중복 열기 방지: ${post.id}');
+      return false;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isPostDetailSheetOpen = true;
+      });
+    } else {
+      _isPostDetailSheetOpen = true;
+    }
+
     final TaggingTextController commentController = TaggingTextController();
     final FocusNode commentFocusNode = FocusNode();
     final ScrollController sheetScrollController = ScrollController();
@@ -4736,7 +4937,9 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
     commentFocusNode.addListener(handleCommentFocusChange);
 
-    final int? initialHighlightCommentId = _pendingHighlightCommentId;
+    final int? resolvedInitialHighlightCommentId =
+        initialHighlightCommentId ?? _pendingHighlightCommentId;
+
     _pendingHighlightCommentId = null;
 
     CommunityPost detailPost = post;
@@ -4745,18 +4948,12 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     Future<List<CommunityComment>> commentsFuture = _fetchComments(post.id);
     CommunityComment? replyTarget;
     bool localSubmitting = false;
-    int? highlightedCommentId = initialHighlightCommentId;
+    int? highlightedCommentId = resolvedInitialHighlightCommentId;
     bool highlightVisible = true;
     Timer? highlightTimer;
     final Map<int, GlobalKey> commentKeys = <int, GlobalKey>{};
     bool didRunInitialHighlight = false;
     bool isRunningInitialHighlight = false;
-
-    if (mounted) {
-      setState(() {
-        _isPostDetailSheetOpen = true;
-      });
-    }
 
     try {
       await showModalBottomSheet<void>(
@@ -4824,25 +5021,30 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
               }
 
               Future<void> refreshComments() async {
+                final future = _fetchComments(detailPost.id);
+
                 setSheetState(() {
-                  commentsFuture = _fetchComments(detailPost.id);
+                  commentsFuture = future;
                   didRunInitialHighlight = false;
                 });
 
-                final comments = await commentsFuture;
-                _commentsByPostId[detailPost.id] = comments;
+                final comments = await future;
 
-                if (context.mounted) {
-                  setSheetState(() {
-                    detailPost = detailPost.copyWith(commentCount: comments.length);
-                  });
-                }
+                if (!context.mounted || !sheetAlive || isSheetClosing) return;
+
+                _commentsByPostId[detailPost.id] = List<CommunityComment>.from(comments);
+
+                setSheetState(() {
+                  commentsFuture = Future<List<CommunityComment>>.value(
+                    List<CommunityComment>.from(comments),
+                  );
+                  detailPost = detailPost.copyWith(commentCount: comments.length);
+                });
 
                 final index = _posts.indexWhere((e) => e.id == detailPost.id);
                 if (index >= 0 && mounted) {
                   setState(() {
-                    _posts[index] =
-                        _posts[index].copyWith(commentCount: comments.length);
+                    _posts[index] = _posts[index].copyWith(commentCount: comments.length);
                   });
                 }
               }
@@ -5157,7 +5359,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                                       ),
                                                                     ),
                                                                   ),
-                                                                  if (detailPost.isAdminPick) ...[
+                                                                  if (_shouldShowAdminPickStyle(post)) ...[
                                                                     const SizedBox(width: 6),
                                                                     _buildVerifiedBadge(),
                                                                   ],
@@ -5321,6 +5523,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                 localComments.any((c) => c.id == highlightedCommentId) &&
                                                 snapshot.connectionState == ConnectionState.done) {
                                               isRunningInitialHighlight = true;
+
                                               WidgetsBinding.instance.addPostFrameCallback((_) async {
                                                 for (int attempt = 0; attempt < 12; attempt++) {
                                                   if (!context.mounted || !sheetAlive || isSheetClosing) {
@@ -5334,6 +5537,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
                                                   final key = commentKeys[highlightedCommentId!];
                                                   final targetContext = key?.currentContext;
+
                                                   if (targetContext == null) {
                                                     if (context.mounted) {
                                                       setSheetState(() {});
@@ -5348,7 +5552,6 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                       curve: Curves.easeOutCubic,
                                                       alignment: 0.12,
                                                     );
-                                                    await Future.delayed(const Duration(milliseconds: 90));
                                                   } catch (_) {
                                                     continue;
                                                   }
@@ -5386,18 +5589,11 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                       });
                                                     });
                                                   });
+
                                                   return;
                                                 }
 
                                                 isRunningInitialHighlight = false;
-                                                if (context.mounted && sheetAlive && !isSheetClosing) {
-                                                  Future.delayed(const Duration(milliseconds: 160), () {
-                                                    if (!context.mounted || !sheetAlive || isSheetClosing) {
-                                                      return;
-                                                    }
-                                                    setSheetState(() {});
-                                                  });
-                                                }
                                               });
                                             }
 
@@ -5659,6 +5855,26 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                               );
                                             }
 
+                                            List<Widget> buildCommentThread(
+                                                CommunityComment comment, {
+                                                  int depth = 0,
+                                                }) {
+                                              final children = repliesFor(comment.id);
+
+                                              return <Widget>[
+                                                buildCommentTile(
+                                                  comment,
+                                                  isReply: depth > 0,
+                                                ),
+                                                ...children.expand<Widget>(
+                                                      (reply) => buildCommentThread(
+                                                    reply,
+                                                    depth: depth + 1,
+                                                  ),
+                                                ),
+                                              ];
+                                            }
+
                                             if (loading) {
                                               return const Padding(
                                                 padding: EdgeInsets.symmetric(vertical: 16),
@@ -5692,19 +5908,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                               );
                                             } else {
                                               return Column(
-                                                children: rootComments.expand(
-                                                      (comment) {
-                                                    final children = repliesFor(comment.id);
-                                                    return <Widget>[
-                                                      buildCommentTile(comment),
-                                                      ...children.map(
-                                                            (reply) => buildCommentTile(
-                                                          reply,
-                                                          isReply: true,
-                                                        ),
-                                                      ),
-                                                    ];
-                                                  },
+                                                children: rootComments.expand<Widget>(
+                                                      (comment) => buildCommentThread(comment),
                                                 ).toList(),
                                               );
                                             }
