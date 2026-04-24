@@ -264,19 +264,24 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  try {
-    await _configureLocalNotifications();
-    await _configureFirebaseMessaging();
-  } catch (e, s) {
-    debugPrint('push init error: $e');
-    debugPrint('$s');
-  }
-
   KakaoSdk.init(
     nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0',
   );
 
   runApp(const KeepersNoteApp());
+
+  Future.microtask(() async {
+    try {
+      await _configureLocalNotifications()
+          .timeout(const Duration(seconds: 3));
+
+      await _configureFirebaseMessaging()
+          .timeout(const Duration(seconds: 4));
+    } catch (e, s) {
+      debugPrint('post init error: $e');
+      debugPrint('$s');
+    }
+  });
 }
 
 class KeepersNoteApp extends StatelessWidget {
@@ -475,29 +480,16 @@ class _SplashScreenState extends State<SplashScreen>
 
     final stopwatch = Stopwatch()..start();
 
-    try {
-      await _initDeepLinks().timeout(
-        const Duration(seconds: 2),
-        onTimeout: () {
-          _log('딥링크 초기화 타임아웃 - 계속 진행');
-        },
-      );
-    } catch (e, s) {
-      _log('딥링크 초기화 실패 - 계속 진행: $e');
-      debugPrint('$s');
-    }
+    // 딥링크/알림 진입 로직은 기존처럼 유지하되, 스플래시 이동을 막지 않게 await 금지
+    _initDeepLinks();
 
     bool isLoggedIn = false;
+
     try {
-      isLoggedIn = await _checkLoginStatus().timeout(
-        const Duration(seconds: 6),
-        onTimeout: () {
-          _log('로그인 체크 타임아웃 - 온보딩으로 이동');
-          return false;
-        },
-      );
+      isLoggedIn = await _checkLoginStatus()
+          .timeout(const Duration(seconds: 2));
     } catch (e, s) {
-      _log('prepareAndNavigate error: $e');
+      _log('로그인 체크 실패/타임아웃 - 온보딩으로 이동: $e');
       debugPrint('$s');
       isLoggedIn = false;
     }
@@ -518,71 +510,40 @@ class _SplashScreenState extends State<SplashScreen>
 
     Navigator.pushReplacement(
       context,
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 700),
-        reverseTransitionDuration: const Duration(milliseconds: 250),
-        pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          );
-
-          return FadeTransition(
-            opacity: curved,
-            child: child,
-          );
-        },
-      ),
+      MaterialPageRoute(builder: (_) => nextScreen),
     );
   }
 
   Future<bool> _checkLoginStatus() async {
     try {
-      _log('자동 로그인 체크 시작');
+      _log('빠른 로그인 체크 시작');
 
       final prefs = await SharedPreferences.getInstance();
+
       final provider = prefs.getString('authProvider');
       final providerUserId = prefs.getString('providerUserId');
-      final nickname = prefs.getString('nickname') ?? '사용자';
-      final profileImageUrl = prefs.getString('profileImageUrl');
+      final userId = prefs.getString('userId');
 
-      if (provider == null || providerUserId == null) {
-        _log('저장된 세션 없음');
+      if (provider == null || provider.isEmpty) {
+        _log('authProvider 없음');
         return false;
       }
 
-      if (provider == 'KAKAO') {
-        final hasToken = await AuthApi.instance.hasToken();
-        _log('hasToken = $hasToken');
-        if (!hasToken) {
-          await _clearSavedSession();
-          return false;
-        }
+      if (providerUserId == null || providerUserId.isEmpty) {
+        _log('providerUserId 없음');
+        return false;
       }
 
-      final synced = await _syncUserToServer(
-        provider: provider,
-        providerUserId: providerUserId,
-        nickname: nickname,
-        profileImageUrl: profileImageUrl,
-      );
-
-      _log('서버 동기화 결과 = $synced');
-
-      if (!synced) {
-        await _clearSavedSession();
-        if (provider == 'KAKAO') {
-          await _clearKakaoToken();
-        }
+      if (userId == null || userId.isEmpty) {
+        _log('userId 없음');
+        return false;
       }
 
-      return synced;
+      _log('저장된 세션 확인됨 - 메인 진입');
+      return true;
     } catch (e, s) {
-      _log('로그인 상태 체크 에러: $e');
+      _log('빠른 로그인 체크 에러: $e');
       debugPrint('$s');
-      await _clearSavedSession();
-      await _clearKakaoToken();
       return false;
     }
   }

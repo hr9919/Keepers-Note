@@ -5466,7 +5466,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     final media = MediaQuery.of(context);
     final bool isTablet = media.size.shortestSide >= 600;
-    final double eventBannerHeight = isTablet ? 230 : 170;
+    final double eventBannerHeight = isTablet ? 320 : 178;
 
     return Column(
       children: [

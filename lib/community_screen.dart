@@ -3856,53 +3856,49 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     return score;
   }
 
-  double _gridAspectRatioForIndex(
-      int index,
-      CommunityPost post, {
-        bool isTablet = false,
-      }) {
-    final baseRatios = isTablet
-        ? <double>[
-      0.48,
-      0.66,
-      0.86,
-      1.12,
-      1.36,
-      0.56,
-      1.24,
-      0.74,
-    ]
-        : <double>[
-      0.62,
-      0.74,
-      0.88,
-      1.02,
-      1.18,
-      1.34,
-      0.70,
-      1.26,
-    ];
-
-    double seed = baseRatios[(post.id + index) % baseRatios.length];
+  double _gridAspectRatioForIndex(int index, CommunityPost post) {
+    final bool isTablet = MediaQuery.of(context).size.shortestSide >= 600;
 
     if (post.hasYoutube) {
-      return isTablet ? 0.56 : 0.68;
+      return isTablet ? 0.58 : 0.82;
     }
+
+    if (!isTablet) {
+      switch (index % 4) {
+        case 0:
+          return 1.02;
+        case 1:
+          return 0.90;
+        case 2:
+          return 1.12;
+        default:
+          return 0.96;
+      }
+    }
+
+    const List<double> tabletRatios = <double>[
+      0.52,
+      0.78,
+      1.18,
+      0.66,
+      1.42,
+      0.88,
+      1.62,
+      0.58,
+      1.05,
+      1.32,
+    ];
+
+    final int seed = (post.id * 31 + index * 17).abs();
+    double ratio = tabletRatios[seed % tabletRatios.length];
 
     if (post.imageUrls.length >= 3) {
-      seed -= isTablet ? 0.18 : 0.12;
+      ratio *= 0.82;
     } else if (post.imageUrls.length == 2) {
-      seed -= isTablet ? 0.10 : 0.06;
+      ratio *= 0.90;
     }
 
-    if (post.body.length > 70) {
-      seed -= isTablet ? 0.12 : 0.08;
-    }
-
-    return seed.clamp(
-      isTablet ? 0.44 : 0.58,
-      isTablet ? 1.48 : 1.38,
-    );
+    return ratio.clamp(0.48, 1.70);
   }
 
   Widget _buildPostCard(CommunityPost post) {
@@ -4759,7 +4755,6 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     final double aspectRatio = _gridAspectRatioForIndex(
       index,
       post,
-      isTablet: isTablet,
     );
 
     return Container(
