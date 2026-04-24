@@ -4752,96 +4752,147 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         bool isTablet = false,
       }) {
     final bool liked = post.likedByMe;
-    final double aspectRatio = _gridAspectRatioForIndex(
-      index,
-      post,
-    );
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: _postBorderColor(post),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.028),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double cardWidth = constraints.maxWidth;
+
+        // 🔥 태블릿용 강화 랜덤 패턴
+        final List<double> heightPattern = isTablet
+            ? <double>[
+          0.55,
+          0.80,
+          1.10,
+          1.45,
+          1.80,
+          0.65,
+          1.60,
+          1.25,
+        ]
+            : <double>[
+          0.78,
+          1.10,
+          1.42,
+          0.90,
+          1.26,
+          0.72,
+          1.55,
+          1.00,
+        ];
+
+        double heightFactor =
+        heightPattern[index % heightPattern.length];
+
+        // 🔥 태블릿 추가 보정
+        if (isTablet) {
+          if (post.hasYoutube) {
+            heightFactor = 0.55;
+          } else if (post.imageUrls.length >= 3) {
+            heightFactor += 0.35;
+          } else if (post.imageUrls.length == 2) {
+            heightFactor += 0.20;
+          }
+        }
+
+        final double imageHeight =
+        (cardWidth * heightFactor).clamp(
+          isTablet ? 120.0 : 150.0,
+          isTablet ? 520.0 : 340.0,
+        );
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.94),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFFFE5DE)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _openPostDetailSheet(post),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Stack(
-                      children: <Widget>[
-                        _PostImageCarousel(
-                          post: post,
-                          baseUrl: _baseUrl,
-                          fixedAspectRatio: aspectRatio,
-                          showLeadingTag: false,
-                          useIntrinsicAspectRatio: false,
-                          onTapImage: (_) {
-                            _openPostDetailSheet(post);
-                          },
-                        ),
-                        Positioned(
-                          left: 10,
-                          bottom: 10,
-                          child: _buildGridMoreButton(
-                            onTap: () => _openPostMoreSheet(post),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _openImageViewer(post, initialIndex: 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: imageHeight,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: <Widget>[
+                              _PostImageCarousel(
+                                post: post,
+                                baseUrl: _baseUrl,
+                                fixedAspectRatio: null,
+                                showLeadingTag: false,
+                                useIntrinsicAspectRatio: false,
+                                onTapImage: (imageIndex) {
+                                  _openImageViewer(
+                                    post,
+                                    initialIndex: imageIndex,
+                                  );
+                                },
+                              ),
+                              Positioned(
+                                top: 7,
+                                left: 8,
+                                child: _buildGridMoreButton(
+                                  onTap: () => _openPostMoreSheet(post),
+                                ),
+                              ),
+                              Positioned(
+                                top: 10,
+                                right: 10,
+                                child: _buildGridLikeButton(
+                                  liked: liked,
+                                  onTap: () => _toggleLike(post.id),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: _buildGridLikeButton(
-                            liked: liked,
-                            onTap: () => _toggleLike(post.id),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: post.tags.isNotEmpty
-                              ? _buildContentTagChip(
-                            post.tags.first,
-                            tiny: true,
-                          )
-                              : const SizedBox.shrink(),
                         ),
                       ),
-                      if (_shouldShowAdminPickStyle(post)) _buildVerifiedBadge(),
-                    ],
-                  ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: post.tags.isNotEmpty
+                                  ? _buildContentTagChip(
+                                post.tags.first,
+                                compact: true,
+                              )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
+                          if (post.isAdminPick) _buildVerifiedBadge(),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
