@@ -313,6 +313,14 @@ class _MainWrapperState extends State<MainWrapper> {
     }
   }
 
+  void _consumeCommunityInitialTarget() {
+    if (!mounted) return;
+    setState(() {
+      _initialCommunityPostId = null;
+      _initialCommunityCommentId = null;
+    });
+  }
+
   Future<void> _confirmAndSendMail() async {
     final bool? ok = await showDialog<bool>(
       context: context,
@@ -1221,9 +1229,7 @@ class _MainWrapperState extends State<MainWrapper> {
         resetSearchSignal: _searchResetSignal,
       ),
       CommunityScreen(
-        key: ValueKey(
-          'community_${_initialCommunityPostId}_${DateTime.now().millisecondsSinceEpoch}',
-        ),
+        key: const ValueKey('community_screen'),
         openDrawer: _openDrawerSmooth,
         userId: _serverUserId,
         isAdmin: _isAdmin,
@@ -1231,6 +1237,7 @@ class _MainWrapperState extends State<MainWrapper> {
         initialCommentId: _selectedIndex == 2 ? _initialCommunityCommentId : null,
         refreshSignal: _communityRefreshSignal,
         openMyProfileSignal: _communityOpenMyProfileSignal,
+        onInitialPostConsumed: _consumeCommunityInitialTarget,
       ),
       CookingScreen(
         openDrawer: _openDrawerSmooth,

@@ -221,14 +221,6 @@ Future<void> _configureFirebaseMessaging() async {
     _firebaseMessagingBackgroundHandler,
   );
 
-  _onForegroundMessageSubscription?.cancel();
-  _onForegroundMessageSubscription = FirebaseMessaging.onMessage.listen(
-        (RemoteMessage message) async {
-      debugPrint('FCM foreground message: ${message.data}');
-      await _showForegroundLocalNotification(message);
-    },
-  );
-
   _onMessageOpenedAppSubscription?.cancel();
   _onMessageOpenedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
         (RemoteMessage message) {
@@ -258,15 +250,17 @@ void main() async {
     nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0',
   );
 
-  try {
-    await _configureLocalNotifications();
-    await _configureFirebaseMessaging();
-  } catch (e, s) {
-    debugPrint('post init error: $e');
-    debugPrint('$s');
-  }
-
   runApp(const KeepersNoteApp());
+
+  Future.microtask(() async {
+    try {
+      await _configureLocalNotifications();
+      await _configureFirebaseMessaging();
+    } catch (e, s) {
+      debugPrint('post init error: $e');
+      debugPrint('$s');
+    }
+  });
 }
 
 class KeepersNoteApp extends StatelessWidget {
@@ -443,13 +437,31 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _prepareAndNavigate() async {
+    _log('스플래시 이동 준비 시작');
+
     final stopwatch = Stopwatch()..start();
 
-    await _initDeepLinks();
+    try {
+      await _initDeepLinks().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          _log('딥링크 초기화 타임아웃 - 계속 진행');
+        },
+      );
+    } catch (e, s) {
+      _log('딥링크 초기화 실패 - 계속 진행: $e');
+      debugPrint('$s');
+    }
 
     bool isLoggedIn = false;
     try {
-      isLoggedIn = await _checkLoginStatus();
+      isLoggedIn = await _checkLoginStatus().timeout(
+        const Duration(seconds: 6),
+        onTimeout: () {
+          _log('로그인 체크 타임아웃 - 온보딩으로 이동');
+          return false;
+        },
+      );
     } catch (e, s) {
       _log('prepareAndNavigate error: $e');
       debugPrint('$s');

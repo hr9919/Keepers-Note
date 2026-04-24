@@ -85,6 +85,7 @@ class CommunityScreen extends StatefulWidget {
   final int? initialCommentId;
   final int refreshSignal;
   final int openMyProfileSignal;
+  final VoidCallback? onInitialPostConsumed;
 
   static const double _kHeaderHorizontalPadding = 16;
   static const double _kHeaderTopExtra = 6;
@@ -130,6 +131,7 @@ class CommunityScreen extends StatefulWidget {
     this.initialCommentId,
     this.refreshSignal = 0,
     this.openMyProfileSignal = 0,
+    this.onInitialPostConsumed,
   });
 
   @override
@@ -535,6 +537,13 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
     if (widget.initialPostId != oldWidget.initialPostId ||
         widget.initialCommentId != oldWidget.initialCommentId) {
+      // initialPostId가 null로 바뀐 건 "이미 소비 완료"라는 뜻이므로
+      // 다시 열기 상태로 되돌리면 안 됨.
+      if (widget.initialPostId == null) {
+        _pendingHighlightCommentId = null;
+        return;
+      }
+
       _didOpenInitialPost = false;
       _pendingHighlightCommentId = widget.initialCommentId;
 
@@ -1293,6 +1302,12 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
     _didOpenInitialPost = true;
 
+    // 🔥 부모의 initialPostId를 바로 비우면 didUpdateWidget에서
+    // _pendingHighlightCommentId가 null로 사라져 댓글 스크롤/하이라이트가 안 됨.
+    // 그래서 바텀시트가 열릴 때까지 하이라이트 대상 댓글 id를 임시 보관한다.
+    final int? commentIdToHighlight =
+        _pendingHighlightCommentId ?? widget.initialCommentId;
+
     // 🔥 UI 프레임 이후 안정적으로 바텀시트 열기
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -1300,7 +1315,13 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       await Future.delayed(const Duration(milliseconds: 120));
       if (!mounted) return;
 
+      _pendingHighlightCommentId = commentIdToHighlight;
+
       final opened = await _openPostDetailSheet(targetPost!);
+
+      // ✅ 바텀시트 열기 시도가 끝난 뒤에 initial 값을 소비해야
+      // 댓글 스크롤/하이라이트는 유지되고, 이후 댓글 입력/탭 이동 때 재오픈은 막힘.
+      widget.onInitialPostConsumed?.call();
 
       // ❗ 실패하면 다시 시도
       if (!opened && mounted) {
