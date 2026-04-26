@@ -318,6 +318,33 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
   }
 
   Widget _buildUidCard(Map<String, dynamic> item) {
+    final status = item['requestStatus']?.toString() ?? '';
+
+    Color statusColor;
+    String statusText;
+
+    switch (status) {
+      case 'PENDING':
+        statusColor = const Color(0xFF46A36A);
+        statusText = '대기중';
+        break;
+      case 'NEED_SCREENSHOT':
+        statusColor = const Color(0xFFE46C6C);
+        statusText = '스크린샷 필요';
+        break;
+      case 'APPROVED':
+        statusColor = const Color(0xFF4A90E2);
+        statusText = '승인됨';
+        break;
+      case 'REJECTED':
+        statusColor = const Color(0xFF8A94A6);
+        statusText = '반려됨';
+        break;
+      default:
+        statusColor = const Color(0xFF8A94A6);
+        statusText = status;
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -335,10 +362,25 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
               fontWeight: FontWeight.w800,
             ),
           ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            '상태: $statusText',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: statusColor,
+            ),
+          ),
+
           const SizedBox(height: 6),
+
           Text('제출 UID: ${item['submittedUid'] ?? '-'}'),
           Text('현재 UID: ${item['gameUid'] ?? '-'}'),
+
           const SizedBox(height: 10),
+
           if ((item['screenshotUrl'] ?? '').toString().isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
@@ -346,37 +388,18 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
                 item['screenshotUrl'],
                 height: 180,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    Container(
-                      height: 180,
-                      color: const Color(0xFFF7F1EE),
-                      alignment: Alignment.center,
-                      child: const Text('이미지 로드 실패'),
-                    ),
               ),
             ),
+
           const SizedBox(height: 12),
+
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
                   onPressed: () async {
-                    final confirmed = await _showUidReviewConfirmDialog(
-                      approve: false,
-                      nickname: item['nickname']?.toString() ?? '사용자',
-                      submittedUid: item['submittedUid']?.toString() ?? '-',
-                    );
-                    if (!confirmed) return;
-                    await _review(item['requestId'] as int, false);
+                    await _review(item['requestId'], false);
                   },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFE46C6C),
-                    side: const BorderSide(color: Color(0xFFFFD4CC)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
                   child: const Text('반려'),
                 ),
               ),
@@ -384,23 +407,8 @@ class _CommunityUidAdminScreenState extends State<CommunityUidAdminScreen> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () async {
-                    final confirmed = await _showUidReviewConfirmDialog(
-                      approve: true,
-                      nickname: item['nickname']?.toString() ?? '사용자',
-                      submittedUid: item['submittedUid']?.toString() ?? '-',
-                    );
-                    if (!confirmed) return;
-                    await _review(item['requestId'] as int, true);
+                    await _review(item['requestId'], true);
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF8E7C),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
                   child: const Text('승인'),
                 ),
               ),

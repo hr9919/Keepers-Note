@@ -1,5 +1,5 @@
 import 'dart:convert';
-
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -129,6 +129,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _handleAppleLogin() async {
     if (_isLoggingIn) return;
 
+    if (!Platform.isIOS) {
+      _showLoginMessage('Apple 로그인은 iOS에서만 사용할 수 있어요.');
+      return;
+    }
+
     setState(() => _loadingProvider = _LoginProvider.apple);
 
     try {
@@ -148,7 +153,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final fullName = [
         credential.givenName,
         credential.familyName,
-      ].where((e) => e != null && e!.trim().isNotEmpty).join(' ').trim();
+      ].where((e) => e != null && e.trim().isNotEmpty).join(' ').trim();
 
       final nickname = fullName.isNotEmpty ? fullName : 'Apple 사용자';
 
