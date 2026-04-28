@@ -62,6 +62,12 @@ class _MainWrapperState extends State<MainWrapper> {
   int? _initialCommunityPostId;
   int? _initialCommunityCommentId;
 
+  Uri? _pendingCommunityDeepLinkUntilUserReady;
+  Timer? _pendingCommunityDeepLinkTimer;
+
+  String? _lastOpenedCommunityTargetKey;
+  DateTime? _lastOpenedCommunityTargetAt;
+
   int _communityOpenMyProfileSignal = 0;
 
   bool _isScrimPressed = false;
@@ -130,6 +136,7 @@ class _MainWrapperState extends State<MainWrapper> {
     _deepLinkSub?.cancel();
     _kakaoSchemeSub?.cancel();
     _todoController.dispose();
+    _pendingCommunityDeepLinkTimer?.cancel();
     super.dispose();
   }
 
@@ -233,18 +240,82 @@ class _MainWrapperState extends State<MainWrapper> {
     });
   }
 
-  void _handleDeepLink(Uri uri) {
-    debugPrint('딥링크 처리: $uri');
+  String _communityTargetKey({
+    required int postId,
+    int? commentId,
+    String? notificationId,
+  }) {
+    final commentPart = commentId?.toString() ?? '';
+    final notificationPart = notificationId ?? '';
+    return '$postId|$commentPart|$notificationPart';
+  }
 
+  bool _shouldIgnoreCommunityTarget(String key) {
+    final now = DateTime.now();
+
+    if (_lastOpenedCommunityTargetKey == key &&
+        _lastOpenedCommunityTargetAt != null &&
+        now.difference(_lastOpenedCommunityTargetAt!) <
+            const Duration(seconds: 2)) {
+      return true;
+    }
+
+    _lastOpenedCommunityTargetKey = key;
+    _lastOpenedCommunityTargetAt = now;
+    return false;
+  }
+
+  void _openCommunityTarget({
+    required int postId,
+    int? commentId,
+  }) {
+    if (!mounted) return;
+
+    // 👉 이미 열려있으면 무시
+    if (_selectedIndex == 2 &&
+        _initialCommunityPostId == postId &&
+        _initialCommunityCommentId == commentId) {
+      return;
+    }
+
+    setState(() {
+      _selectedIndex = 2;
+      _initialCommunityPostId = null;
+      _initialCommunityCommentId = null;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.delayed(const Duration(milliseconds: 120));
+      if (!mounted) return;
+
+      setState(() {
+        _initialCommunityPostId = postId;
+        _initialCommunityCommentId = commentId;
+      });
+    });
+  }
+
+  void _openPendingCommunityDeepLinkIfNeeded() {
+    final uri = _pendingCommunityDeepLinkUntilUserReady;
+    if (uri == null) return;
+
+    _pendingCommunityDeepLinkUntilUserReady = null;
+    _pendingCommunityDeepLinkTimer?.cancel();
+    _pendingCommunityDeepLinkTimer = null;
+
+    _handleDeepLink(uri);
+  }
+
+  void _handleDeepLink(Uri uri) {
     int? postId;
     int? commentId;
     String? eventId;
 
-    // 1) 카카오 execution params 우선 처리
     final target = uri.queryParameters['target'];
     final queryPostId = uri.queryParameters['postId'];
     final queryCommentId = uri.queryParameters['commentId'];
     final queryEventId = uri.queryParameters['eventId'];
+    final notificationId = uri.queryParameters['notificationId'];
 
     if (target == 'community_post' && queryPostId != null) {
       postId = int.tryParse(queryPostId);
@@ -255,7 +326,6 @@ class _MainWrapperState extends State<MainWrapper> {
       eventId = queryEventId;
     }
 
-    // 2) 커스텀 스킴: keepersnote://community/post/123
     if (postId == null && uri.scheme == 'keepersnote') {
       final host = uri.host;
 
@@ -271,7 +341,6 @@ class _MainWrapperState extends State<MainWrapper> {
       }
     }
 
-    // 3) https: https://keepersnote.app/community/post/123
     if (postId == null &&
         (uri.scheme == 'https' || uri.scheme == 'http') &&
         uri.host == 'keepersnote.app') {
@@ -290,26 +359,46 @@ class _MainWrapperState extends State<MainWrapper> {
     }
 
     if (postId != null) {
-      if (!mounted) return;
+      if (_serverUserId.isEmpty) {
+        _pendingCommunityDeepLinkUntilUserReady = uri;
 
-      setState(() {
-        _selectedIndex = 2;
-        _initialCommunityPostId = null;
-        _initialCommunityCommentId = null;
-      });
+        _pendingCommunityDeepLinkTimer?.cancel();
+        _pendingCommunityDeepLinkTimer = Timer(
+          const Duration(seconds: 2),
+              () {
+            if (!mounted) return;
 
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await Future.delayed(const Duration(milliseconds: 100));
+            final pending = _pendingCommunityDeepLinkUntilUserReady;
+            if (pending == null) return;
 
-        if (!mounted) return;
+            _pendingCommunityDeepLinkUntilUserReady = null;
+            _handleDeepLink(pending);
+          },
+        );
 
-        setState(() {
-          _initialCommunityPostId = postId;
-          _initialCommunityCommentId = commentId;
-        });
-      });
+        return;
+      }
+
+      final key = _communityTargetKey(
+        postId: postId,
+        commentId: commentId,
+        notificationId: notificationId,
+      );
+
+      if (_shouldIgnoreCommunityTarget(key)) return;
+
+      _openCommunityTarget(
+        postId: postId,
+        commentId: commentId,
+      );
 
       return;
+    }
+
+    if (eventId != null && eventId.isNotEmpty) {
+      setState(() {
+        _selectedIndex = 0;
+      });
     }
   }
 
@@ -603,6 +692,7 @@ class _MainWrapperState extends State<MainWrapper> {
         });
 
         await _initPush();
+        _openPendingCommunityDeepLinkIfNeeded();
         await _loadTodoFromServer(serverUserId);
       } else {
         if (!mounted) return;

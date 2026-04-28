@@ -116,6 +116,92 @@ Uri? _deepLinkFromRemoteMessage(RemoteMessage? message) {
   return _deepLinkFromPushData(message.data);
 }
 
+Uri? _deepLinkFromNotificationJson(Map<String, dynamic> json) {
+  final String type = json['type']?.toString() ?? '';
+  final String target = json['target']?.toString() ??
+      ((type == 'comment' || type == 'reply' || type == 'like')
+          ? 'community_post'
+          : type);
+
+  if (target != 'community_post') return null;
+
+  final String postId =
+      (json['postId'] ?? json['targetId'] ?? json['targetPostId'])
+          ?.toString() ??
+          '';
+
+  if (postId.isEmpty) return null;
+
+  final String commentId =
+      (json['commentId'] ?? json['targetCommentId'] ?? json['target_comment_id'])
+          ?.toString() ??
+          '';
+
+  final String notificationId =
+      (json['notificationId'] ?? json['id'])?.toString() ?? '';
+
+  final query = <String, String>{
+    'target': 'community_post',
+    'postId': postId,
+  };
+
+  if (commentId.isNotEmpty) {
+    query['commentId'] = commentId;
+  }
+
+  if (notificationId.isNotEmpty) {
+    query['notificationId'] = notificationId;
+  }
+
+  return Uri.https('keepersnote.app', '/community/post/$postId', query);
+}
+
+Future<Uri?> _latestNotificationDeepLinkFromServer() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('userId');
+
+    if (userId == null || userId.isEmpty) return null;
+
+    final response = await http
+        .get(
+      Uri.parse(
+        'https://api.keepers-note.o-r.kr/api/community/notifications?userId=$userId',
+      ),
+    )
+        .timeout(const Duration(seconds: 2));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      return null;
+    }
+
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! List || decoded.isEmpty) return null;
+
+    for (final item in decoded) {
+      if (item is Map<String, dynamic>) {
+        final uri = _deepLinkFromNotificationJson(item);
+        if (uri != null) return uri;
+      }
+    }
+
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<Uri?> _deepLinkFromRemoteMessageOrFallback(
+    RemoteMessage? message,
+    ) async {
+  if (message == null) return null;
+
+  final direct = _deepLinkFromRemoteMessage(message);
+  if (direct != null) return direct;
+
+  return _latestNotificationDeepLinkFromServer();
+}
+
 Future<void> _showForegroundLocalNotification(RemoteMessage message) async {
   final RemoteNotification? notification = message.notification;
   final AppleNotification? apple = message.notification?.apple;
@@ -263,9 +349,8 @@ Future<void> _configureFirebaseMessaging() async {
 
   _onMessageOpenedAppSubscription?.cancel();
   _onMessageOpenedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
-        (RemoteMessage message) {
-      debugPrint('FCM notification opened: ${message.data}');
-      final Uri? uri = _deepLinkFromRemoteMessage(message);
+        (RemoteMessage message) async {
+      final Uri? uri = await _deepLinkFromRemoteMessageOrFallback(message);
       if (uri != null) {
         _navigateToDeepLink(uri);
       }
@@ -273,12 +358,10 @@ Future<void> _configureFirebaseMessaging() async {
   );
 
   final RemoteMessage? initialMessage = await messaging.getInitialMessage();
-  final Uri? initialUri = _deepLinkFromRemoteMessage(initialMessage);
+  final Uri? initialUri =
+  await _deepLinkFromRemoteMessageOrFallback(initialMessage);
 
   if (initialUri != null) {
-    debugPrint('FCM initial notification opened: ${initialMessage?.data}');
-    debugPrint('FCM initial deepLink: $initialUri');
-
     _initialPushDeepLink = initialUri;
   }
 }
@@ -294,20 +377,18 @@ void main() async {
     nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0',
   );
 
+  try {
+    await _configureLocalNotifications()
+        .timeout(const Duration(seconds: 3));
+
+    await _configureFirebaseMessaging()
+        .timeout(const Duration(seconds: 4));
+  } catch (e, s) {
+    debugPrint('pre runApp init error: $e');
+    debugPrint('$s');
+  }
+
   runApp(const KeepersNoteApp());
-
-  Future.microtask(() async {
-    try {
-      await _configureLocalNotifications()
-          .timeout(const Duration(seconds: 3));
-
-      await _configureFirebaseMessaging()
-          .timeout(const Duration(seconds: 4));
-    } catch (e, s) {
-      debugPrint('post init error: $e');
-      debugPrint('$s');
-    }
-  });
 }
 
 class KeepersNoteApp extends StatelessWidget {
@@ -416,6 +497,21 @@ class _SplashScreenState extends State<SplashScreen>
     _prepareAndNavigate();
   }
 
+  Future<void> _loadInitialPushDeepLinkAgain() async {
+    try {
+      final message = await FirebaseMessaging.instance
+          .getInitialMessage()
+          .timeout(const Duration(milliseconds: 600));
+
+      final uri = await _deepLinkFromRemoteMessageOrFallback(message);
+
+      if (uri != null) {
+        _pendingDeepLink = uri;
+        _initialPushDeepLink = uri;
+      }
+    } catch (_) {}
+  }
+
   Future<void> _initDeepLinks() async {
     _pendingDeepLink = _initialPushDeepLink ?? _pendingDeepLink;
 
@@ -506,8 +602,8 @@ class _SplashScreenState extends State<SplashScreen>
 
     final stopwatch = Stopwatch()..start();
 
-    // 딥링크/알림 진입 로직은 기존처럼 유지하되, 스플래시 이동을 막지 않게 await 금지
-    _initDeepLinks();
+    await _loadInitialPushDeepLinkAgain();
+    unawaited(_initDeepLinks());
 
     bool isLoggedIn = false;
 

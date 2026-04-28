@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,12 +24,9 @@ class PushService {
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool('push_enabled') ?? true;
 
-    if (!enabled) {
-      debugPrint('푸시 OFF 상태 → init 스킵');
-      return;
-    }
-
+    if (!enabled) return;
     if (_initialized) return;
+
     _initialized = true;
 
     await _messaging.requestPermission(
@@ -56,23 +53,18 @@ class PushService {
           android: androidSettings,
           iOS: iosSettings,
         ),
-        onDidReceiveNotificationResponse: (NotificationResponse response) async {
+        onDidReceiveNotificationResponse:
+            (NotificationResponse response) async {
           final payload = response.payload;
-          debugPrint('A. onDidReceiveNotificationResponse payload=$payload');
-
           if (payload == null || payload.isEmpty) return;
 
-          try {
-            final Map<String, dynamic> data =
-            jsonDecode(payload) as Map<String, dynamic>;
-            debugPrint('A-1. 로컬 알림 클릭 data=$data');
+          final uri = Uri.tryParse(payload);
+          if (uri == null) return;
 
-            await onRealtimeNotificationRefresh();
-            await onTapNavigate(data);
-          } catch (e, s) {
-            debugPrint('로컬 알림 payload 파싱 실패: $e');
-            debugPrint('$s');
-          }
+          final data = _dataFromDeepLink(uri);
+
+          await onRealtimeNotificationRefresh();
+          await onTapNavigate(data);
         },
       );
 
@@ -91,17 +83,107 @@ class PushService {
     });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      debugPrint('B. onMessage data=${message.data}');
-      debugPrint('B-1. onMessage title=${message.notification?.title}');
-      debugPrint('B-2. onMessage body=${message.notification?.body}');
-
       await onRealtimeNotificationRefresh();
       await _showLocalNotification(message);
     });
   }
 
+  Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
+    final String rawTarget = data['target']?.toString() ?? '';
+    final String rawType = data['type']?.toString() ?? '';
+
+    final bool isCommunityType =
+        rawType == 'comment' || rawType == 'reply' || rawType == 'like';
+
+    final String target = rawTarget.isNotEmpty
+        ? rawTarget
+        : isCommunityType
+        ? 'community_post'
+        : rawType;
+
+    if (target == 'community_post') {
+      final String postId =
+          (data['postId'] ?? data['targetId'] ?? data['targetPostId'])
+              ?.toString() ??
+              '';
+
+      if (postId.isEmpty) return null;
+
+      final String commentId =
+          (data['commentId'] ??
+              data['targetCommentId'] ??
+              data['target_comment_id'])
+              ?.toString() ??
+              '';
+
+      final String notificationId =
+          data['notificationId']?.toString() ?? data['id']?.toString() ?? '';
+
+      final query = <String, String>{
+        'target': 'community_post',
+        'postId': postId,
+      };
+
+      if (commentId.isNotEmpty) {
+        query['commentId'] = commentId;
+      }
+
+      if (notificationId.isNotEmpty) {
+        query['notificationId'] = notificationId;
+      }
+
+      return Uri.https('keepersnote.app', '/community/post/$postId', query);
+    }
+
+    if (target == 'event') {
+      final String eventId = data['eventId']?.toString() ?? '';
+      if (eventId.isEmpty) return null;
+
+      return Uri.https('keepersnote.app', '/event/$eventId', {
+        'target': 'event',
+        'eventId': eventId,
+      });
+    }
+
+    if (target == 'uid_request' ||
+        target == 'uid_rejected' ||
+        target == 'uid_approved') {
+      return Uri(
+        scheme: 'keepersnote',
+        host: 'community',
+        queryParameters: {'target': target},
+      );
+    }
+
+    return null;
+  }
+
+  Map<String, dynamic> _dataFromDeepLink(Uri uri) {
+    final params = uri.queryParameters;
+
+    if (params['target'] == 'community_post') {
+      return {
+        'target': 'community_post',
+        'type': 'comment',
+        'postId': params['postId'],
+        'targetId': params['postId'],
+        'commentId': params['commentId'],
+        'targetCommentId': params['commentId'],
+        'notificationId': params['notificationId'],
+      };
+    }
+
+    if (params['target'] == 'event') {
+      return {
+        'target': 'event',
+        'eventId': params['eventId'],
+      };
+    }
+
+    return Map<String, dynamic>.from(params);
+  }
+
   Future<void> _showLocalNotification(RemoteMessage message) async {
-    final notification = message.notification;
     final title = message.notification?.title ?? message.data['title'];
     final body = message.notification?.body ?? message.data['body'];
 
@@ -123,6 +205,8 @@ class PushService {
       presentList: true,
     );
 
+    final deepLink = _deepLinkFromPushData(message.data);
+
     await _localNotifications.show(
       title.hashCode,
       title,
@@ -131,7 +215,7 @@ class PushService {
         android: androidDetails,
         iOS: iosDetails,
       ),
-      payload: jsonEncode(message.data),
+      payload: deepLink?.toString(),
     );
   }
 
@@ -154,7 +238,6 @@ class PushService {
       }
 
       if (apnsToken == null) {
-        debugPrint('APNs token 미준비');
         return null;
       }
     }
@@ -167,16 +250,12 @@ class PushService {
     required String userId,
   }) async {
     if (enabled) {
-      debugPrint('푸시 ON');
-
       final token = await _getSafeFcmToken();
       if (token != null) {
         await _registerToken(userId: userId, token: token);
       }
       return;
     }
-
-    debugPrint('푸시 OFF');
 
     try {
       final existingToken = await _messaging.getToken();
@@ -199,7 +278,7 @@ class PushService {
     required String userId,
     required String token,
   }) async {
-    final response = await http.post(
+    await http.post(
       Uri.parse('$_baseUrl/api/push/token'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -208,11 +287,5 @@ class PushService {
         'platform': Platform.isIOS ? 'ios' : 'android',
       }),
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      debugPrint('푸시 토큰 등록 실패: ${response.statusCode} ${response.body}');
-    } else {
-      debugPrint('푸시 토큰 등록 완료');
-    }
   }
 }

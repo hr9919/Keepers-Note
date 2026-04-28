@@ -475,6 +475,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   bool _isPostDetailSheetOpen = false;
   int? _pendingHighlightCommentId;
 
+  String? _openingInitialTargetKey;
+
   bool _showTopButton = false;
   bool _showSwipeGestureHint = false;
   bool _isGridView = true;
@@ -1288,19 +1290,40 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
   Future<void> _tryOpenInitialPost() async {
     final int? postId = widget.initialPostId;
-
     if (!mounted || postId == null) return;
+
+    final int? commentIdToHighlight =
+        widget.initialCommentId ?? _pendingHighlightCommentId;
+
+    final String targetKey = '$postId|${commentIdToHighlight ?? ''}';
+
+    if (_openingInitialTargetKey == targetKey) return;
     if (_didOpenInitialPost) return;
     if (_isPostDetailSheetOpen) return;
 
-    if (_isLoading) {
+    if ((widget.userId ?? '').trim().isEmpty) {
       Future.delayed(const Duration(milliseconds: 180), () {
-        if (mounted && !_didOpenInitialPost && !_isPostDetailSheetOpen) {
-          _tryOpenInitialPost();
-        }
+        if (!mounted) return;
+        if (_openingInitialTargetKey == targetKey) return;
+        if (_didOpenInitialPost) return;
+        if (_isPostDetailSheetOpen) return;
+        _tryOpenInitialPost();
       });
       return;
     }
+
+    if (_isLoading) {
+      Future.delayed(const Duration(milliseconds: 180), () {
+        if (!mounted) return;
+        if (_openingInitialTargetKey == targetKey) return;
+        if (_didOpenInitialPost) return;
+        if (_isPostDetailSheetOpen) return;
+        _tryOpenInitialPost();
+      });
+      return;
+    }
+
+    _openingInitialTargetKey = targetKey;
 
     CommunityPost? targetPost;
 
@@ -1312,20 +1335,24 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     }
 
     if (!mounted || targetPost == null) {
-      debugPrint('딥링크 대상 게시글 못찾음: $postId');
+      _openingInitialTargetKey = null;
       return;
     }
 
     _didOpenInitialPost = true;
 
-    final int? commentIdToHighlight =
-        widget.initialCommentId ?? _pendingHighlightCommentId;
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || _isPostDetailSheetOpen) return;
+      if (!mounted || _isPostDetailSheetOpen) {
+        _openingInitialTargetKey = null;
+        return;
+      }
 
       await Future.delayed(const Duration(milliseconds: 220));
-      if (!mounted || _isPostDetailSheetOpen) return;
+
+      if (!mounted || _isPostDetailSheetOpen) {
+        _openingInitialTargetKey = null;
+        return;
+      }
 
       _pendingHighlightCommentId = commentIdToHighlight;
 
@@ -1344,6 +1371,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       } else {
         _didOpenInitialPost = false;
       }
+
+      _openingInitialTargetKey = null;
     });
   }
 
