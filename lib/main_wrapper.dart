@@ -635,29 +635,70 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
-    final target = data['target']?.toString();
+    final String rawTarget = data['target']?.toString() ?? '';
+    final String rawType = data['type']?.toString() ?? '';
+
+    final bool isCommunityType =
+        rawType == 'comment' || rawType == 'reply' || rawType == 'like';
+
+    final String target = rawTarget.isNotEmpty
+        ? rawTarget
+        : isCommunityType
+        ? 'community_post'
+        : rawType;
 
     if (target == 'community_post') {
-      final postId = data['postId']?.toString();
-      if (postId == null || postId.isEmpty) return null;
+      final String postId =
+          (data['postId'] ?? data['targetId'] ?? data['targetPostId'])
+              ?.toString() ??
+              '';
 
-      final query = <String, String>{
+      if (postId.isEmpty) return null;
+
+      final String commentId =
+          (data['commentId'] ??
+              data['targetCommentId'] ??
+              data['target_comment_id'])
+              ?.toString() ??
+              '';
+
+      final String notificationId =
+          data['notificationId']?.toString() ?? data['id']?.toString() ?? '';
+
+      final Map<String, String> query = <String, String>{
         'target': 'community_post',
         'postId': postId,
       };
 
-      final commentId = data['commentId']?.toString();
-      final notificationId = data['notificationId']?.toString();
-
-      if (commentId != null && commentId.isNotEmpty) {
+      if (commentId.isNotEmpty) {
         query['commentId'] = commentId;
       }
 
-      if (notificationId != null && notificationId.isNotEmpty) {
+      if (notificationId.isNotEmpty) {
         query['notificationId'] = notificationId;
       }
 
       return Uri.https('keepersnote.app', '/community/post/$postId', query);
+    }
+
+    if (target == 'event') {
+      final String eventId = data['eventId']?.toString() ?? '';
+      if (eventId.isEmpty) return null;
+
+      return Uri.https('keepersnote.app', '/event/$eventId', {
+        'target': 'event',
+        'eventId': eventId,
+      });
+    }
+
+    if (target == 'uid_request' ||
+        target == 'uid_rejected' ||
+        target == 'uid_approved') {
+      return Uri(
+        scheme: 'keepersnote',
+        host: 'community',
+        queryParameters: {'target': target},
+      );
     }
 
     return null;
@@ -677,16 +718,14 @@ class _MainWrapperState extends State<MainWrapper> {
         }
       },
       onTapNavigate: (data) async {
+        final target = data['target']?.toString() ?? data['type']?.toString();
         debugPrint('F. onTapNavigate data=$data');
 
-        final target = data['target']?.toString();
+        final uri = _deepLinkFromPushData(data);
 
-        if (target == 'community_post') {
-          final uri = _deepLinkFromPushData(data);
-          if (uri == null) return;
-
+        if (uri != null) {
           final notificationId = int.tryParse(
-            data['notificationId']?.toString() ?? '',
+            data['notificationId']?.toString() ?? data['id']?.toString() ?? '',
           );
 
           if (notificationId != null) {

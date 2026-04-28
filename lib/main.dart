@@ -42,25 +42,46 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
-  final String? target = data['target']?.toString();
-  if (target == null || target.isEmpty) return null;
+  final String rawTarget = data['target']?.toString() ?? '';
+  final String rawType = data['type']?.toString() ?? '';
+
+  final bool isCommunityType =
+      rawType == 'comment' || rawType == 'reply' || rawType == 'like';
+
+  final String target = rawTarget.isNotEmpty
+      ? rawTarget
+      : isCommunityType
+      ? 'community_post'
+      : rawType;
 
   if (target == 'community_post') {
-    final String? postId = data['postId']?.toString();
-    if (postId == null || postId.isEmpty) return null;
+    final String postId =
+        (data['postId'] ?? data['targetId'] ?? data['targetPostId'])
+            ?.toString() ??
+            '';
+
+    if (postId.isEmpty) return null;
+
+    final String commentId =
+        (data['commentId'] ??
+            data['targetCommentId'] ??
+            data['target_comment_id'])
+            ?.toString() ??
+            '';
+
+    final String notificationId =
+        data['notificationId']?.toString() ?? data['id']?.toString() ?? '';
 
     final Map<String, String> query = <String, String>{
       'target': 'community_post',
       'postId': postId,
     };
 
-    final String? commentId = data['commentId']?.toString();
-    final String? notificationId = data['notificationId']?.toString();
-
-    if (commentId != null && commentId.isNotEmpty) {
+    if (commentId.isNotEmpty) {
       query['commentId'] = commentId;
     }
-    if (notificationId != null && notificationId.isNotEmpty) {
+
+    if (notificationId.isNotEmpty) {
       query['notificationId'] = notificationId;
     }
 
@@ -68,9 +89,10 @@ Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
   }
 
   if (target == 'event') {
-    final String? eventId = data['eventId']?.toString();
-    if (eventId == null || eventId.isEmpty) return null;
-    return Uri.https('keepersnote.app', '/event/$eventId', <String, String>{
+    final String eventId = data['eventId']?.toString() ?? '';
+    if (eventId.isEmpty) return null;
+
+    return Uri.https('keepersnote.app', '/event/$eventId', {
       'target': 'event',
       'eventId': eventId,
     });
@@ -82,7 +104,7 @@ Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
     return Uri(
       scheme: 'keepersnote',
       host: 'community',
-      queryParameters: <String, String>{'target': target},
+      queryParameters: {'target': target},
     );
   }
 
@@ -252,7 +274,11 @@ Future<void> _configureFirebaseMessaging() async {
 
   final RemoteMessage? initialMessage = await messaging.getInitialMessage();
   final Uri? initialUri = _deepLinkFromRemoteMessage(initialMessage);
+
   if (initialUri != null) {
+    debugPrint('FCM initial notification opened: ${initialMessage?.data}');
+    debugPrint('FCM initial deepLink: $initialUri');
+
     _initialPushDeepLink = initialUri;
   }
 }
@@ -503,6 +529,12 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted || _isNavigating) return;
     _isNavigating = true;
+
+    final Uri? latestInitialPushDeepLink = _initialPushDeepLink;
+    if (latestInitialPushDeepLink != null) {
+      _pendingDeepLink = latestInitialPushDeepLink;
+      _initialPushDeepLink = null;
+    }
 
     final Widget nextScreen = isLoggedIn
         ? MainWrapper(initialDeepLink: _pendingDeepLink)
