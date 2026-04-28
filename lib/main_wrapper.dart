@@ -615,6 +615,54 @@ class _MainWrapperState extends State<MainWrapper> {
     }
   }
 
+  String? _lastHandledCommunityPushKey;
+  DateTime? _lastHandledCommunityPushAt;
+
+  bool _shouldIgnoreDuplicateCommunityPush(Uri uri) {
+    final now = DateTime.now();
+    final key = uri.toString();
+
+    if (_lastHandledCommunityPushKey == key &&
+        _lastHandledCommunityPushAt != null &&
+        now.difference(_lastHandledCommunityPushAt!) < const Duration(seconds: 2)) {
+      debugPrint('MainWrapper 중복 커뮤니티 푸시 무시: $uri');
+      return true;
+    }
+
+    _lastHandledCommunityPushKey = key;
+    _lastHandledCommunityPushAt = now;
+    return false;
+  }
+
+  Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
+    final target = data['target']?.toString();
+
+    if (target == 'community_post') {
+      final postId = data['postId']?.toString();
+      if (postId == null || postId.isEmpty) return null;
+
+      final query = <String, String>{
+        'target': 'community_post',
+        'postId': postId,
+      };
+
+      final commentId = data['commentId']?.toString();
+      final notificationId = data['notificationId']?.toString();
+
+      if (commentId != null && commentId.isNotEmpty) {
+        query['commentId'] = commentId;
+      }
+
+      if (notificationId != null && notificationId.isNotEmpty) {
+        query['notificationId'] = notificationId;
+      }
+
+      return Uri.https('keepersnote.app', '/community/post/$postId', query);
+    }
+
+    return null;
+  }
+
   Future<void> _initPush() async {
     if (_serverUserId.isEmpty) return;
 
@@ -624,6 +672,9 @@ class _MainWrapperState extends State<MainWrapper> {
       userId: _serverUserId,
       onRealtimeNotificationRefresh: () async {
         debugPrint('🔔 실시간 알림 도착');
+        if (mounted) {
+          await _refreshCommunityUnreadCount();
+        }
       },
       onTapNavigate: (data) async {
         debugPrint('F. onTapNavigate data=$data');
@@ -631,8 +682,9 @@ class _MainWrapperState extends State<MainWrapper> {
         final target = data['target']?.toString();
 
         if (target == 'community_post') {
-          final postId = int.tryParse(data['postId']?.toString() ?? '');
-          final commentId = int.tryParse(data['commentId']?.toString() ?? '');
+          final uri = _deepLinkFromPushData(data);
+          if (uri == null) return;
+
           final notificationId = int.tryParse(
             data['notificationId']?.toString() ?? '',
           );
@@ -650,28 +702,11 @@ class _MainWrapperState extends State<MainWrapper> {
             } catch (_) {}
           }
 
-          if (postId != null) {
-            if (!mounted) return;
+          if (!mounted) return;
+          if (_shouldIgnoreDuplicateCommunityPush(uri)) return;
 
-            setState(() {
-              _selectedIndex = 2;
-              _initialCommunityPostId = null;
-              _initialCommunityCommentId = null;
-            });
-
-            WidgetsBinding.instance.addPostFrameCallback((_) async {
-              await Future.delayed(const Duration(milliseconds: 100));
-
-              if (!mounted) return;
-
-              setState(() {
-                _initialCommunityPostId = postId;
-                _initialCommunityCommentId = commentId;
-              });
-            });
-
-            return;
-          }
+          _handleDeepLink(uri);
+          return;
         }
 
         if (target == 'uid_request') {
