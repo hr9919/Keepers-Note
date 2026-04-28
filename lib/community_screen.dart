@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'community_write_screen.dart';
 import 'my_community_posts_screen.dart';
 import 'package:kakao_flutter_sdk_share/kakao_flutter_sdk_share.dart' hide ImageInfo;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'services/community_tag_api_service.dart';
 import 'models/community_tag_item.dart';
 import 'community_user_profile_screen.dart';
@@ -454,6 +455,7 @@ class _TagChipStyle {
 
 class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingObserver {
   static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
+  static const String _swipeHintShownKey = 'community_swipe_hint_shown';
 
   late TaggingTextController _commentController;
   final FocusNode _commentFocusNode = FocusNode();
@@ -474,6 +476,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   int? _pendingHighlightCommentId;
 
   bool _showTopButton = false;
+  bool _showSwipeGestureHint = false;
   bool _isGridView = true;
   bool _isFilterPanelOpen = false;
   bool _showLikedOnly = false;
@@ -487,6 +490,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   List<CommunityTagItem> _tagItems = const <CommunityTagItem>[];
   final Map<int, List<CommunityComment>> _commentsByPostId = <int, List<CommunityComment>>{};
   final List<CommunityNotice> _communityNotices = CommunityNotice.defaultNotices;
+
   @override
   void initState() {
     super.initState();
@@ -504,6 +508,27 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tryOpenInitialPost();
+      _checkSwipeGestureHint();
+    });
+  }
+
+  Future<void> _checkSwipeGestureHint() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyShown = prefs.getBool(_swipeHintShownKey) ?? false;
+
+    if (alreadyShown || !mounted) return;
+
+    setState(() {
+      _showSwipeGestureHint = true;
+    });
+
+    await prefs.setBool(_swipeHintShownKey, true);
+
+    Future.delayed(const Duration(seconds: 6), () {
+      if (!mounted) return;
+      setState(() {
+        _showSwipeGestureHint = false;
+      });
     });
   }
 
@@ -2280,6 +2305,121 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                   ),
                 ),
               ),
+
+            if (_showSwipeGestureHint)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: media.padding.bottom + 130,
+                child: IgnorePointer(
+                  child: Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.72),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.78),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 18,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 92,
+                                height: 28,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // 👉 트랙 (iOS 느낌 핵심)
+                                    Container(
+                                      width: 78,
+                                      height: 2,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(999),
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.transparent,
+                                            const Color(0xFFB8B0AA).withOpacity(0.45),
+                                            const Color(0xFFB8B0AA).withOpacity(0.45),
+                                            Colors.transparent,
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+
+                                    // 👉 움직이는 highlight (진짜 iOS 느낌)
+                                    TweenAnimationBuilder<double>(
+                                      tween: Tween(begin: -28, end: 28),
+                                      duration: const Duration(milliseconds: 1400),
+                                      curve: Curves.easeInOutCubic,
+                                      builder: (context, value, child) {
+                                        return Transform.translate(
+                                          offset: Offset(value, 0),
+                                          child: Container(
+                                            width: 22,
+                                            height: 2,
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(999),
+                                              color: const Color(0xFFFF8E7C).withOpacity(0.8),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+
+                                    // 👉 손가락
+                                    TweenAnimationBuilder<double>(
+                                      tween: Tween(begin: -28, end: 28),
+                                      duration: const Duration(milliseconds: 1400),
+                                      curve: Curves.easeInOutCubic,
+                                      builder: (context, value, child) {
+                                        return Transform.translate(
+                                          offset: Offset(value, 7),
+                                          child: child,
+                                        );
+                                      },
+                                      child: const Icon(
+                                        Icons.touch_app_rounded,
+                                        size: 20,
+                                        color: Color(0xFFFF8E7C),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                '좌우로 밀어 보기 전환',
+                                style: TextStyle(
+                                  fontSize: 12.4,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF6F625C),
+                                  letterSpacing: -0.25,
+                                  height: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
             AnimatedPositioned(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
@@ -2299,6 +2439,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       ),
     );
   }
+
+
 
   Widget _buildFilterSidePanel(double topPadding) {
     const List<String> preferredOrder = <String>[
@@ -4797,7 +4939,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.94),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFFFE5DE)),
+            border: Border.all(
+              color: _postBorderColor(post),
+              width: 1.2,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.03),
@@ -4879,7 +5024,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                   : const SizedBox.shrink(),
                             ),
                           ),
-                          if (post.isAdminPick) _buildVerifiedBadge(),
+                          if (_shouldShowAdminPickStyle(post)) _buildVerifiedBadge(),
                         ],
                       ),
                     ),

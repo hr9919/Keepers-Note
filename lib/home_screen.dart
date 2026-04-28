@@ -936,7 +936,7 @@ class _HomeScreenState extends State<HomeScreen>
         }).toList();
 
         setState(() {
-          _currentWeather = currentWeather;
+          _currentWeather = _normalizeWeatherLabel(currentWeather);
           _hourlyWeather = hourly;
         });
       }
@@ -950,7 +950,7 @@ class _HomeScreenState extends State<HomeScreen>
           final map = e as Map<String, dynamic>;
           return {
             'day': (map['dayOfWeek'] ?? '').toString(),
-            'weather': (map['weather'] ?? '수집중').toString(),
+            'weather': _normalizeWeatherLabel((map['weather'] ?? '수집중').toString()),
             'date': (map['date'] ?? '').toString(),
           };
         }).toList();
@@ -3017,6 +3017,8 @@ class _HomeScreenState extends State<HomeScreen>
         return '채집하러 가볼까요?';
       case '눈':
         return '눈이 내리고 있어요';
+      case '유성우':
+        return '별똥별 조각을 찾아보세요';
       default:
         return '오늘의 날씨예요';
     }
@@ -3496,6 +3498,69 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ],
                   );
+                case '유성우':
+                  return Stack(
+                    children: [
+                      // 밤하늘 배경 (이미 BoxDecoration 있지만 더 깊이감 추가)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF0F172A),
+                                Color(0xFF1E1B4B),
+                                Color(0xFF312E81),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      ...List.generate(5, (i) {
+                        final progress = ((t + i * 0.21) % 1.0);
+
+                        final randomX = (i * 73 % 100) / 100; // pseudo 랜덤
+                        final randomY = (i * 41 % 100) / 100;
+
+                        final startX = w * (0.3 + randomX * 0.9) - progress * w * (0.6 + randomX * 0.3);
+                        final startY = h * (-0.2 + randomY * 0.6) + progress * h * (0.5 + randomY * 0.4);
+
+                        final length = 50 + (randomX * 40);
+
+                        return Positioned(
+                          left: startX,
+                          top: startY,
+                          child: Transform.rotate(
+                            angle: -0.7,
+                            child: Container(
+                              width: length,
+                              height: 2.2,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                gradient: LinearGradient(
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                  colors: [
+                                    Colors.white,
+                                    Colors.white.withOpacity(0.35),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.white.withOpacity(0.25),
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  );
 
                 default:
                   return Container(
@@ -3550,6 +3615,10 @@ class _HomeScreenState extends State<HomeScreen>
             break;
           case '눈':
             dy = wave * 1.2;
+            break;
+          case '유성우':
+            dy = wave * 1.0;
+            scale = 1.0 + (sin(t * pi * 2) * 0.018);
             break;
         }
 

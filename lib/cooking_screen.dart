@@ -1808,15 +1808,6 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                                     ],
                                   ),
                                 ),
-                                const SizedBox(width: 6),
-                                const Padding(
-                                  padding: EdgeInsets.only(right: 2),
-                                  child: Icon(
-                                    Icons.chevron_right_rounded,
-                                    size: 22,
-                                    color: Color(0xFFB8C2CC),
-                                  ),
-                                ),
                               ],
                             ),
                             const SizedBox(height: 8),
@@ -2029,15 +2020,6 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                                           ? const Color(0xFFFF8E7C)
                                           : const Color(0xFFD9D9D9),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 2, right: 2),
-                                  child: Icon(
-                                    Icons.chevron_right_rounded,
-                                    size: 21,
-                                    color: Color(0xFFB8C2CC),
                                   ),
                                 ),
                               ],
@@ -3166,6 +3148,99 @@ class CookingRecipeDetailPage extends StatelessWidget {
     required this.onMaterialOpenDetail,
   });
 
+  String _formatPrice(int? price) {
+    if (price == null) return '';
+    return price.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},',
+    );
+  }
+
+  Color _starBadgeColor(int star) {
+    switch (star) {
+      case 1:
+        return const Color(0xFFE5E7EB);
+      case 2:
+        return const Color(0xFFFFE4E6);
+      case 3:
+        return const Color(0xFFFFEDD5);
+      case 4:
+        return const Color(0xFFFEF3C7);
+      case 5:
+        return const Color(0xFFDCFCE7);
+      default:
+        return const Color(0xFFF3F4F6);
+    }
+  }
+
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF2D3436),
+          height: 1.0,
+        ),
+      ),
+    );
+  }
+
+  Widget _priceTile(int star, int price) {
+    final priceText = price > 0 ? '${_formatPrice(price)}원' : '-';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFE2DB)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: _starBadgeColor(star),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$star성',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF3F3F46),
+                height: 1.0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                priceText,
+                maxLines: 1,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF2D3436),
+                  height: 1.0,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -3176,14 +3251,22 @@ class CookingRecipeDetailPage extends StatelessWidget {
 
     final String displayName = _displayRecipeName(recipe);
     final String heroImagePath = _resolveRecipeHeroImage(recipe);
+    final visiblePrices = List<Map<String, int>>.generate(
+      5,
+          (index) => {
+        'star': index + 1,
+        'price': index < recipe.prices.length ? recipe.prices[index] : 0,
+      },
+    );
+    final bool hasPrice = recipe.prices.any((price) => price > 0);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFAF8),
       appBar: AppBar(
         backgroundColor: const Color(0xFFFFFAF8),
         elevation: 0,
+        centerTitle: true,
         title: Text(
-          displayName,
+          recipe.nameKo,
           style: const TextStyle(
             color: Color(0xFF2D3436),
             fontSize: 18,
@@ -3350,6 +3433,45 @@ class CookingRecipeDetailPage extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
+          const SizedBox(height: 22),
+          _sectionTitle('성급별 판매가'),
+          const SizedBox(height: 10),
+          if (!hasPrice)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFFE2DB)),
+              ),
+              child: const Center(
+                child: Text(
+                  '등록된 판매가가 없어요.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ),
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: visiblePrices.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                crossAxisSpacing: 6,
+                mainAxisSpacing: 6,
+                childAspectRatio: 0.82,
+              ),
+              itemBuilder: (context, index) {
+                final item = visiblePrices[index];
+                return _priceTile(item['star']!, item['price']!);
+              },
+            ),
         ],
       ),
     );
@@ -3411,10 +3533,10 @@ class CookingMaterialDetailPage extends StatelessWidget {
     purchasePrice > 0 ? '${purchasePrice}원' : '-';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFAF8),
       appBar: AppBar(
         backgroundColor: const Color(0xFFFFFAF8),
         elevation: 0,
+        centerTitle: true,
         title: Text(
           material.nameKo,
           style: const TextStyle(

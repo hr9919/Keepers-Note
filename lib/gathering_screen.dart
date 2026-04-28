@@ -457,7 +457,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     }
 
     if (index == 2) {
-      return ['전체', '숲', '집 앞', '호수', '바다', '도시', '어촌'];
+      return ['전체', '숲', '집 앞', '호수', '도시', '어촌'];
     }
 
     return ['전체'];
@@ -1499,6 +1499,128 @@ class _GatheringScreenState extends State<GatheringScreen>
     }
   }
 
+  Future<void> _openFishDetail(FishItem fish) async {
+    final fishPrices = [
+      fish.price1 ?? 0,
+      fish.price2 ?? 0,
+      fish.price3 ?? 0,
+      fish.price4 ?? 0,
+      fish.price5 ?? 0,
+    ];
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GatheringSimpleDetailPage(
+          title: _displayName(fish),
+          categoryLabel: '물고기',
+          levelLabel: fish.level == null ? '-' : '낚시 ${fish.level}레벨',
+          image: fish.image,
+          fallbackIcon: Icons.set_meal_rounded,
+          prices: fishPrices,
+          timeText: _formatDetailAvailableTime(fish.availableTime),
+          locationText: fish.location.trim().isEmpty ? '-' : fish.location.trim(),
+          weatherText: _formatDetailWeather(fish.weather),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openBirdDetail(BirdItem bird) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GatheringSimpleDetailPage(
+          title: _displayBirdName(bird),
+          categoryLabel: '새',
+          levelLabel: '관찰 ${bird.level}레벨',
+          image: bird.image,
+          fallbackIcon: Icons.flutter_dash_rounded,
+          prices: bird.prices,
+          timeText: _formatDetailAvailableTime(
+            bird.timeKey.isNotEmpty ? bird.timeKey : bird.availableTime,
+          ),
+          locationText: bird.location.trim().isEmpty
+              ? '-'
+              : _normalizeBirdLocationLabel(bird.location),
+          weatherText: _formatDetailWeather(bird.weather),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openInsectDetail(InsectItem insect) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GatheringSimpleDetailPage(
+          title: _displayInsectName(insect),
+          categoryLabel: '곤충',
+          levelLabel: '채집 ${insect.level}레벨',
+          image: insect.image,
+          fallbackIcon: Icons.bug_report,
+          prices: insect.prices,
+          timeText: _formatDetailAvailableTime(insect.availableTime),
+          locationText: insect.location.trim().isEmpty
+              ? '-'
+              : _normalizeInsectLocationLabel(insect.location),
+          weatherText: '모든 날씨',
+        ),
+      ),
+    );
+  }
+
+  String _formatDetailAvailableTime(String? time) {
+    if (time == null || time.trim().isEmpty) return '하루종일';
+
+    final raw = time.trim();
+    final compact = raw.replaceAll(' ', '').toLowerCase();
+
+    if (compact == 'allday' ||
+        compact == 'all' ||
+        compact == '0~24' ||
+        compact == '0-24' ||
+        compact == '상시' ||
+        compact == '하루종일') {
+      return '하루종일';
+    }
+
+    switch (compact) {
+      case 'day_night':
+        return '6시~24시';
+      case 'dawn_night':
+        return '0시~6시, 18시~24시';
+    }
+
+    final match = RegExp(r'^(\d{1,2})[~-](\d{1,2})$').firstMatch(compact);
+    if (match != null) {
+      return '${match.group(1)}시~${match.group(2)}시';
+    }
+
+    final insectTime = _normalizeInsectTimeLabel(raw);
+    if (insectTime.isNotEmpty) return insectTime;
+
+    return raw;
+  }
+
+  String _formatDetailWeather(String raw) {
+    final labels = _normalizeWeatherLabel(raw);
+    if (labels.isNotEmpty) return labels.join(', ');
+
+    final compact = raw.trim().replaceAll(' ', '').toLowerCase();
+    if (compact.isEmpty ||
+        compact == 'any' ||
+        compact == 'all' ||
+        compact == 'unknown' ||
+        compact == '전체' ||
+        compact == '모든날씨') {
+      return '모든 날씨';
+    }
+
+    return raw.trim();
+  }
+
+
   Future<void> _loadFavorites() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
@@ -2328,11 +2450,12 @@ class _GatheringScreenState extends State<GatheringScreen>
     required Widget child,
     required VoidCallback onTap,
   }) {
+    bool isPressed = false;
+
     return StatefulBuilder(
       builder: (context, setCardState) {
-        bool isPressed = false;
-
         void setPressed(bool value) {
+          if (isPressed == value) return;
           setCardState(() => isPressed = value);
         }
 
@@ -2362,7 +2485,6 @@ class _GatheringScreenState extends State<GatheringScreen>
       },
     );
   }
-
   Widget _buildFilterBarArea() {
     final filters = _getCurrentFilterList();
 
@@ -2511,35 +2633,48 @@ class _GatheringScreenState extends State<GatheringScreen>
   Widget _buildGatheringCardShell({
     required bool isHighlighted,
     required Widget child,
+    VoidCallback? onTap,
   }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: ShapeDecoration(
-        color: isHighlighted
-            ? const Color(0xFFFFF4D8)
-            : Colors.white.withOpacity(0.92),
-        shape: RoundedRectangleBorder(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: isHighlighted
-                ? const Color(0xFFFFB27A).withOpacity(0.6)
-                : const Color(0xFFFF8E7C).withOpacity(0.12),
-            width: 1,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: isHighlighted
+              ? const Color(0xFFFFF4D8)
+              : Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            splashColor: const Color(0xFFFF8E7C).withOpacity(0.08),
+            highlightColor: const Color(0xFFFF8E7C).withOpacity(0.04),
+            onTap: onTap,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isHighlighted
+                      ? const Color(0xFFFFB27A).withOpacity(0.55)
+                      : const Color(0xFFFF8E7C).withOpacity(0.12),
+                  width: 1,
+                ),
+              ),
+              child: child,
+            ),
           ),
         ),
-        shadows: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
-      child: child,
     );
   }
-
   Widget _buildBirdTabContent() {
     return _buildDynamicTabContent<BirdItem>(
       _isBirdLoading,
@@ -2748,6 +2883,14 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
+
+  Widget _buildCardBottomAction(List<int> prices) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: _buildPriceButton(prices),
+    );
+  }
+
   Widget _buildInsectCard(InsectItem insect) {
     final bool isHighlighted = _highlightedId == insect.id;
     final timeChip = _normalizeInsectTimeLabel(insect.availableTime);
@@ -2757,59 +2900,66 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
+      onTap: () => _openInsectDetail(insect),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildCardImage(
-                insect.image,
-                Icons.bug_report,
-                previewTitle: _displayInsectName(insect),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _buildCardImage(
+              insect.image,
+              Icons.bug_report,
+              previewTitle: _displayInsectName(insect),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 110),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildCardTitle(_displayInsectName(insect), insect.id),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildBaseChip(
-                          '채집 ${insect.level}레벨',
-                          bg: levelColors['bg']!,
-                          border: levelColors['border']!,
-                          textColor: levelColors['text']!,
+                        _buildCardTitle(_displayInsectName(insect), insect.id),
+                        const SizedBox(height: 5),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [
+                            _buildBaseChip(
+                              '채집 ${insect.level}레벨',
+                              bg: levelColors['bg']!,
+                              border: levelColors['border']!,
+                              textColor: levelColors['text']!,
+                            ),
+                            if (timeChip.isNotEmpty)
+                              _buildBaseChip(
+                                timeChip,
+                                bg: timeColors['bg']!,
+                                border: timeColors['border']!,
+                                textColor: timeColors['text']!,
+                              ),
+                            if (locationChip.isNotEmpty)
+                              _buildLocationTag(locationChip),
+                          ],
                         ),
-                        if (timeChip.isNotEmpty)
-                          _buildBaseChip(
-                            timeChip,
-                            bg: timeColors['bg']!,
-                            border: timeColors['border']!,
-                            textColor: timeColors['text']!,
-                          ),
-                        if (locationChip.isNotEmpty)
-                          _buildLocationTag(locationChip),
                       ],
                     ),
-                    const Spacer(),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: _buildPriceButton(insect.prices),
-                    ),
+                    const SizedBox(height: 8),
+                    _buildCardBottomAction(insect.prices),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+
 
   Widget _buildPlantCard(PlantItem plant) {
     final bool isHighlighted = _highlightedId == plant.id;
@@ -3006,100 +3156,107 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
+      onTap: () => _openFishDetail(fish),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildCardImage(
-                fish.image,
-                Icons.set_meal_rounded,
-                previewTitle: _displayName(fish),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _buildCardImage(
+              fish.image,
+              Icons.set_meal_rounded,
+              previewTitle: _displayName(fish),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 110),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildCardTitle(_displayName(fish), fish.id),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (fish.level != null)
-                          _buildBaseChip(
-                            '낚시 ${fish.level}레벨',
-                            bg: _levelChipColors(fish.level!)['bg']!,
-                            border: _levelChipColors(fish.level!)['border']!,
-                            textColor: _levelChipColors(fish.level!)['text']!,
-                          ),
-                        if (timeChip.isNotEmpty)
-                          _buildBaseChip(
-                            timeChip,
-                            bg: timeColors['bg']!,
-                            border: timeColors['border']!,
-                            textColor: timeColors['text']!,
-                          ),
-                        if (locationChip.isNotEmpty)
-                          _buildLocationTag(locationChip),
-                        ...weatherLabels.map((label) {
-                          Color bg = const Color(0xFFF0F7FF);
-                          Color border = const Color(0xFFD9E9FF);
-                          Color textColor = const Color(0xFF5B88C7);
+                        _buildCardTitle(_displayName(fish), fish.id),
+                        const SizedBox(height: 5),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [
+                            if (fish.level != null)
+                              _buildBaseChip(
+                                '낚시 ${fish.level}레벨',
+                                bg: _levelChipColors(fish.level!)['bg']!,
+                                border: _levelChipColors(fish.level!)['border']!,
+                                textColor: _levelChipColors(fish.level!)['text']!,
+                              ),
+                            if (timeChip.isNotEmpty)
+                              _buildBaseChip(
+                                timeChip,
+                                bg: timeColors['bg']!,
+                                border: timeColors['border']!,
+                                textColor: timeColors['text']!,
+                              ),
+                            if (locationChip.isNotEmpty)
+                              _buildLocationTag(locationChip),
+                            ...weatherLabels.map((label) {
+                              Color bg = const Color(0xFFF0F7FF);
+                              Color border = const Color(0xFFD9E9FF);
+                              Color textColor = const Color(0xFF5B88C7);
 
-                          switch (label) {
-                            case '맑음':
-                              bg = const Color(0xFFFFF7D6);
-                              border = const Color(0xFFFFE6A3);
-                              textColor = const Color(0xFFB7791F);
-                              break;
-                            case '비':
-                              bg = const Color(0xFFEAF3FF);
-                              border = const Color(0xFFD4E4FF);
-                              textColor = const Color(0xFF4A67A1);
-                              break;
-                            case '눈':
-                              bg = const Color(0xFFF3F4F6);
-                              border = const Color(0xFFE5E7EB);
-                              textColor = const Color(0xFF6B7280);
-                              break;
-                            case '무지개':
-                              bg = const Color(0xFFFFF0FA);
-                              border = const Color(0xFFF6D6EC);
-                              textColor = const Color(0xFFC05A9D);
-                              break;
-                            case '흐림':
-                              bg = const Color(0xFFF3F4F6);
-                              border = const Color(0xFFE5E7EB);
-                              textColor = const Color(0xFF6B7280);
-                              break;
-                          }
+                              switch (label) {
+                                case '맑음':
+                                  bg = const Color(0xFFFFF7D6);
+                                  border = const Color(0xFFFFE6A3);
+                                  textColor = const Color(0xFFB7791F);
+                                  break;
+                                case '비':
+                                  bg = const Color(0xFFEAF3FF);
+                                  border = const Color(0xFFD4E4FF);
+                                  textColor = const Color(0xFF4A67A1);
+                                  break;
+                                case '눈':
+                                  bg = const Color(0xFFF3F4F6);
+                                  border = const Color(0xFFE5E7EB);
+                                  textColor = const Color(0xFF6B7280);
+                                  break;
+                                case '무지개':
+                                  bg = const Color(0xFFFFF0FA);
+                                  border = const Color(0xFFF6D6EC);
+                                  textColor = const Color(0xFFC05A9D);
+                                  break;
+                                case '흐림':
+                                  bg = const Color(0xFFF3F4F6);
+                                  border = const Color(0xFFE5E7EB);
+                                  textColor = const Color(0xFF6B7280);
+                                  break;
+                              }
 
-                          return _buildBaseChip(
-                            label,
-                            bg: bg,
-                            border: border,
-                            textColor: textColor,
-                          );
-                        }),
+                              return _buildBaseChip(
+                                label,
+                                bg: bg,
+                                border: border,
+                                textColor: textColor,
+                              );
+                            }),
+                          ],
+                        ),
                       ],
                     ),
-                    const Spacer(),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: _buildPriceButton(fishPrices),
-                    ),
+                    const SizedBox(height: 8),
+                    _buildCardBottomAction(fishPrices),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+
 
   Widget _buildBaseChip(
       String text, {
@@ -3143,99 +3300,106 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
+      onTap: () => _openBirdDetail(bird),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildCardImage(
-                bird.image,
-                Icons.flutter_dash_rounded,
-                previewTitle: _displayBirdName(bird),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _buildCardImage(
+              bird.image,
+              Icons.flutter_dash_rounded,
+              previewTitle: _displayBirdName(bird),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 110),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildCardTitle(_displayBirdName(bird), bird.id),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildBaseChip(
-                          '관찰 ${bird.level}레벨',
-                          bg: _levelChipColors(bird.level)['bg']!,
-                          border: _levelChipColors(bird.level)['border']!,
-                          textColor: _levelChipColors(bird.level)['text']!,
+                        _buildCardTitle(_displayBirdName(bird), bird.id),
+                        const SizedBox(height: 5),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [
+                            _buildBaseChip(
+                              '관찰 ${bird.level}레벨',
+                              bg: _levelChipColors(bird.level)['bg']!,
+                              border: _levelChipColors(bird.level)['border']!,
+                              textColor: _levelChipColors(bird.level)['text']!,
+                            ),
+                            if (timeChip.isNotEmpty)
+                              _buildBaseChip(
+                                timeChip,
+                                bg: timeColors['bg']!,
+                                border: timeColors['border']!,
+                                textColor: timeColors['text']!,
+                              ),
+                            if (locationChip.isNotEmpty)
+                              _buildLocationTag(locationChip),
+                            ...weatherLabels.map((label) {
+                              Color bg = const Color(0xFFF0F7FF);
+                              Color border = const Color(0xFFD9E9FF);
+                              Color textColor = const Color(0xFF5B88C7);
+
+                              switch (label) {
+                                case '맑음':
+                                  bg = const Color(0xFFFFF7D6);
+                                  border = const Color(0xFFFFE6A3);
+                                  textColor = const Color(0xFFB7791F);
+                                  break;
+                                case '비':
+                                  bg = const Color(0xFFEAF3FF);
+                                  border = const Color(0xFFD4E4FF);
+                                  textColor = const Color(0xFF4A67A1);
+                                  break;
+                                case '눈':
+                                  bg = const Color(0xFFF3F4F6);
+                                  border = const Color(0xFFE5E7EB);
+                                  textColor = const Color(0xFF6B7280);
+                                  break;
+                                case '무지개':
+                                  bg = const Color(0xFFFFF0FA);
+                                  border = const Color(0xFFF6D6EC);
+                                  textColor = const Color(0xFFC05A9D);
+                                  break;
+                                case '흐림':
+                                  bg = const Color(0xFFF3F4F6);
+                                  border = const Color(0xFFE5E7EB);
+                                  textColor = const Color(0xFF6B7280);
+                                  break;
+                              }
+
+                              return _buildBaseChip(
+                                label,
+                                bg: bg,
+                                border: border,
+                                textColor: textColor,
+                              );
+                            }),
+                          ],
                         ),
-                        if (timeChip.isNotEmpty)
-                          _buildBaseChip(
-                            timeChip,
-                            bg: timeColors['bg']!,
-                            border: timeColors['border']!,
-                            textColor: timeColors['text']!,
-                          ),
-                        if (locationChip.isNotEmpty)
-                          _buildLocationTag(locationChip),
-                        ...weatherLabels.map((label) {
-                          Color bg = const Color(0xFFF0F7FF);
-                          Color border = const Color(0xFFD9E9FF);
-                          Color textColor = const Color(0xFF5B88C7);
-
-                          switch (label) {
-                            case '맑음':
-                              bg = const Color(0xFFFFF7D6);
-                              border = const Color(0xFFFFE6A3);
-                              textColor = const Color(0xFFB7791F);
-                              break;
-                            case '비':
-                              bg = const Color(0xFFEAF3FF);
-                              border = const Color(0xFFD4E4FF);
-                              textColor = const Color(0xFF4A67A1);
-                              break;
-                            case '눈':
-                              bg = const Color(0xFFF3F4F6);
-                              border = const Color(0xFFE5E7EB);
-                              textColor = const Color(0xFF6B7280);
-                              break;
-                            case '무지개':
-                              bg = const Color(0xFFFFF0FA);
-                              border = const Color(0xFFF6D6EC);
-                              textColor = const Color(0xFFC05A9D);
-                              break;
-                            case '흐림':
-                              bg = const Color(0xFFF3F4F6);
-                              border = const Color(0xFFE5E7EB);
-                              textColor = const Color(0xFF6B7280);
-                              break;
-                          }
-
-                          return _buildBaseChip(
-                            label,
-                            bg: bg,
-                            border: border,
-                            textColor: textColor,
-                          );
-                        }),
                       ],
                     ),
-                    const Spacer(),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: _buildPriceButton(bird.prices),
-                    ),
+                    const SizedBox(height: 8),
+                    _buildCardBottomAction(bird.prices),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+
   // 카드 공통 컨테이너
   Widget _buildBaseContainer({
     required Widget child,
@@ -3329,8 +3493,9 @@ class _GatheringScreenState extends State<GatheringScreen>
         const SizedBox(width: 8),
         GestureDetector(
           onTap: () => _toggleFavorite(itemId),
+          behavior: HitTestBehavior.opaque,
           child: Padding(
-            padding: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             child: Icon(
               isFavorite ? Icons.favorite : Icons.favorite_border,
               size: 24,
@@ -4261,6 +4426,389 @@ class _GatheringScreenState extends State<GatheringScreen>
     if (index <= 0) return;
     final selected = list.removeAt(index);
     list.insert(0, selected);
+  }
+}
+
+class GatheringSimpleDetailPage extends StatelessWidget {
+  final String title;
+  final String categoryLabel;
+  final String levelLabel;
+  final String image;
+  final IconData fallbackIcon;
+  final List<int> prices;
+  final String timeText;
+  final String locationText;
+  final String weatherText;
+
+  const GatheringSimpleDetailPage({
+    super.key,
+    required this.title,
+    required this.categoryLabel,
+    required this.levelLabel,
+    required this.image,
+    required this.fallbackIcon,
+    required this.prices,
+    required this.timeText,
+    required this.locationText,
+    required this.weatherText,
+  });
+
+  String _formatPrice(int price) {
+    return price.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},',
+    );
+  }
+
+  String _imageAssetPath(String? image) {
+    if (image == null || image.isEmpty) return 'assets/images/default.png';
+
+    String fullPath = image.startsWith('assets/') ? image : 'assets/$image';
+
+    if (!fullPath.toLowerCase().endsWith('.webp') &&
+        !fullPath.toLowerCase().endsWith('.png') &&
+        !fullPath.toLowerCase().endsWith('.jpg')) {
+      fullPath = '$fullPath.webp';
+    }
+
+    return fullPath;
+  }
+
+  Color _starBadgeColor(int star) {
+    switch (star) {
+      case 1:
+        return const Color(0xFFF3F4F6);
+      case 2:
+        return const Color(0xFFFFE4E6);
+      case 3:
+        return const Color(0xFFFFEDD5);
+      case 4:
+        return const Color(0xFFFEF3C7);
+      case 5:
+        return const Color(0xFFDCFCE7);
+      default:
+        return const Color(0xFFF3F4F6);
+    }
+  }
+
+  IconData _infoIcon(String label) {
+    switch (label) {
+      case '출현 시간':
+        return Icons.schedule_rounded;
+      case '출현 장소':
+        return Icons.place_rounded;
+      case '날씨':
+        return Icons.wb_cloudy_rounded;
+      default:
+        return Icons.info_rounded;
+    }
+  }
+
+  Widget _infoTile(String label, String value) {
+    final display = value.trim().isEmpty ? '-' : value.trim();
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 76),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: const Color(0xFFFFE2DB),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.022),
+            blurRadius: 9,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _infoIcon(label),
+            size: 16,
+            color: const Color(0xFFFF8E7C),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF94A3B8),
+              height: 1.0,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            display,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11.2,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2D3436),
+              height: 1.12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF2D3436),
+          height: 1.0,
+        ),
+      ),
+    );
+  }
+
+  Widget _priceTile(int star, int price) {
+    final priceText = price > 0 ? '${_formatPrice(price)}원' : '-';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFE2DB)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: _starBadgeColor(star),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$star성',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF3F3F46),
+                height: 1.0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                priceText,
+                maxLines: 1,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF2D3436),
+                  height: 1.0,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePath = _imageAssetPath(image);
+    final visiblePrices = List<Map<String, int>>.generate(
+      5,
+          (index) => {
+        'star': index + 1,
+        'price': index < prices.length ? prices[index] : 0,
+      },
+    );
+    final bool hasPrice = prices.any((price) => price > 0);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFBFA),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFFFBFA),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Color(0xFF2D3436),
+            size: 19,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF2D3436),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 17),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.96),
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: const Color(0xFFFFE2DB)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.045),
+                      blurRadius: 18,
+                      offset: const Offset(0, 7),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 190,
+                      height: 190,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFAF8),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Image.asset(
+                          imagePath,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Icon(
+                            fallbackIcon,
+                            size: 72,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 23,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2D3436),
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3EE),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$categoryLabel · $levelLabel',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFFF7A65),
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              _sectionTitle('출현 정보'),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _infoTile('출현 시간', timeText)),
+                  const SizedBox(width: 7),
+                  Expanded(child: _infoTile('날씨', weatherText)),
+                  const SizedBox(width: 7),
+                  Expanded(child: _infoTile('출현 장소', locationText)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _sectionTitle('성급별 판매가'),
+              const SizedBox(height: 10),
+              if (!hasPrice)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFFE2DB)),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      '등록된 판매가가 없어요.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: visiblePrices.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 5,
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 6,
+                    childAspectRatio: 0.82,
+                  ),
+                  itemBuilder: (context, index) {
+                    final item = visiblePrices[index];
+                    return _priceTile(item['star']!, item['price']!);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
