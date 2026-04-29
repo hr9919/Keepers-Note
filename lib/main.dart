@@ -197,9 +197,10 @@ Future<Uri?> _deepLinkFromRemoteMessageOrFallback(
   if (message == null) return null;
 
   final direct = _deepLinkFromRemoteMessage(message);
+
   if (direct != null) return direct;
 
-  return _latestNotificationDeepLinkFromServer();
+  return null;
 }
 
 Future<void> _showForegroundLocalNotification(RemoteMessage message) async {
@@ -352,7 +353,9 @@ Future<void> _configureFirebaseMessaging() async {
         (RemoteMessage message) async {
       final Uri? uri = await _deepLinkFromRemoteMessageOrFallback(message);
       if (uri != null) {
-        _navigateToDeepLink(uri);
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _navigateToDeepLink(uri);
+        });
       }
     },
   );
@@ -603,6 +606,7 @@ class _SplashScreenState extends State<SplashScreen>
     final stopwatch = Stopwatch()..start();
 
     await _loadInitialPushDeepLinkAgain();
+    await Future.delayed(const Duration(milliseconds: 200));
     unawaited(_initDeepLinks());
 
     bool isLoggedIn = false;
@@ -626,9 +630,8 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted || _isNavigating) return;
     _isNavigating = true;
 
-    final Uri? latestInitialPushDeepLink = _initialPushDeepLink;
-    if (latestInitialPushDeepLink != null) {
-      _pendingDeepLink = latestInitialPushDeepLink;
+    if (_pendingDeepLink == null && _initialPushDeepLink != null) {
+      _pendingDeepLink = _initialPushDeepLink;
       _initialPushDeepLink = null;
     }
 
