@@ -278,10 +278,12 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
         _isSavingDaily = true;
       });
 
+      debugPrint('🔥 일별 추가 요청 forecastDate=$_nextDailyDate weatherType=$_selectedDailyWeather');
       final response = await http.post(
         Uri.parse('$_baseUrl/api/admin/weather/daily/append'),
         headers: _adminHeaders(),
         body: jsonEncode({
+          'forecastDate': _nextDailyDate,
           'weatherType': _selectedDailyWeather,
         }),
       );
@@ -1013,10 +1015,21 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
                 onApply: () async {
                   if (!isDirty) return;
 
-                  await _updateDailyWeather(
-                    forecastDate: forecastDate,
-                    weatherType: currentValue,
-                  );
+                  final isNew = originalWeatherType == null;
+
+                  if (isNew) {
+                    // 🔥 추가로 보내야됨
+                    await _appendDailyWeatherDirect(
+                      forecastDate: forecastDate,
+                      weatherType: currentValue,
+                    );
+                  } else {
+                    // 기존 데이터만 update
+                    await _updateDailyWeather(
+                      forecastDate: forecastDate,
+                      weatherType: currentValue,
+                    );
+                  }
 
                   if (!mounted) return;
                   setState(() {
@@ -1046,6 +1059,41 @@ class _WeatherAdminScreenState extends State<WeatherAdminScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _appendDailyWeatherDirect({
+    required String forecastDate,
+    required String weatherType,
+  }) async {
+    try {
+      setState(() {
+        _isUpdatingDaily = true;
+      });
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/admin/weather/daily/append'),
+        headers: _adminHeaders(),
+        body: jsonEncode({
+          'forecastDate': forecastDate,
+          'weatherType': weatherType,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        _hasWeatherChanged = true;
+        _showSnack('일별 날씨가 추가됐어요.');
+        await _refreshAll(showLoading: false);
+      } else {
+        _showSnack('추가 실패: ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      _showSnack('추가 실패: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isUpdatingDaily = false;
+      });
+    }
   }
 
   @override
