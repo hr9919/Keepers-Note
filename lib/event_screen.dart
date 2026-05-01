@@ -82,43 +82,13 @@ class _EventScreenState extends State<EventScreen> {
   Future<void> _loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final provider = prefs.getString('authProvider');
-    final providerUserId = prefs.getString('providerUserId');
-    final nickname = prefs.getString('nickname') ?? '사용자';
-    final profileImageUrl = prefs.getString('profileImageUrl');
+    final savedUserId = prefs.getString('userId');
 
-    if (provider == null || provider.isEmpty) {
-      throw Exception('authProvider 없음');
+    if (savedUserId == null || savedUserId.isEmpty) {
+      throw Exception('userId 없음');
     }
 
-    if (providerUserId == null || providerUserId.isEmpty) {
-      throw Exception('providerUserId 없음');
-    }
-
-    final response = await http.post(
-      Uri.parse('https://api.keepers-note.o-r.kr/api/user/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'provider': provider,
-        'providerUserId': providerUserId,
-        'nickname': nickname,
-        'profileImageUrl': profileImageUrl,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('userId 조회 실패: ${response.statusCode}');
-    }
-
-    final data = jsonDecode(utf8.decode(response.bodyBytes));
-    final id = data['id']?.toString();
-
-    if (id == null || id.isEmpty) {
-      throw Exception('서버 userId가 비어 있어요.');
-    }
-
-    await prefs.setString('userId', id);
-    _serverUserId = id;
+    _serverUserId = savedUserId;
   }
 
   int? get _userIdAsInt {

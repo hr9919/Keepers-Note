@@ -639,54 +639,100 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
   _TagChipStyle _tagChipStyle(String text) {
     switch (text) {
-      case '인테리어':
-        return const _TagChipStyle(
-          selectedBackground: Color(0xFFFFE8DF),
-          selectedBorder: Color(0xFFF1BEAA),
-          selectedText: Color(0xFFC96547),
-        );
-      case '익스테리어':
-        return const _TagChipStyle(
-          selectedBackground: Color(0xFFE5F5EB),
-          selectedBorder: Color(0xFFBFE2CB),
-          selectedText: Color(0xFF43885B),
-        );
-      case '코디':
-        return const _TagChipStyle(
-          selectedBackground: Color(0xFFFFE8F4),
-          selectedBorder: Color(0xFFEAB8D6),
-          selectedText: Color(0xFFB75689),
-        );
-      case '반려동물':
-        return const _TagChipStyle(
-          selectedBackground: Color(0xFFEEE7FF),
-          selectedBorder: Color(0xFFD1C2F0),
-          selectedText: Color(0xFF775BB8),
-        );
-      case '도트 도안':
-        return const _TagChipStyle(
-          selectedBackground: Color(0xFFFFF2D9),
-          selectedBorder: Color(0xFFEBCF8D),
-          selectedText: Color(0xFFB78718),
-        );
-      case '꿀팁 영상':
-        return const _TagChipStyle(
-          selectedBackground: Color(0xFFE1F1FC),
-          selectedBorder: Color(0xFFB6DBF2),
-          selectedText: Color(0xFF427FA7),
-        );
-      case '공략':
-        return const _TagChipStyle(
-          selectedBackground: Color(0xFFE3EDFF),
-          selectedBorder: Color(0xFFBFD4FF),
-          selectedText: Color(0xFF2F5FBF),
-        );
       case '전체':
-      default:
+      // 코랄 핑크
         return const _TagChipStyle(
           selectedBackground: Color(0xFFFFEDE7),
           selectedBorder: Color(0xFFFFD8CF),
           selectedText: Color(0xFFFF8E7C),
+        );
+
+      case '인테리어':
+      // 레드 오렌지
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFFFE8E2),
+          selectedBorder: Color(0xFFFFBFAA),
+          selectedText: Color(0xFFD96A4A),
+        );
+
+      case '익스테리어':
+      // 오렌지
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFFFF0DC),
+          selectedBorder: Color(0xFFFFD29A),
+          selectedText: Color(0xFFC97818),
+        );
+
+      case '코디':
+      // 옐로우
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFFFF8D9),
+          selectedBorder: Color(0xFFEEDB83),
+          selectedText: Color(0xFFA88713),
+        );
+
+      case '반려동물':
+      // 라임 그린
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFECF8DA),
+          selectedBorder: Color(0xFFCBE99B),
+          selectedText: Color(0xFF6D9B22),
+        );
+
+      case '도트 도안':
+      // 그린
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFE3F6E8),
+          selectedBorder: Color(0xFFB7E2C3),
+          selectedText: Color(0xFF3F925A),
+        );
+
+      case '꿀팁 영상':
+      // 민트
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFDFF8F3),
+          selectedBorder: Color(0xFFAEE4D8),
+          selectedText: Color(0xFF2F8D7B),
+        );
+
+      case '공략':
+      // 스카이 블루
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFE3F3FF),
+          selectedBorder: Color(0xFFB9DDF7),
+          selectedText: Color(0xFF397EAF),
+        );
+
+      case '일상':
+      // 블루
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFE6ECFF),
+          selectedBorder: Color(0xFFC1CDF8),
+          selectedText: Color(0xFF5068C8),
+        );
+
+      case '질문':
+      // 퍼플
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFF0E8FF),
+          selectedBorder: Color(0xFFD5C3F6),
+          selectedText: Color(0xFF7B5BC9),
+        );
+
+      case '그림':
+      // 핑크
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFFFE8F3),
+          selectedBorder: Color(0xFFF0BED8),
+          selectedText: Color(0xFFC05E91),
+        );
+
+      default:
+      // 새 태그가 추가됐는데 색을 아직 지정 안 했을 때 기본값
+        return const _TagChipStyle(
+          selectedBackground: Color(0xFFF3F4F6),
+          selectedBorder: Color(0xFFDADDE3),
+          selectedText: Color(0xFF7B8493),
         );
     }
   }
@@ -1587,10 +1633,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   // void -> bool로 변경합니다.
   Future<bool> _deletePost(CommunityPost post) async {
     if ((widget.userId ?? '').isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보가 필요해요.')),
-      );
-      return false; // 실패 시 false 반환
+      _showSnackBar('로그인 정보가 필요해요.');
+      return false;
     }
 
     try {
@@ -1607,26 +1651,21 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       }
 
       if (!mounted) return false;
+
       setState(() {
         _posts.removeWhere((e) => e.id == post.id);
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('게시글이 삭제되었어요.')),
-      );
-      return true; // 성공 시 true 반환
+      _showSnackBar('게시글이 삭제되었어요.');
+      return true;
     } on TimeoutException {
       if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('서버 응답이 지연되고 있어요.')),
-      );
-      return false; // 실패 시 false 반환
+      _showSnackBar('서버 응답이 지연되고 있어요.');
+      return false;
     } catch (e) {
       if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('삭제 중 문제가 발생했어요. $e')),
-      );
-      return false; // 실패 시 false 반환
+      _showSnackBar('삭제 중 문제가 발생했어요. $e');
+      return false;
     }
   }
 
@@ -2478,11 +2517,17 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       '코디',
       '반려동물',
       '도트 도안',
-      '공략',
       '꿀팁 영상',
+      '공략',
+      '일상',
+      '질문',
+      '그림',
     ];
 
-    final Set<String> available = _availableTagNames.toSet();
+    final Set<String> available = <String>{
+      ..._availableTagNames.where((e) => e.trim().isNotEmpty && e != '전체'),
+      ...preferredOrder,
+    };
 
     final List<String> filterTags = <String>[
       for (final tag in preferredOrder)
@@ -5242,6 +5287,108 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                 requestComposerFocus(context);
               }
 
+              Future<void> toggleDetailLike() async {
+                if ((widget.userId ?? '').trim().isEmpty) {
+                  _showSnackBar('로그인 정보가 필요해요.');
+                  return;
+                }
+
+                final CommunityPost previousPost = detailPost;
+
+                final bool nextLiked = !previousPost.likedByMe;
+                final int nextCount = previousPost.likeCount + (nextLiked ? 1 : -1);
+
+                final CommunityPost optimisticPost = previousPost.copyWith(
+                  likedByMe: nextLiked,
+                  likeCount: nextCount < 0 ? 0 : nextCount,
+                );
+
+                // 바텀시트 즉시 반영
+                setSheetState(() {
+                  detailPost = optimisticPost;
+                });
+
+                // 뒤에 깔린 목록/그리드도 즉시 반영
+                final int optimisticIndex = _posts.indexWhere((e) => e.id == previousPost.id);
+                if (optimisticIndex >= 0 && mounted) {
+                  setState(() {
+                    _posts[optimisticIndex] = _posts[optimisticIndex].copyWith(
+                      likedByMe: optimisticPost.likedByMe,
+                      likeCount: optimisticPost.likeCount,
+                    );
+                  });
+                }
+
+                try {
+                  final uri = Uri.parse(
+                    '$_baseUrl/api/community/posts/${previousPost.id}/like',
+                  ).replace(
+                    queryParameters: <String, String>{
+                      'userId': widget.userId!.trim(),
+                    },
+                  );
+
+                  final response = await http.post(uri).timeout(const Duration(seconds: 10));
+
+                  if (response.statusCode < 200 || response.statusCode >= 300) {
+                    throw Exception('좋아요 처리 실패 (${response.statusCode})');
+                  }
+
+                  final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+
+                  final bool serverLiked = decoded is Map<String, dynamic>
+                      ? (decoded['liked'] == true || decoded['liked'] == 1)
+                      : optimisticPost.likedByMe;
+
+                  final int serverLikeCount = decoded is Map<String, dynamic>
+                      ? ((decoded['likeCount'] as num?)?.toInt() ?? optimisticPost.likeCount)
+                      : optimisticPost.likeCount;
+
+                  final CommunityPost confirmedPost = optimisticPost.copyWith(
+                    likedByMe: serverLiked,
+                    likeCount: serverLikeCount < 0 ? 0 : serverLikeCount,
+                  );
+
+                  if (!context.mounted || !sheetAlive || isSheetClosing) return;
+
+                  // 서버 응답값으로 바텀시트 최종 보정
+                  setSheetState(() {
+                    detailPost = confirmedPost;
+                  });
+
+                  // 목록/그리드도 서버 응답값으로 최종 보정
+                  final int confirmedIndex = _posts.indexWhere((e) => e.id == confirmedPost.id);
+                  if (confirmedIndex >= 0 && mounted) {
+                    setState(() {
+                      _posts[confirmedIndex] = _posts[confirmedIndex].copyWith(
+                        likedByMe: confirmedPost.likedByMe,
+                        likeCount: confirmedPost.likeCount,
+                      );
+                    });
+                  }
+                } catch (e) {
+                  if (!context.mounted || !sheetAlive || isSheetClosing) return;
+
+                  // 실패하면 바텀시트 원복
+                  setSheetState(() {
+                    detailPost = previousPost;
+                  });
+
+                  // 목록/그리드도 원복
+                  final int rollbackIndex = _posts.indexWhere((e) => e.id == previousPost.id);
+                  if (rollbackIndex >= 0 && mounted) {
+                    setState(() {
+                      _posts[rollbackIndex] = _posts[rollbackIndex].copyWith(
+                        likedByMe: previousPost.likedByMe,
+                        likeCount: previousPost.likeCount,
+                      );
+                    });
+                  }
+
+                  _showSnackBar('좋아요 처리 중 문제가 발생했어요.');
+                }
+              }
+
               Future<void> refreshComments() async {
                 final future = _fetchComments(detailPost.id);
 
@@ -5770,7 +5917,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                             _buildLikeButton(
                                               liked: detailPost.likedByMe,
                                               count: detailPost.likeCount,
-                                              onTap: () => _toggleLike(post.id),
+                                              onTap: toggleDetailLike,
                                             ),
                                           ],
                                         ),

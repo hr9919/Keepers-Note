@@ -473,9 +473,44 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
     try {
       setState(() => _isSaving = true);
 
-      const outputScale = 3.0;
-      final outputWidth = (cropRect.width * outputScale).round();
-      final outputHeight = (cropRect.height * outputScale).round();
+      final effectiveScale = _effectiveScale;
+
+      // 화면 좌표 cropRect를 원본 이미지 픽셀 좌표로 변환
+      double srcLeft = (cropRect.left - _offset.dx) / effectiveScale;
+      double srcTop = (cropRect.top - _offset.dy) / effectiveScale;
+      double srcWidth = cropRect.width / effectiveScale;
+      double srcHeight = cropRect.height / effectiveScale;
+
+      // 원본 이미지 범위 밖으로 나가지 않게 보정
+      srcLeft = srcLeft.clamp(0.0, _decodedImage!.width.toDouble());
+      srcTop = srcTop.clamp(0.0, _decodedImage!.height.toDouble());
+
+      if (srcLeft + srcWidth > _decodedImage!.width) {
+        srcWidth = _decodedImage!.width - srcLeft;
+      }
+
+      if (srcTop + srcHeight > _decodedImage!.height) {
+        srcHeight = _decodedImage!.height - srcTop;
+      }
+
+      final srcRect = Rect.fromLTWH(
+        srcLeft,
+        srcTop,
+        srcWidth,
+        srcHeight,
+      );
+
+      // 커뮤니티 포스트용 최대 해상도
+      // 너무 큰 원본은 업로드 용량이 커질 수 있으니 긴 변 기준 2560px로 제한
+      const maxOutputSide = 2560.0;
+
+      final sourceLongSide = math.max(srcRect.width, srcRect.height);
+      final resizeRatio = sourceLongSide > maxOutputSide
+          ? maxOutputSide / sourceLongSide
+          : 1.0;
+
+      final outputWidth = math.max(1, (srcRect.width * resizeRatio).round());
+      final outputHeight = math.max(1, (srcRect.height * resizeRatio).round());
 
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(
@@ -483,7 +518,7 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
         Rect.fromLTWH(0, 0, outputWidth.toDouble(), outputHeight.toDouble()),
       );
 
-      final clipRect = Rect.fromLTWH(
+      final outputRect = Rect.fromLTWH(
         0,
         0,
         outputWidth.toDouble(),
@@ -491,43 +526,35 @@ class _ImageAdjustScreenState extends State<ImageAdjustScreen> {
       );
 
       if (widget.shape == ImageAdjustShape.circle) {
-        canvas.clipPath(Path()..addOval(clipRect));
+        canvas.clipPath(Path()..addOval(outputRect));
       } else if (_useSharpRect) {
-        canvas.clipRect(clipRect);
+        canvas.clipRect(outputRect);
       } else {
         canvas.clipRRect(
           RRect.fromRectAndRadius(
-            clipRect,
-            Radius.circular(widget.borderRadius * outputScale),
+            outputRect,
+            Radius.circular(widget.borderRadius * resizeRatio),
           ),
         );
       }
 
-      final drawLeft = (_offset.dx - cropRect.left) * outputScale;
-      final drawTop = (_offset.dy - cropRect.top) * outputScale;
-      final drawWidth = _rawImageSize!.width * _effectiveScale * outputScale;
-      final drawHeight = _rawImageSize!.height * _effectiveScale * outputScale;
-
-      final dstRect = Rect.fromLTWH(drawLeft, drawTop, drawWidth, drawHeight);
-
-      final paint = Paint()..isAntiAlias = true;
+      final paint = Paint()
+        ..isAntiAlias = true
+        ..filterQuality = FilterQuality.high;
 
       canvas.drawImageRect(
         _decodedImage!,
-        Rect.fromLTWH(
-          0,
-          0,
-          _decodedImage!.width.toDouble(),
-          _decodedImage!.height.toDouble(),
-        ),
-        dstRect,
+        srcRect,
+        outputRect,
         paint,
       );
 
       final picture = recorder.endRecording();
       final renderedImage = await picture.toImage(outputWidth, outputHeight);
-      final bytes =
-      await renderedImage.toByteData(format: ui.ImageByteFormat.png);
+
+      final bytes = await renderedImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
 
       if (!mounted || bytes == null) return;
 
