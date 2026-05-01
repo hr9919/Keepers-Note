@@ -42,8 +42,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
-  final String rawTarget = data['target']?.toString() ?? '';
-  final String rawType = data['type']?.toString() ?? '';
+  final String rawTarget = data['target']?.toString().trim().toLowerCase() ?? '';
+  final String rawType = data['type']?.toString().trim().toLowerCase() ?? '';
 
   final bool isCommunityType =
       rawType == 'comment' || rawType == 'reply' || rawType == 'like';
@@ -57,7 +57,8 @@ Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
   if (target == 'community_post') {
     final String postId =
         (data['postId'] ?? data['targetId'] ?? data['targetPostId'])
-            ?.toString() ??
+            ?.toString()
+            .trim() ??
             '';
 
     if (postId.isEmpty) return null;
@@ -66,11 +67,12 @@ Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
         (data['commentId'] ??
             data['targetCommentId'] ??
             data['target_comment_id'])
-            ?.toString() ??
+            ?.toString()
+            .trim() ??
             '';
 
     final String notificationId =
-        data['notificationId']?.toString() ?? data['id']?.toString() ?? '';
+        (data['notificationId'] ?? data['id'])?.toString().trim() ?? '';
 
     final Map<String, String> query = <String, String>{
       'target': 'community_post',
@@ -89,7 +91,7 @@ Uri? _deepLinkFromPushData(Map<String, dynamic> data) {
   }
 
   if (target == 'event') {
-    final String eventId = data['eventId']?.toString() ?? '';
+    final String eventId = data['eventId']?.toString().trim() ?? '';
     if (eventId.isEmpty) return null;
 
     return Uri.https('keepersnote.app', '/event/$eventId', {
@@ -194,11 +196,22 @@ Future<Uri?> _latestNotificationDeepLinkFromServer() async {
 Future<Uri?> _deepLinkFromRemoteMessageOrFallback(
     RemoteMessage? message,
     ) async {
-  if (message == null) return null;
+  if (message == null) {
+    return null;
+  }
 
   final direct = _deepLinkFromRemoteMessage(message);
 
-  if (direct != null) return direct;
+  if (direct != null) {
+    return direct;
+  }
+
+
+  final fallback = await _latestNotificationDeepLinkFromServer();
+
+  if (fallback != null) {
+    return fallback;
+  }
 
   return null;
 }

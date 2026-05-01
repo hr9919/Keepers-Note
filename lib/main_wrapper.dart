@@ -271,27 +271,28 @@ class _MainWrapperState extends State<MainWrapper> {
   }) {
     if (!mounted) return;
 
-    // 👉 이미 열려있으면 무시
-    if (_selectedIndex == 2 &&
-        _initialCommunityPostId == postId &&
-        _initialCommunityCommentId == commentId) {
-      return;
-    }
-
     setState(() {
       _selectedIndex = 2;
+
+      // 먼저 비워서 CommunityScreen.didUpdateWidget이 확실히 감지하게 함
       _initialCommunityPostId = null;
       _initialCommunityCommentId = null;
+
+      // 커뮤니티 화면 refresh/update 신호
+      _communityRefreshSignal++;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future.delayed(const Duration(milliseconds: 120));
+      await Future.delayed(const Duration(milliseconds: 260));
       if (!mounted) return;
 
       setState(() {
+        _selectedIndex = 2;
         _initialCommunityPostId = postId;
         _initialCommunityCommentId = commentId;
+        _communityRefreshSignal++;
       });
+
     });
   }
 
