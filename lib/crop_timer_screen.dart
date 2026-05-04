@@ -5,7 +5,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'services/crop_timer_live_activity_service.dart';
 import 'services/crop_timer_notification_service.dart';
 
 const Map<String, int> _cropMinutesById = {
@@ -105,6 +105,7 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
     });
 
     CropTimerNotificationService.instance.init();
+    CropTimerLiveActivityService.instance.init();
   }
 
   @override
@@ -229,6 +230,8 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
             cropName: item.cropName,
           );
 
+          await CropTimerLiveActivityService.instance.endCurrentActivity();
+
           updatedItems.add(
             item.copyWith(doneNotified: true),
           );
@@ -340,6 +343,14 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
 
       await _syncProgressNotification();
 
+      await CropTimerLiveActivityService.instance.startCropTimer(
+        timerId: id.toString(),
+        cropId: crop.id,
+        cropName: crop.name,
+        plantedAt: now,
+        harvestAt: harvestAt,
+      );
+
       _showSnackBar('${crop.name} 수확 알림을 예약했어요.');
     } catch (e) {
       debugPrint('작물 타이머 시작 실패: $e');
@@ -360,6 +371,8 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
     await _saveItems();
     await CropTimerNotificationService.instance.cancelCropTimer(item.id);
     await _syncProgressNotification();
+
+    await CropTimerLiveActivityService.instance.endCurrentActivity();
   }
 
   Future<void> _openCropPicker() async {
