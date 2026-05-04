@@ -8,7 +8,7 @@ import 'main_wrapper.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:app_links/app_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'services/crop_timer_notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -230,26 +230,28 @@ Future<void> _showForegroundLocalNotification(RemoteMessage message) async {
 
   final Uri? deepLink = _deepLinkFromRemoteMessage(message);
 
-  await flutterLocalNotificationsPlugin.show(
-    notification.hashCode,
-    title,
-    body,
-    NotificationDetails(
-      android: AndroidNotificationDetails(
-        _defaultNotificationChannel.id,
-        _defaultNotificationChannel.name,
-        channelDescription: _defaultNotificationChannel.description,
-        importance: Importance.max,
-        priority: Priority.high,
-        icon: android?.smallIcon,
-      ),
-      iOS: DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-        subtitle: apple?.subtitle,
-      ),
+  final NotificationDetails notificationDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      _defaultNotificationChannel.id,
+      _defaultNotificationChannel.name,
+      channelDescription: _defaultNotificationChannel.description,
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: android?.smallIcon,
     ),
+    iOS: DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      subtitle: apple?.subtitle,
+    ),
+  );
+
+  await flutterLocalNotificationsPlugin.show(
+    id: notification.hashCode,
+    title: title,
+    body: body,
+    notificationDetails: notificationDetails,
     payload: deepLink?.toString(),
   );
 }
@@ -302,7 +304,7 @@ Future<void> _configureLocalNotifications() async {
   );
 
   await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings,
+    settings: initializationSettings,
     onDidReceiveNotificationResponse: (NotificationResponse response) {
       final String? payload = response.payload;
       if (payload == null || payload.isEmpty) return;
@@ -399,6 +401,10 @@ void main() async {
 
     await _configureFirebaseMessaging()
         .timeout(const Duration(seconds: 4));
+
+    await CropTimerNotificationService.instance
+        .syncCropTimerProgressFromStorage()
+        .timeout(const Duration(seconds: 2));
   } catch (e, s) {
     debugPrint('pre runApp init error: $e');
     debugPrint('$s');

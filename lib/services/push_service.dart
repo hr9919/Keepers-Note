@@ -49,7 +49,7 @@ class PushService {
       const iosSettings = DarwinInitializationSettings();
 
       await _localNotifications.initialize(
-        const InitializationSettings(
+        settings: const InitializationSettings(
           android: androidSettings,
           iOS: iosSettings,
         ),
@@ -208,10 +208,10 @@ class PushService {
     final deepLink = _deepLinkFromPushData(message.data);
 
     await _localNotifications.show(
-      title.hashCode,
-      title,
-      body,
-      const NotificationDetails(
+      id: title.hashCode,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       ),

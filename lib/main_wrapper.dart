@@ -29,7 +29,7 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/push_service.dart';
-
+import 'crop_timer_screen.dart';
 
 class MainWrapper extends StatefulWidget {
   final Uri? initialDeepLink;
@@ -2193,6 +2193,27 @@ class _MainWrapperState extends State<MainWrapper> {
                             await _closeDrawerSmooth();
                             if (!mounted) return;
                             await _confirmAndSendMail();
+                          },
+                        ),
+                        _buildDrawerItem(
+                          icon: Icons.eco_rounded,
+                          title: '작물 타이머',
+                          subtitle: '수확 시간 알림',
+                          isSelected: false,
+                          accentColor: const Color(0xFF7BCB8F),
+                          onTap: () async {
+                            await Future.delayed(const Duration(milliseconds: 110));
+                            if (!mounted) return;
+
+                            await _closeDrawerSmooth();
+                            if (!mounted) return;
+
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CropTimerScreen(),
+                              ),
+                            );
                           },
                         ),
                         if (_isAdmin) ...[

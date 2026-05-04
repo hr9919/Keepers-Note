@@ -1,7 +1,7 @@
 name: keepers_note
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.3+9
+version: 1.0.3+11
 
 environment:
   sdk: ^3.11.3
@@ -29,7 +29,9 @@ dependencies:
   sign_in_with_apple: ^7.0.1
   firebase_core: ^3.13.0
   firebase_messaging: ^15.2.5
-  flutter_local_notifications: ^17.2.1
+  flutter_local_notifications: ^21.0.0
+  timezone: ^0.11.0
+  flutter_timezone: ^5.0.2
 
 dev_dependencies:
   flutter_test:
