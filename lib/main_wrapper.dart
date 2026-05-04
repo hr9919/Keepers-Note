@@ -2213,20 +2213,6 @@ class _MainWrapperState extends State<MainWrapper> {
                           },
                         ),
                         _buildDrawerItem(
-                          icon: Icons.mail_outline_rounded,
-                          title: '피드백 보내기',
-                          subtitle: '아이디어를 보내주세요',
-                          isSelected: false,
-                          accentColor: const Color(0xFF78C3FF),
-                          onTap: () async {
-                            await Future.delayed(const Duration(milliseconds: 110));
-                            if (!mounted) return;
-                            await _closeDrawerSmooth();
-                            if (!mounted) return;
-                            await _confirmAndSendMail();
-                          },
-                        ),
-                        _buildDrawerItem(
                           icon: Icons.eco_rounded,
                           title: '작물 타이머',
                           subtitle: '수확 시간 알림',
@@ -2245,6 +2231,20 @@ class _MainWrapperState extends State<MainWrapper> {
                                 builder: (_) => const CropTimerScreen(),
                               ),
                             );
+                          },
+                        ),
+                        _buildDrawerItem(
+                          icon: Icons.mail_outline_rounded,
+                          title: '피드백 보내기',
+                          subtitle: '아이디어를 보내주세요',
+                          isSelected: false,
+                          accentColor: const Color(0xFF78C3FF),
+                          onTap: () async {
+                            await Future.delayed(const Duration(milliseconds: 110));
+                            if (!mounted) return;
+                            await _closeDrawerSmooth();
+                            if (!mounted) return;
+                            await _confirmAndSendMail();
                           },
                         ),
                         if (_isAdmin) ...[
