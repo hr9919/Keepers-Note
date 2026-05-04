@@ -360,9 +360,6 @@ class CropTimerNotificationService {
       icon: '@mipmap/ic_launcher',
 
       showWhen: false,
-      when: next.harvestAt.millisecondsSinceEpoch,
-      usesChronometer: true,
-      chronometerCountDown: true,
 
       styleInformation: InboxStyleInformation(
         lines,
