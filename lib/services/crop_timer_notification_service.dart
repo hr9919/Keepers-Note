@@ -74,10 +74,17 @@ class CropTimerNotificationService {
     );
 
     if (Platform.isAndroid) {
-      await _plugin
+      final androidPlugin = _plugin
           .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
+          AndroidFlutterLocalNotificationsPlugin>();
+
+      await androidPlugin?.requestNotificationsPermission();
+
+      try {
+        await androidPlugin?.requestExactAlarmsPermission();
+      } catch (e) {
+        debugPrint('정확 알람 권한 요청 실패 또는 미지원: $e');
+      }
     }
 
     if (Platform.isIOS) {
@@ -145,16 +152,8 @@ class CropTimerNotificationService {
       ongoing: true,
       autoCancel: false,
       onlyAlertOnce: true,
-      showProgress: true,
-      maxProgress: 100,
-      progress: progress,
       icon: '@mipmap/ic_launcher',
-
-      // 앱이 꺼져 있어도 Android 시스템이 남은 시간을 계속 카운트다운하게 함
-      showWhen: true,
-      when: harvestAt.millisecondsSinceEpoch,
-      usesChronometer: true,
-      chronometerCountDown: true,
+      showWhen: false,
     );
 
     final NotificationDetails details = NotificationDetails(
@@ -266,13 +265,15 @@ class CropTimerNotificationService {
         payload: 'keepersnote://crop-timer?target=crop_timer',
       );
     } catch (e) {
+      debugPrint('작물 수확 exact 알림 예약 실패: $e');
+
       await _plugin.zonedSchedule(
         id: notificationId,
         title: '$cropName 수확 시간이에요',
         body: '지금 수확하러 가볼까요?',
         scheduledDate: scheduledAt,
         notificationDetails: details,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.alarmClock,
         payload: 'keepersnote://crop-timer?target=crop_timer',
       );
     }
@@ -358,7 +359,7 @@ class CropTimerNotificationService {
       onlyAlertOnce: true,
       icon: '@mipmap/ic_launcher',
 
-      showWhen: true,
+      showWhen: false,
       when: next.harvestAt.millisecondsSinceEpoch,
       usesChronometer: true,
       chronometerCountDown: true,

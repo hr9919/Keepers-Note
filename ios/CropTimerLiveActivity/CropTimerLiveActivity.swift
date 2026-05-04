@@ -204,7 +204,7 @@ struct CropTimerLockScreenView: View {
             .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
 
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .center, spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(cropName)
                             .font(.system(size: 18, weight: .heavy, design: .rounded))
@@ -214,14 +214,16 @@ struct CropTimerLockScreenView: View {
                         Text(summaryText.isEmpty ? "수확까지" : summaryText)
                             .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundStyle(Color(red: 0.72, green: 0.76, blue: 0.82))
+                            .lineLimit(1)
                     }
 
-                    Spacer(minLength: 8)
+                    Spacer(minLength: 12)
 
-                   CropTimerCountdownText(
-                       harvestAt: harvestAt,
-                       fontSize: 24
-                   )
+                    CropTimerCountdownText(
+                        harvestAt: harvestAt,
+                        fontSize: 23
+                    )
+                    .frame(minWidth: 92, alignment: .trailing)
                 }
 
                 CropTimerProgressBar(
@@ -302,5 +304,6 @@ struct CropTimerCountdownText: View {
             .foregroundStyle(Color(red: 1.0, green: 0.38, blue: 0.34))
             .lineLimit(1)
             .minimumScaleFactor(0.72)
+            .multilineTextAlignment(.trailing)
     }
 }
