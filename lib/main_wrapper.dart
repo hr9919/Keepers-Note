@@ -318,6 +318,37 @@ class _MainWrapperState extends State<MainWrapper> {
     final queryEventId = uri.queryParameters['eventId'];
     final notificationId = uri.queryParameters['notificationId'];
 
+    final bool isCropTimerLink =
+        target == 'crop_timer' ||
+            uri.host == 'crop-timer' ||
+            uri.path == '/crop-timer' ||
+            uri.pathSegments.contains('crop-timer');
+
+    if (isCropTimerLink) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+
+        if (_isDrawerOpen) {
+          await _closeDrawerSmooth();
+        }
+
+        if (_isEndDrawerOpen) {
+          await _closeEndDrawerSmooth();
+        }
+
+        if (!mounted) return;
+
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const CropTimerScreen(),
+          ),
+        );
+      });
+
+      return;
+    }
+
     if (target == 'community_post' && queryPostId != null) {
       postId = int.tryParse(queryPostId);
       commentId = int.tryParse(queryCommentId ?? '');

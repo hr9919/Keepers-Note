@@ -28,6 +28,7 @@ class CropTimerLiveActivityService {
     required String cropName,
     required DateTime plantedAt,
     required DateTime harvestAt,
+    String? summaryText,
   }) async {
     if (!Platform.isIOS) return;
 
@@ -38,6 +39,7 @@ class CropTimerLiveActivityService {
       {
         'cropId': cropId,
         'cropName': cropName,
+        'summaryText': summaryText ?? '',
         'plantedAtMillis': plantedAt.millisecondsSinceEpoch,
         'harvestAtMillis': harvestAt.millisecondsSinceEpoch,
       },
@@ -52,12 +54,14 @@ class CropTimerLiveActivityService {
     await init();
 
     final id = _activityId;
-    if (id == null || id.isEmpty) {
+
+    if (id != null && id.isNotEmpty) {
+      await _liveActivities.endActivity(id);
+      _activityId = null;
       return;
     }
 
-    await _liveActivities.endActivity(id);
-
+    await _liveActivities.endAllActivities();
     _activityId = null;
   }
 

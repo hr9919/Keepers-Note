@@ -402,6 +402,14 @@ void main() async {
     await _configureFirebaseMessaging()
         .timeout(const Duration(seconds: 4));
 
+    await CropTimerNotificationService.instance.init(
+      onTapCropTimer: () {
+        _navigateToDeepLink(
+          Uri.parse('keepersnote://crop-timer?target=crop_timer'),
+        );
+      },
+    );
+
     await CropTimerNotificationService.instance
         .syncCropTimerProgressFromStorage()
         .timeout(const Duration(seconds: 2));

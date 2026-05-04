@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +13,8 @@ class CropTimerNotificationService {
   static final CropTimerNotificationService instance =
   CropTimerNotificationService._();
 
+  VoidCallback? _onTapCropTimer;
+
   final FlutterLocalNotificationsPlugin _plugin =
   FlutterLocalNotificationsPlugin();
 
@@ -21,7 +23,13 @@ class CropTimerNotificationService {
   static const int cropProgressNotificationId = 991001;
   static const String _storageKey = 'crop_timer_items';
 
-  Future<void> init() async {
+  Future<void> init({
+    VoidCallback? onTapCropTimer,
+  }) async {
+    if (onTapCropTimer != null) {
+      _onTapCropTimer = onTapCropTimer;
+    }
+
     if (_initialized) return;
 
     tz.initializeTimeZones();
@@ -55,6 +63,14 @@ class CropTimerNotificationService {
 
     await _plugin.initialize(
       settings: initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        final payload = response.payload ?? '';
+
+        if (payload.contains('crop_timer') ||
+            payload.contains('crop-timer')) {
+          _onTapCropTimer?.call();
+        }
+      },
     );
 
     if (Platform.isAndroid) {
@@ -133,6 +149,12 @@ class CropTimerNotificationService {
       maxProgress: 100,
       progress: progress,
       icon: '@mipmap/ic_launcher',
+
+      // 앱이 꺼져 있어도 Android 시스템이 남은 시간을 계속 카운트다운하게 함
+      showWhen: true,
+      when: harvestAt.millisecondsSinceEpoch,
+      usesChronometer: true,
+      chronometerCountDown: true,
     );
 
     final NotificationDetails details = NotificationDetails(
@@ -144,7 +166,7 @@ class CropTimerNotificationService {
       title: '$cropName 자라는 중',
       body: remainText,
       notificationDetails: details,
-      payload: 'crop_timer_progress',
+      payload: 'keepersnote://crop-timer?target=crop_timer',
     );
   }
 
@@ -191,7 +213,7 @@ class CropTimerNotificationService {
       title: '$cropName 수확 시간이에요',
       body: '지금 수확하러 가볼까요?',
       notificationDetails: details,
-      payload: 'crop_timer_done:$notificationId',
+      payload: 'keepersnote://crop-timer?target=crop_timer',
     );
   }
 
@@ -241,7 +263,7 @@ class CropTimerNotificationService {
         scheduledDate: scheduledAt,
         notificationDetails: details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: 'crop_timer:$notificationId',
+        payload: 'keepersnote://crop-timer?target=crop_timer',
       );
     } catch (e) {
       await _plugin.zonedSchedule(
@@ -251,9 +273,116 @@ class CropTimerNotificationService {
         scheduledDate: scheduledAt,
         notificationDetails: details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        payload: 'crop_timer:$notificationId',
+        payload: 'keepersnote://crop-timer?target=crop_timer',
       );
     }
+  }
+
+  Future<void> showCropTimerProgressSummaryNotification({
+    required List<CropTimerNotificationItem> items,
+  }) async {
+    await init();
+
+    if (!Platform.isAndroid) {
+      return;
+    }
+
+    final now = DateTime.now();
+
+    final activeItems = items
+        .where((e) => e.harvestAt.isAfter(now))
+        .toList()
+      ..sort((a, b) => a.harvestAt.compareTo(b.harvestAt));
+
+    if (activeItems.isEmpty) {
+      await cancelCropTimerProgressNotification();
+      return;
+    }
+
+    final next = activeItems.first;
+
+    String formatHarvestTime(DateTime dateTime) {
+      final now = DateTime.now();
+
+      final isToday = now.year == dateTime.year &&
+          now.month == dateTime.month &&
+          now.day == dateTime.day;
+
+      final tomorrow = DateTime(now.year, now.month, now.day + 1);
+      final isTomorrow = tomorrow.year == dateTime.year &&
+          tomorrow.month == dateTime.month &&
+          tomorrow.day == dateTime.day;
+
+      final hour = dateTime.hour.toString().padLeft(2, '0');
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+
+      if (isToday) return '오늘 $hour:$minute 수확';
+      if (isTomorrow) return '내일 $hour:$minute 수확';
+
+      return '${dateTime.month}.${dateTime.day} $hour:$minute 수확';
+    }
+
+    int progressFor(CropTimerNotificationItem item) {
+      final totalSeconds = item.harvestAt.difference(item.plantedAt).inSeconds;
+      final passedSeconds = now.difference(item.plantedAt).inSeconds;
+
+      if (totalSeconds <= 0) return 100;
+
+      return ((passedSeconds / totalSeconds) * 100).clamp(0, 100).round();
+    }
+
+    final lines = activeItems.take(6).map((item) {
+      return '${item.cropName} · ${formatHarvestTime(item.harvestAt)}';
+    }).toList();
+
+    if (activeItems.length > 6) {
+      lines.add('외 ${activeItems.length - 6}개 더 진행 중');
+    }
+
+    final title = activeItems.length == 1
+        ? '${next.cropName} 자라는 중'
+        : '작물 ${activeItems.length}개 자라는 중';
+
+    final body = activeItems.length == 1
+        ? '${next.cropName} 수확 대기 중'
+        : '다음 수확: ${next.cropName}';
+
+    final androidDetails = AndroidNotificationDetails(
+      'crop_timer_progress_channel',
+      '작물 타이머 진행 상황',
+      channelDescription: '진행 중인 작물 타이머를 상단바에 표시합니다.',
+      importance: Importance.low,
+      priority: Priority.low,
+      ongoing: true,
+      autoCancel: false,
+      onlyAlertOnce: true,
+      icon: '@mipmap/ic_launcher',
+
+      showWhen: true,
+      when: next.harvestAt.millisecondsSinceEpoch,
+      usesChronometer: true,
+      chronometerCountDown: true,
+
+      styleInformation: InboxStyleInformation(
+        lines,
+        contentTitle: title,
+        summaryText: activeItems.length == 1
+            ? null
+            : '${activeItems.length}개 진행 중',
+      ),
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+    );
+
+    await _plugin.show(
+      id: cropProgressNotificationId,
+      title: title,
+      body: body,
+      notificationDetails: details,
+      payload: 'keepersnote://crop-timer?target=crop_timer',
+    );
   }
 
   Future<void> cancelCropTimer(int notificationId) async {
@@ -319,27 +448,43 @@ class CropTimerNotificationService {
         return;
       }
 
-      final next = activeItems.first;
+      final items = activeItems.map((item) {
+        final cropName = item['cropName']?.toString() ?? '작물';
 
-      final cropName = next['cropName']?.toString() ?? '작물';
+        final plantedAt = DateTime.tryParse(
+          item['plantedAt']?.toString() ?? '',
+        ) ??
+            now;
 
-      final plantedAt = DateTime.tryParse(
-        next['plantedAt']?.toString() ?? '',
-      ) ??
-          now;
+        final harvestAt = DateTime.tryParse(
+          item['harvestAt']?.toString() ?? '',
+        ) ??
+            now;
 
-      final harvestAt = DateTime.tryParse(
-        next['harvestAt']?.toString() ?? '',
-      ) ??
-          now;
+        return CropTimerNotificationItem(
+          cropName: cropName,
+          plantedAt: plantedAt,
+          harvestAt: harvestAt,
+        );
+      }).toList();
 
-      await showCropTimerProgressNotification(
-        cropName: cropName,
-        plantedAt: plantedAt,
-        harvestAt: harvestAt,
+      await showCropTimerProgressSummaryNotification(
+        items: items,
       );
     } catch (_) {
       await cancelCropTimerProgressNotification();
     }
   }
+}
+
+class CropTimerNotificationItem {
+  final String cropName;
+  final DateTime plantedAt;
+  final DateTime harvestAt;
+
+  const CropTimerNotificationItem({
+    required this.cropName,
+    required this.plantedAt,
+    required this.harvestAt,
+  });
 }

@@ -35,6 +35,10 @@ struct CropTimerLiveActivity: Widget {
                 forKey: context.attributes.prefixedKey("cropId")
             ) ?? ""
 
+            let summaryText = sharedDefault.string(
+                forKey: context.attributes.prefixedKey("summaryText")
+            ) ?? ""
+
             let plantedAtMillis = sharedDefault.double(
                 forKey: context.attributes.prefixedKey("plantedAtMillis")
             )
@@ -54,16 +58,22 @@ struct CropTimerLiveActivity: Widget {
             CropTimerLockScreenView(
                 cropId: cropId,
                 cropName: cropName,
+                summaryText: summaryText,
                 plantedAt: plantedAt,
                 harvestAt: harvestAt
             )
             .activityBackgroundTint(Color(red: 1.0, green: 0.94, blue: 0.91))
             .activitySystemActionForegroundColor(Color(red: 1.0, green: 0.56, blue: 0.49))
+            .widgetURL(URL(string: "keepersnote://crop-timer?target=crop_timer"))
 
         } dynamicIsland: { context in
             let cropName = sharedDefault.string(
                 forKey: context.attributes.prefixedKey("cropName")
             ) ?? "작물"
+
+            let summaryText = sharedDefault.string(
+                forKey: context.attributes.prefixedKey("summaryText")
+            ) ?? ""
 
             let plantedAtMillis = sharedDefault.double(
                 forKey: context.attributes.prefixedKey("plantedAtMillis")
@@ -84,7 +94,7 @@ struct CropTimerLiveActivity: Widget {
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("작물")
+                       Text(summaryText.isEmpty ? "작물" : summaryText)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
 
@@ -101,10 +111,10 @@ struct CropTimerLiveActivity: Widget {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
 
-                        Text(harvestAt, style: .timer)
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .monospacedDigit()
+                        CropTimerCountdownText(
+                            harvestAt: harvestAt,
+                            fontSize: 16
+                        )
                     }
                 }
 
@@ -121,23 +131,25 @@ struct CropTimerLiveActivity: Widget {
                 Image(systemName: "leaf.fill")
                     .foregroundStyle(Color(red: 1.0, green: 0.56, blue: 0.49))
 
-            } compactTrailing: {
-                Text(harvestAt, style: .timer)
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .monospacedDigit()
+                        } compactTrailing: {
+                            CropTimerCountdownText(
+                                harvestAt: harvestAt,
+                                fontSize: 12
+                            )
 
-            } minimal: {
-                Image(systemName: "leaf.fill")
-                    .foregroundStyle(Color(red: 1.0, green: 0.56, blue: 0.49))
-            }
-        }
+                        } minimal: {
+                            Image(systemName: "leaf.fill")
+                                .foregroundStyle(Color(red: 1.0, green: 0.56, blue: 0.49))
+                        }
+                        .widgetURL(URL(string: "keepersnote://crop-timer?target=crop_timer"))
+                    }
     }
 }
 
 struct CropTimerLockScreenView: View {
     let cropId: String
     let cropName: String
+    let summaryText: String
     let plantedAt: Date
     let harvestAt: Date
 
@@ -199,19 +211,17 @@ struct CropTimerLockScreenView: View {
                             .foregroundStyle(Color(red: 0.17, green: 0.19, blue: 0.22))
                             .lineLimit(1)
 
-                        Text("수확까지")
+                        Text(summaryText.isEmpty ? "수확까지" : summaryText)
                             .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundStyle(Color(red: 0.72, green: 0.76, blue: 0.82))
                     }
 
                     Spacer(minLength: 8)
 
-                    Text(harvestAt, style: .timer)
-                        .font(.system(size: 24, weight: .heavy, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(Color(red: 1.0, green: 0.38, blue: 0.34))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.74)
+                   CropTimerCountdownText(
+                       harvestAt: harvestAt,
+                       fontSize: 24
+                   )
                 }
 
                 CropTimerProgressBar(
@@ -278,5 +288,19 @@ struct CropTimerProgressBar: View {
 
         let passed = now.timeIntervalSince(plantedAt)
         return min(max(passed / total, 0.0), 1.0)
+    }
+}
+
+struct CropTimerCountdownText: View {
+    let harvestAt: Date
+    let fontSize: CGFloat
+
+    var body: some View {
+        Text(timerInterval: Date()...harvestAt, countsDown: true)
+            .font(.system(size: fontSize, weight: .heavy, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(Color(red: 1.0, green: 0.38, blue: 0.34))
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
     }
 }

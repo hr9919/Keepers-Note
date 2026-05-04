@@ -189,6 +189,34 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
     return false;
   }
 
+  Future<void> _syncLiveActivity() async {
+    final activeItems = _items
+        .where((e) => DateTime.now().isBefore(e.harvestAt))
+        .toList()
+      ..sort((a, b) => a.harvestAt.compareTo(b.harvestAt));
+
+    await CropTimerLiveActivityService.instance.endAllActivities();
+
+    if (activeItems.isEmpty) {
+      return;
+    }
+
+    final next = activeItems.first;
+
+    final summaryText = activeItems.length <= 1
+        ? ''
+        : '작물 ${activeItems.length}개 진행 중';
+
+    await CropTimerLiveActivityService.instance.startCropTimer(
+      timerId: next.id.toString(),
+      cropId: next.cropId,
+      cropName: next.cropName,
+      summaryText: summaryText,
+      plantedAt: next.plantedAt,
+      harvestAt: next.harvestAt,
+    );
+  }
+
   Future<void> _syncProgressNotification() async {
     final activeItems = _items
         .where((e) => DateTime.now().isBefore(e.harvestAt))
@@ -201,12 +229,17 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
       return;
     }
 
-    final next = activeItems.first;
-
-    await CropTimerNotificationService.instance.showCropTimerProgressNotification(
-      cropName: next.cropName,
-      plantedAt: next.plantedAt,
-      harvestAt: next.harvestAt,
+    await CropTimerNotificationService.instance
+        .showCropTimerProgressSummaryNotification(
+      items: activeItems
+          .map(
+            (item) => CropTimerNotificationItem(
+          cropName: item.cropName,
+          plantedAt: item.plantedAt,
+          harvestAt: item.harvestAt,
+        ),
+      )
+          .toList(),
     );
   }
 
@@ -230,8 +263,6 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
             cropName: item.cropName,
           );
 
-          await CropTimerLiveActivityService.instance.endCurrentActivity();
-
           updatedItems.add(
             item.copyWith(doneNotified: true),
           );
@@ -252,6 +283,7 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
 
       await _saveItems();
       await _syncProgressNotification();
+      await _syncLiveActivity();
     } finally {
       _checkingDone = false;
     }
@@ -263,6 +295,7 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
 
     if (raw == null || raw.isEmpty) {
       await _syncProgressNotification();
+      await _syncLiveActivity();
       return;
     }
 
@@ -284,6 +317,7 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
       });
 
       await _syncProgressNotification();
+      await _syncLiveActivity();
       await _checkAndNotifyCompletedTimers();
     } catch (e) {
       debugPrint('작물 타이머 저장값 불러오기 실패: $e');
@@ -342,14 +376,7 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
       );
 
       await _syncProgressNotification();
-
-      await CropTimerLiveActivityService.instance.startCropTimer(
-        timerId: id.toString(),
-        cropId: crop.id,
-        cropName: crop.name,
-        plantedAt: now,
-        harvestAt: harvestAt,
-      );
+      await _syncLiveActivity();
 
       _showSnackBar('${crop.name} 수확 알림을 예약했어요.');
     } catch (e) {
@@ -371,8 +398,7 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
     await _saveItems();
     await CropTimerNotificationService.instance.cancelCropTimer(item.id);
     await _syncProgressNotification();
-
-    await CropTimerLiveActivityService.instance.endCurrentActivity();
+    await _syncLiveActivity();
   }
 
   Future<void> _openCropPicker() async {
