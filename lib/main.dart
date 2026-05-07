@@ -396,30 +396,24 @@ void main() async {
     nativeAppKey: '13e6e9e30bad4b0e8a92e1561bab73b0',
   );
 
-  try {
-    await _configureLocalNotifications()
-        .timeout(const Duration(seconds: 3));
+  await HomeWidget.setAppGroupId('group.com.townhelpers.keepersnote');
 
-    await _configureFirebaseMessaging();
-
-    await CropTimerNotificationService.instance.init(
-      onTapCropTimer: () {
-        _navigateToDeepLink(
-          Uri.parse('keepersnote://crop-timer?target=crop_timer'),
-        );
-      },
-    );
-    await HomeWidget.setAppGroupId('group.com.townhelpers.keepersnote');
-
-    await CropTimerNotificationService.instance
-        .syncCropTimerProgressFromStorage()
-        .timeout(const Duration(seconds: 2));
-  } catch (e, s) {
-    debugPrint('pre runApp init error: $e');
-    debugPrint('$s');
-  }
-
+  // 앱 화면은 먼저 띄움. 푸시 초기화 때문에 스플래시가 멈추지 않게 함.
   runApp(const KeepersNoteApp());
+
+  // 알림/FCM 초기화는 백그라운드로 실행
+  Future.microtask(() async {
+    try {
+      await _configureLocalNotifications()
+          .timeout(const Duration(seconds: 3));
+
+      await _configureFirebaseMessaging()
+          .timeout(const Duration(seconds: 8));
+    } catch (e, s) {
+      debugPrint('post runApp init error: $e');
+      debugPrint('$s');
+    }
+  });
 }
 
 class KeepersNoteApp extends StatelessWidget {
