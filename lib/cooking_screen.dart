@@ -2119,13 +2119,16 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           break;
         case '가격순':
           filtered.sort((a, b) {
-            final aPrice = a.prices.where((e) => e > 0).isEmpty
-                ? 0
-                : a.prices.where((e) => e > 0).first;
-            final bPrice = b.prices.where((e) => e > 0).isEmpty
-                ? 0
-                : b.prices.where((e) => e > 0).first;
-            return aPrice.compareTo(bPrice);
+            final aValidPrices = a.prices.where((e) => e > 0).toList();
+            final bValidPrices = b.prices.where((e) => e > 0).toList();
+
+            final aPrice = aValidPrices.isEmpty ? 0 : aValidPrices.first;
+            final bPrice = bValidPrices.isEmpty ? 0 : bValidPrices.first;
+
+            final priceCompare = bPrice.compareTo(aPrice); // 비싼순
+            if (priceCompare != 0) return priceCompare;
+
+            return a.nameKo.compareTo(b.nameKo);
           });
           break;
         case '좋아요순':
@@ -2198,13 +2201,16 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         break;
       case '가격순':
         filtered.sort((a, b) {
-          final aPrice = a.prices.where((e) => e > 0).isEmpty
-              ? 0
-              : a.prices.where((e) => e > 0).first;
-          final bPrice = b.prices.where((e) => e > 0).isEmpty
-              ? 0
-              : b.prices.where((e) => e > 0).first;
-          return aPrice.compareTo(bPrice);
+          final aValidPrices = a.prices.where((e) => e > 0).toList();
+          final bValidPrices = b.prices.where((e) => e > 0).toList();
+
+          final aPrice = aValidPrices.isEmpty ? 0 : aValidPrices.first;
+          final bPrice = bValidPrices.isEmpty ? 0 : bValidPrices.first;
+
+          final priceCompare = bPrice.compareTo(aPrice); // 비싼순
+          if (priceCompare != 0) return priceCompare;
+
+          return a.nameKo.compareTo(b.nameKo);
         });
         break;
       case '좋아요순':

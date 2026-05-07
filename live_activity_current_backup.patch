@@ -1,0 +1,236 @@
+diff --git a/ios/CropTimerLiveActivity/CropTimerLiveActivity.swift b/ios/CropTimerLiveActivity/CropTimerLiveActivity.swift
+index e7d6435..ef4f246 100644
+--- a/ios/CropTimerLiveActivity/CropTimerLiveActivity.swift
++++ b/ios/CropTimerLiveActivity/CropTimerLiveActivity.swift
+@@ -11,6 +11,10 @@ struct LiveActivitiesAppAttributes: ActivityAttributes, Identifiable {
+     public typealias LiveDeliveryData = ContentState
+ 
+     public struct ContentState: Codable, Hashable {
++        var cropId: String = ""
++        var cropName: String = "작물"
++        var plantedAtMillis: Double = 0
++        var harvestAtMillis: Double = 0
+     }
+ 
+     var id = UUID()
+@@ -27,26 +31,33 @@ struct CropTimerLiveActivity: Widget {
+ 
+     var body: some WidgetConfiguration {
+         ActivityConfiguration(for: LiveActivitiesAppAttributes.self) { context in
+-            let cropName = sharedDefault.string(
++            let storedCropName = sharedDefault.string(
+                 forKey: context.attributes.prefixedKey("cropName")
+-            ) ?? "작물"
+-
+-            let cropId = sharedDefault.string(
+-                forKey: context.attributes.prefixedKey("cropId")
+             ) ?? ""
+ 
+-            let summaryText = sharedDefault.string(
+-                forKey: context.attributes.prefixedKey("summaryText")
++            let storedCropId = sharedDefault.string(
++                forKey: context.attributes.prefixedKey("cropId")
+             ) ?? ""
+ 
+-            let plantedAtMillis = sharedDefault.double(
++            let storedPlantedAtMillis = sharedDefault.double(
+                 forKey: context.attributes.prefixedKey("plantedAtMillis")
+             )
+ 
+-            let harvestAtMillis = sharedDefault.double(
++            let storedHarvestAtMillis = sharedDefault.double(
+                 forKey: context.attributes.prefixedKey("harvestAtMillis")
+             )
+ 
++            let cropName = storedCropName.isEmpty ? context.state.cropName : storedCropName
++            let cropId = storedCropId.isEmpty ? context.state.cropId : storedCropId
++
++            let plantedAtMillis = storedPlantedAtMillis > 0
++                ? storedPlantedAtMillis
++                : context.state.plantedAtMillis
++
++            let harvestAtMillis = storedHarvestAtMillis > 0
++                ? storedHarvestAtMillis
++                : context.state.harvestAtMillis
++
+             let plantedAt = plantedAtMillis > 0
+                 ? Date(timeIntervalSince1970: plantedAtMillis / 1000)
+                 : Date()
+@@ -58,7 +69,6 @@ struct CropTimerLiveActivity: Widget {
+             CropTimerLockScreenView(
+                 cropId: cropId,
+                 cropName: cropName,
+-                summaryText: summaryText,
+                 plantedAt: plantedAt,
+                 harvestAt: harvestAt
+             )
+@@ -67,22 +77,28 @@ struct CropTimerLiveActivity: Widget {
+             .widgetURL(URL(string: "keepersnote://crop-timer?target=crop_timer"))
+ 
+         } dynamicIsland: { context in
+-            let cropName = sharedDefault.string(
++            let storedCropName = sharedDefault.string(
+                 forKey: context.attributes.prefixedKey("cropName")
+-            ) ?? "작물"
+-
+-            let summaryText = sharedDefault.string(
+-                forKey: context.attributes.prefixedKey("summaryText")
+             ) ?? ""
+ 
+-            let plantedAtMillis = sharedDefault.double(
++            let storedPlantedAtMillis = sharedDefault.double(
+                 forKey: context.attributes.prefixedKey("plantedAtMillis")
+             )
+ 
+-            let harvestAtMillis = sharedDefault.double(
++            let storedHarvestAtMillis = sharedDefault.double(
+                 forKey: context.attributes.prefixedKey("harvestAtMillis")
+             )
+ 
++            let cropName = storedCropName.isEmpty ? context.state.cropName : storedCropName
++
++            let plantedAtMillis = storedPlantedAtMillis > 0
++                ? storedPlantedAtMillis
++                : context.state.plantedAtMillis
++
++            let harvestAtMillis = storedHarvestAtMillis > 0
++                ? storedHarvestAtMillis
++                : context.state.harvestAtMillis
++
+             let plantedAt = plantedAtMillis > 0
+                 ? Date(timeIntervalSince1970: plantedAtMillis / 1000)
+                 : Date()
+@@ -94,7 +110,7 @@ struct CropTimerLiveActivity: Widget {
+             return DynamicIsland {
+                 DynamicIslandExpandedRegion(.leading) {
+                     VStack(alignment: .leading, spacing: 4) {
+-                       Text(summaryText.isEmpty ? "작물" : summaryText)
++                        Text("작물")
+                             .font(.caption2)
+                             .foregroundStyle(.secondary)
+ 
+@@ -131,25 +147,24 @@ struct CropTimerLiveActivity: Widget {
+                 Image(systemName: "leaf.fill")
+                     .foregroundStyle(Color(red: 1.0, green: 0.56, blue: 0.49))
+ 
+-                        } compactTrailing: {
+-                            CropTimerCountdownText(
+-                                harvestAt: harvestAt,
+-                                fontSize: 12
+-                            )
++            } compactTrailing: {
++                CropTimerCountdownText(
++                    harvestAt: harvestAt,
++                    fontSize: 12
++                )
+ 
+-                        } minimal: {
+-                            Image(systemName: "leaf.fill")
+-                                .foregroundStyle(Color(red: 1.0, green: 0.56, blue: 0.49))
+-                        }
+-                        .widgetURL(URL(string: "keepersnote://crop-timer?target=crop_timer"))
+-                    }
++            } minimal: {
++                Image(systemName: "leaf.fill")
++                    .foregroundStyle(Color(red: 1.0, green: 0.56, blue: 0.49))
++            }
++            .widgetURL(URL(string: "keepersnote://crop-timer?target=crop_timer"))
++        }
+     }
+ }
+ 
+ struct CropTimerLockScreenView: View {
+     let cropId: String
+     let cropName: String
+-    let summaryText: String
+     let plantedAt: Date
+     let harvestAt: Date
+ 
+@@ -211,7 +226,7 @@ struct CropTimerLockScreenView: View {
+                             .foregroundStyle(Color(red: 0.17, green: 0.19, blue: 0.22))
+                             .lineLimit(1)
+ 
+-                        Text(summaryText.isEmpty ? "수확까지" : summaryText)
++                        Text("수확까지")
+                             .font(.system(size: 11, weight: .bold, design: .rounded))
+                             .foregroundStyle(Color(red: 0.72, green: 0.76, blue: 0.82))
+                             .lineLimit(1)
+diff --git a/lib/crop_timer_screen.dart b/lib/crop_timer_screen.dart
+index 724c8b7..585e3d4 100644
+--- a/lib/crop_timer_screen.dart
++++ b/lib/crop_timer_screen.dart
+@@ -203,15 +203,10 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
+ 
+     final next = activeItems.first;
+ 
+-    final summaryText = activeItems.length <= 1
+-        ? ''
+-        : '작물 ${activeItems.length}개 진행 중';
+-
+     await CropTimerLiveActivityService.instance.startCropTimer(
+       timerId: next.id.toString(),
+       cropId: next.cropId,
+       cropName: next.cropName,
+-      summaryText: summaryText,
+       plantedAt: next.plantedAt,
+       harvestAt: next.harvestAt,
+     );
+diff --git a/lib/services/crop_timer_live_activity_service.dart b/lib/services/crop_timer_live_activity_service.dart
+index 33df77d..9269463 100644
+--- a/lib/services/crop_timer_live_activity_service.dart
++++ b/lib/services/crop_timer_live_activity_service.dart
+@@ -1,5 +1,6 @@
+ import 'dart:io';
+ 
++import 'package:flutter/foundation.dart';
+ import 'package:live_activities/live_activities.dart';
+ 
+ class CropTimerLiveActivityService {
+@@ -28,24 +29,34 @@ class CropTimerLiveActivityService {
+     required String cropName,
+     required DateTime plantedAt,
+     required DateTime harvestAt,
+-    String? summaryText,
+   }) async {
+     if (!Platform.isIOS) return;
+ 
+     await init();
+ 
+-    final activityId = await _liveActivities.createActivity(
+-      timerId,
+-      {
+-        'cropId': cropId,
+-        'cropName': cropName,
+-        'summaryText': summaryText ?? '',
+-        'plantedAtMillis': plantedAt.millisecondsSinceEpoch,
+-        'harvestAtMillis': harvestAt.millisecondsSinceEpoch,
+-      },
+-    );
+-
+-    _activityId = activityId;
++    try {
++      debugPrint('[LiveActivity] start request');
++      debugPrint('[LiveActivity] timerId=$timerId');
++      debugPrint('[LiveActivity] cropId=$cropId cropName=$cropName');
++      debugPrint('[LiveActivity] plantedAt=$plantedAt harvestAt=$harvestAt');
++
++      final activityId = await _liveActivities.createActivity(
++        timerId,
++        {
++          'cropId': cropId,
++          'cropName': cropName,
++          'plantedAtMillis': plantedAt.millisecondsSinceEpoch,
++          'harvestAtMillis': harvestAt.millisecondsSinceEpoch,
++        },
++      );
++
++      debugPrint('[LiveActivity] created activityId=$activityId');
++
++      _activityId = activityId;
++    } catch (e, s) {
++      debugPrint('[LiveActivity] start failed: $e');
++      debugPrint('$s');
++    }
+   }
+ 
+   Future<void> endCurrentActivity() async {
