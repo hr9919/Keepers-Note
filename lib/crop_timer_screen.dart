@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
-
+import 'services/crop_timer_widget_service.dart';
 import 'package:flutter/material.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/crop_timer_live_activity_service.dart';
@@ -56,6 +58,8 @@ class CropTimerScreen extends StatefulWidget {
 
 class _CropTimerScreenState extends State<CropTimerScreen> {
   static const String _storageKey = 'crop_timer_items';
+  static const String _widgetItemsKey = 'crop_timer_widget_items';
+  static const String _appGroupId = 'group.com.townhelpers.keepersnote';
   static const String _materialApiUrl =
       'https://api.keepers-note.o-r.kr/api/cooking/materials';
 
@@ -291,46 +295,89 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
 
   Future<void> _loadItems() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_storageKey);
-
-    if (raw == null || raw.isEmpty) {
-      await _syncProgressNotification();
-      await _syncLiveActivity();
-      return;
-    }
+    final localRaw = prefs.getString(_storageKey);
+    final widgetRaw = await _loadWidgetItemsRaw();
 
     try {
-      final decoded = jsonDecode(raw) as List<dynamic>;
+      final loaded = <CropTimerItem>[];
 
-      final loaded = decoded
-          .whereType<Map>()
-          .map((e) => CropTimerItem.fromJson(Map<String, dynamic>.from(e)))
-          .where((e) => e.id != 0)
-          .toList();
+      loaded.addAll(_decodeTimerItems(localRaw));
+      loaded.addAll(_decodeTimerItems(widgetRaw));
 
-      loaded.sort((a, b) => a.harvestAt.compareTo(b.harvestAt));
+      final mergedById = <int, CropTimerItem>{};
+      for (final item in loaded) {
+        if (item.id == 0) continue;
+        mergedById[item.id] = item;
+      }
+
+      final merged = mergedById.values.toList()
+        ..sort((a, b) => a.harvestAt.compareTo(b.harvestAt));
 
       if (!mounted) return;
 
       setState(() {
-        _items = loaded;
+        _items = merged;
       });
 
+      await _saveItems();
       await _syncProgressNotification();
       await _syncLiveActivity();
       await _checkAndNotifyCompletedTimers();
     } catch (e) {
       debugPrint('작물 타이머 저장값 불러오기 실패: $e');
+      await CropTimerWidgetService.clearAndRefresh();
+      await _syncProgressNotification();
+      await _syncLiveActivity();
     }
+  }
+
+  Future<String?> _loadWidgetItemsRaw() async {
+    try {
+      if (Platform.isIOS) {
+        await HomeWidget.setAppGroupId(_appGroupId);
+      }
+
+      return await HomeWidget.getWidgetData<String>(
+        _widgetItemsKey,
+        defaultValue: null,
+      );
+    } catch (e) {
+      debugPrint('작물 타이머 위젯 저장값 읽기 실패: $e');
+      return null;
+    }
+  }
+
+  List<CropTimerItem> _decodeTimerItems(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return [];
+    }
+
+    final decoded = jsonDecode(raw);
+
+    if (decoded is! List) {
+      return [];
+    }
+
+    return decoded
+        .whereType<Map>()
+        .map((e) => CropTimerItem.fromJson(Map<String, dynamic>.from(e)))
+        .where((e) => e.id != 0)
+        .toList();
   }
 
   Future<void> _saveItems() async {
     final prefs = await SharedPreferences.getInstance();
 
+    final itemsJson = jsonEncode(
+      _items.map((e) => e.toJson()).toList(),
+    );
+
     await prefs.setString(
       _storageKey,
-      jsonEncode(_items.map((e) => e.toJson()).toList()),
+      itemsJson,
     );
+
+    await CropTimerWidgetService.saveAndRefreshFromJson(itemsJson);
   }
 
   Future<void> _startTimer() async {

@@ -3,9 +3,10 @@ import 'package:home_widget/home_widget.dart';
 
 class KeepersHomeWidgetService {
   static const String _androidWidgetName = 'TodayInfoWidgetProvider';
+  static const String _iOSWidgetName = 'KeepersTodayInfoWidget';
 
-  // iOS에서 Runner/Widget Extension에 동일하게 넣은 App Group 값으로 바꿔야 함
-  static const String _iOSAppGroupId = 'group.com.townhelpers.keepers_note';
+  // Xcode Runner / Widget Extension App Groups와 반드시 동일해야 함
+  static const String _iOSAppGroupId = 'group.com.townhelpers.keepersnote';
 
   static bool _isInitialized = false;
 
@@ -40,12 +41,15 @@ class KeepersHomeWidgetService {
     await HomeWidget.saveWidgetData<String>('voter_id', voterId);
 
     for (int i = 0; i < 3; i++) {
-      final item = i < hourlyWeather.length ? hourlyWeather[i] : const <String, String>{};
+      final item = i < hourlyWeather.length
+          ? hourlyWeather[i]
+          : const <String, String>{};
 
       await HomeWidget.saveWidgetData<String>(
         'hourly_${i}_time',
         item['time'] ?? '-',
       );
+
       await HomeWidget.saveWidgetData<String>(
         'hourly_${i}_weather',
         item['weather'] ?? '-',
@@ -53,10 +57,17 @@ class KeepersHomeWidgetService {
     }
 
     await HomeWidget.updateWidget(
-      name: Platform.isAndroid
-          ? 'TodayInfoWidgetProvider'
-          : 'HomeWidget',
-      androidName: 'TodayInfoWidgetProvider',
+      iOSName: _iOSWidgetName,
+      androidName: _androidWidgetName,
+    );
+  }
+
+  static Future<void> refreshOnly() async {
+    await _ensureInitialized();
+
+    await HomeWidget.updateWidget(
+      iOSName: _iOSWidgetName,
+      androidName: _androidWidgetName,
     );
   }
 }

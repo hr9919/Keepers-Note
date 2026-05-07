@@ -30,6 +30,7 @@ import 'package:app_links/app_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/push_service.dart';
 import 'crop_timer_screen.dart';
+import 'services/todo_widget_service.dart';
 
 class MainWrapper extends StatefulWidget {
   final Uri? initialDeepLink;
@@ -47,6 +48,8 @@ class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
   int _searchResetSignal = 0;
   final TextEditingController _todoController = TextEditingController();
+
+  final FocusNode _todoInputFocusNode = FocusNode();
 
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _deepLinkSub;
@@ -118,6 +121,8 @@ class _MainWrapperState extends State<MainWrapper> {
   @override
   void initState() {
     super.initState();
+
+    _syncTodoToWidget(); // 기본 할일 4개 먼저 위젯에 저장
     _fetchUserInfo();
     _loadEvents();
 
@@ -137,6 +142,7 @@ class _MainWrapperState extends State<MainWrapper> {
     _kakaoSchemeSub?.cancel();
     _todoController.dispose();
     _pendingCommunityDeepLinkTimer?.cancel();
+    _todoInputFocusNode.dispose();
     super.dispose();
   }
 
@@ -238,6 +244,47 @@ class _MainWrapperState extends State<MainWrapper> {
         debugPrint('MainWrapper 카카오 스킴 처리 실패: $e');
       }
     });
+  }
+
+  Future<void> _syncTodoToWidget() async {
+    try {
+      final todos = _todoTasks
+          .where((todo) {
+        final title = (todo['taskName'] ?? '')
+            .toString()
+            .replaceAll('\n', ' ')
+            .replaceAll('\r', ' ')
+            .trim();
+
+        return title.isNotEmpty;
+      })
+          .toList();
+
+      debugPrint('🧩 할일 위젯 저장 개수: ${todos.length}');
+      debugPrint('🧩 할일 위젯 저장 목록: ${todos.map((e) => e['taskName']).toList()}');
+
+      await TodoWidgetService.saveAndRefresh(
+        todos: List.generate(todos.length, (index) {
+          final todo = todos[index];
+
+          final rawId = (todo['id'] ?? 0).toString();
+          final safeId = rawId == '0' ? 'local_default_$index' : rawId;
+
+          return TodoWidgetItem(
+            id: safeId,
+            title: (todo['taskName'] ?? '')
+                .toString()
+                .replaceAll('\n', ' ')
+                .replaceAll('\r', ' ')
+                .trim(),
+            done: todo['completed'] == true,
+            createdAt: index.toDouble(),
+          );
+        }),
+      );
+    } catch (e) {
+      debugPrint('할일 위젯 동기화 실패: $e');
+    }
   }
 
   String _communityTargetKey({
@@ -344,6 +391,51 @@ class _MainWrapperState extends State<MainWrapper> {
             builder: (_) => const CropTimerScreen(),
           ),
         );
+      });
+
+      return;
+    }
+
+    final bool isTodoLink =
+        target == 'todo' ||
+            uri.host == 'todo' ||
+            uri.path == '/todo' ||
+            uri.pathSegments.contains('todo');
+
+    if (isTodoLink) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+
+        if (_isDrawerOpen) {
+          await _closeDrawerSmooth();
+        }
+
+        if (!mounted) return;
+
+        setState(() {
+          _selectedIndex = 0;
+          _isCommunityMenuOpen = false;
+          _pendingSearchItem = null;
+          _searchResetSignal++;
+        });
+
+        await Future.delayed(const Duration(milliseconds: 260));
+        if (!mounted) return;
+
+        if (!_isEndDrawerOpen) {
+          await _openEndDrawerSmooth();
+        }
+
+        final bool shouldFocusInput =
+            uri.pathSegments.contains('add') ||
+                uri.path == '/todo/add' ||
+                uri.toString().contains('/add');
+
+        if (shouldFocusInput) {
+          await Future.delayed(const Duration(milliseconds: 420));
+          if (!mounted) return;
+          _todoInputFocusNode.requestFocus();
+        }
       });
 
       return;
@@ -980,6 +1072,8 @@ class _MainWrapperState extends State<MainWrapper> {
       setState(() {
         _todoTasks = mapped;
       });
+
+      await _syncTodoToWidget();
     } catch (_) {}
   }
 
@@ -1031,6 +1125,8 @@ class _MainWrapperState extends State<MainWrapper> {
       _todoTasks[index]['completed'] = !previous;
     });
 
+    await _syncTodoToWidget();
+
     try {
       final response = await http.put(
         Uri.parse('https://api.keepers-note.o-r.kr/api/todo/toggle/$taskId'),
@@ -1040,12 +1136,14 @@ class _MainWrapperState extends State<MainWrapper> {
         setState(() {
           _todoTasks[index]['completed'] = previous;
         });
+        await _syncTodoToWidget();
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _todoTasks[index]['completed'] = previous;
         });
+        await _syncTodoToWidget();
       }
       debugPrint("_toggleTodo 실패: $e");
     }
@@ -1102,6 +1200,8 @@ class _MainWrapperState extends State<MainWrapper> {
         setState(() {
           _todoTasks.removeAt(index);
         });
+
+        await _syncTodoToWidget();
       }
     } catch (_) {}
   }
@@ -2068,6 +2168,7 @@ class _MainWrapperState extends State<MainWrapper> {
               ),
               child: TextField(
                 controller: _todoController,
+                focusNode: _todoInputFocusNode,
                 onSubmitted: (_) {
                   FocusManager.instance.primaryFocus?.unfocus();
                   _addTodo();

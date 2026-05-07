@@ -1382,6 +1382,14 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
     if (!mounted || targetPost == null) {
       _openingInitialTargetKey = null;
+
+      Future.delayed(const Duration(milliseconds: 450), () {
+        if (!mounted) return;
+        if (_didOpenInitialPost) return;
+        if (_isPostDetailSheetOpen) return;
+        _tryOpenInitialPost();
+      });
+
       return;
     }
 
@@ -1416,6 +1424,13 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         });
       } else {
         _didOpenInitialPost = false;
+
+        Future.delayed(const Duration(milliseconds: 450), () {
+          if (!mounted) return;
+          if (_didOpenInitialPost) return;
+          if (_isPostDetailSheetOpen) return;
+          _tryOpenInitialPost();
+        });
       }
 
       _openingInitialTargetKey = null;

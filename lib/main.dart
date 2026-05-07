@@ -13,6 +13,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'firebase_options.dart';
+import 'package:home_widget/home_widget.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -399,8 +400,7 @@ void main() async {
     await _configureLocalNotifications()
         .timeout(const Duration(seconds: 3));
 
-    await _configureFirebaseMessaging()
-        .timeout(const Duration(seconds: 4));
+    await _configureFirebaseMessaging();
 
     await CropTimerNotificationService.instance.init(
       onTapCropTimer: () {
@@ -409,6 +409,7 @@ void main() async {
         );
       },
     );
+    await HomeWidget.setAppGroupId('group.com.townhelpers.keepersnote');
 
     await CropTimerNotificationService.instance
         .syncCropTimerProgressFromStorage()
@@ -531,15 +532,21 @@ class _SplashScreenState extends State<SplashScreen>
     try {
       final message = await FirebaseMessaging.instance
           .getInitialMessage()
-          .timeout(const Duration(milliseconds: 600));
+          .timeout(const Duration(seconds: 3));
+
+      debugPrint('[PUSH] getInitialMessage data=${message?.data}');
 
       final uri = await _deepLinkFromRemoteMessageOrFallback(message);
+
+      debugPrint('[PUSH] getInitialMessage uri=$uri');
 
       if (uri != null) {
         _pendingDeepLink = uri;
         _initialPushDeepLink = uri;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[PUSH] getInitialMessage 실패/타임아웃: $e');
+    }
   }
 
   Future<void> _initDeepLinks() async {
