@@ -304,6 +304,7 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
                 "비" -> "🌧️"
                 "눈" -> "❄️"
                 "무지개" -> "🌈"
+                "유성우" -> "☄️"
                 else -> "·"
             }
         }
@@ -315,6 +316,7 @@ class TodayInfoWidgetProvider : HomeWidgetProvider() {
                 "비" -> R.drawable.bg_widget_weather_rain
                 "눈" -> R.drawable.bg_widget_weather_snow
                 "무지개" -> R.drawable.bg_widget_weather_rainbow
+                "유성우" -> R.drawable.bg_widget_weather_cloudy
                 else -> R.drawable.bg_widget_weather_sunny
             }
         }

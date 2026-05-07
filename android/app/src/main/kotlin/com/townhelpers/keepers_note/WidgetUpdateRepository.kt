@@ -58,12 +58,26 @@ object WidgetUpdateRepository {
             val hourly = mutableListOf<Pair<String, String>>()
 
             if (timeline != null) {
-                for (i in 0 until minOf(3, timeline.length())) {
+                val allTimeline = mutableListOf<Pair<String, String>>()
+
+                for (i in 0 until timeline.length()) {
                     val item = timeline.optJSONObject(i) ?: continue
                     val time = formatHourlyLabel(item.optString("label", "-"))
                     val weather = normalizeWeatherLabel(item.optString("weather", "-"))
-                    hourly.add(time to weather)
+
+                    if (time == "-" || weather == "-") continue
+
+                    allTimeline.add(time to weather)
                 }
+
+                // 핵심:
+                // timeline 첫 번째가 현재 날씨 슬롯인 경우가 있어서 첫 칸을 제외하고 다음 3개만 사용
+                val nextTimeline = allTimeline
+                    .distinctBy { it.first }   // 같은 시간 중복 제거
+                    .drop(1)                   // 현재 슬롯 제외
+                    .take(3)                   // 미래 날씨 3개
+
+                hourly.addAll(nextTimeline)
             }
 
             while (hourly.size < 3) {
@@ -180,6 +194,7 @@ object WidgetUpdateRepository {
             "RAIN", "비" -> "비"
             "SNOW", "눈" -> "눈"
             "RAINBOW", "무지개" -> "무지개"
+            "METEOR_SHOWER", "유성우" -> "유성우"
             else -> if (raw.isNullOrBlank()) "맑음" else raw.trim()
         }
     }
