@@ -496,6 +496,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   @override
   void initState() {
     super.initState();
+    _KeepersNetworkImageCache.configure();
     _commentController = TaggingTextController();
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
@@ -4776,10 +4777,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
           border: Border.all(color: const Color(0xFFFFE1DA)),
         ),
         child: ClipOval(
-          child: Image.network(
-            resolved,
+          child: _KeepersCachedNetworkImage(
+            url: resolved,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => fallback,
+            errorWidget: fallback,
           ),
         ),
       );
@@ -4928,25 +4929,11 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     }
 
     if (resolved.startsWith('http')) {
-      return Image.network(
-        resolved,
+      return _KeepersCachedNetworkImage(
+        url: resolved,
         fit: BoxFit.cover,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            color: const Color(0xFFFFF6F2),
-            alignment: Alignment.center,
-            child: const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.2,
-                color: Color(0xFFFF8E7C),
-              ),
-            ),
-          );
-        },
-        errorBuilder: (_, __, ___) => _buildImageFallback(),
+        placeholderColor: const Color(0xFFFFF6F2),
+        errorWidget: _buildImageFallback(),
       );
     }
 
@@ -5113,7 +5100,34 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                   : const SizedBox.shrink(),
                             ),
                           ),
-                          if (_shouldShowAdminPickStyle(post)) _buildVerifiedBadge(),
+                          if (_shouldShowAdminPickStyle(post)) ...[
+                            const SizedBox(width: 5),
+                            _buildVerifiedBadge(),
+                          ],
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildGridStatPill(
+                                    icon: Icons.chat_bubble_outline_rounded,
+                                    count: post.commentCount,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  _buildGridStatPill(
+                                    icon: liked
+                                        ? Icons.favorite_rounded
+                                        : Icons.favorite_border_rounded,
+                                    count: post.likeCount,
+                                    active: liked,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -5227,6 +5241,59 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     bool didRunInitialHighlight = false;
     bool isRunningInitialHighlight = false;
 
+    bool commentUidVerified = false;
+    bool commentUidChecking = true;
+
+    Future<void> openUidVerificationFromComment() async {
+      final String userId = (widget.userId ?? '').trim();
+
+      if (userId.isEmpty) {
+        _showSnackBar('로그인 정보가 필요해요.');
+        return;
+      }
+
+      final bool? requested = await Navigator.of(context, rootNavigator: true).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => CommunityUidVerificationScreen(userId: userId),
+        ),
+      );
+
+      if (requested == true) {
+        _showSnackBar('UID 인증 요청이 접수되었어요. 승인 후 댓글을 이용할 수 있어요.');
+      }
+
+      final status = await _fetchCommunityUidStatus();
+      if (!sheetAlive || isSheetClosing) return;
+
+      final String communityStatus =
+          status?['communityStatus']?.toString().toUpperCase() ?? 'NONE';
+      final bool uidLocked = status?['uidLocked'] == true;
+
+      commentUidVerified = communityStatus == 'APPROVED' || uidLocked;
+    }
+
+    Future<void> refreshCommentUidStatus() async {
+      final String userId = (widget.userId ?? '').trim();
+
+      if (userId.isEmpty) {
+        commentUidVerified = false;
+        commentUidChecking = false;
+        return;
+      }
+
+      commentUidChecking = true;
+      final status = await _fetchCommunityUidStatus();
+
+      final String communityStatus =
+          status?['communityStatus']?.toString().toUpperCase() ?? 'NONE';
+      final bool uidLocked = status?['uidLocked'] == true;
+
+      commentUidVerified = communityStatus == 'APPROVED' || uidLocked;
+      commentUidChecking = false;
+    }
+
+    await refreshCommentUidStatus();
+
     try {
       await showModalBottomSheet<void>(
         context: Navigator
@@ -5279,19 +5346,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
               }
 
               void activateReplyMode(CommunityComment target) {
-                final String targetName = target.authorName.trim();
-
                 setSheetState(() {
                   replyTarget = target;
-
-                  commentController.setMentionNames(
-                    targetName.isEmpty ? const <String>[] : <String>[targetName],
-                  );
-
-                  commentController.text = targetName.isEmpty ? '' : '@$targetName ';
-                  commentController.selection = TextSelection.fromPosition(
-                    TextPosition(offset: commentController.text.length),
-                  );
+                  commentController.clear();
+                  commentController.clearMentionNames();
                 });
 
                 requestComposerFocus(context);
@@ -5447,6 +5505,11 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                   _showSnackBar('로그인 정보가 필요해요.');
                   return;
                 }
+                if (!commentUidVerified) {
+                  _showSnackBar('UID 인증 후 댓글을 달 수 있어요.');
+                  await openUidVerificationFromComment();
+                  return;
+                }
                 if (!detailPost.allowComments) {
                   _showSnackBar('댓글이 비활성화된 게시글이에요.');
                   return;
@@ -5467,6 +5530,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                       'userId': int.tryParse(widget.userId ?? ''),
                       'content': text,
                       'parentCommentId': replyTarget?.id,
+                      if (replyTarget?.authorUserId != null)
+                        'parentCommentAuthorUserId': replyTarget!.authorUserId,
+                      if (replyTarget?.authorUserId != null)
+                        'targetUserId': replyTarget!.authorUserId,
                     }),
                   )
                       .timeout(const Duration(seconds: 10));
@@ -6242,6 +6309,17 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                                                       ),
                                                                                       const SizedBox(
                                                                                           height: 14),
+                                                                                      _buildPostActionTile(
+                                                                                        icon: Icons.reply_rounded,
+                                                                                        iconBg: const Color(0xFFEFF6FF),
+                                                                                        iconColor: const Color(0xFF4A7BD0),
+                                                                                        title: '답글 달기',
+                                                                                        subtitle: '${comment.authorName}님에게 답글을 남겨요',
+                                                                                        onTap: () {
+                                                                                          Navigator.pop(sheetContext);
+                                                                                          activateReplyMode(comment);
+                                                                                        },
+                                                                                      ),
                                                                                       if (comment
                                                                                           .mine)
                                                                                         _buildPostActionTile(
@@ -6575,80 +6653,134 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                               .end,
                                           children: [
                                             Expanded(
-                                              child: ConstrainedBox(
+                                              child: !detailPost.allowComments
+                                                  ? Container(
+                                                constraints: const BoxConstraints(minHeight: 50),
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 14,
+                                                  vertical: 13,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFFFFBFA),
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  border: Border.all(color: const Color(0xFFF1E4DE)),
+                                                ),
+                                                alignment: Alignment.centerLeft,
+                                                child: const Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.lock_outline_rounded,
+                                                      size: 17,
+                                                      color: Color(0xFFB7A9A2),
+                                                    ),
+                                                    SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Text(
+                                                        '작성자가 댓글을 비활성화했어요.',
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                        style: TextStyle(
+                                                          color: Color(0xFFADB5C2),
+                                                          fontWeight: FontWeight.w800,
+                                                          fontSize: 13,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              )
+                                                  : commentUidVerified
+                                                  ? ConstrainedBox(
                                                 constraints: const BoxConstraints(
                                                   minHeight: 50,
                                                 ),
                                                 child: TextField(
                                                   controller: commentController,
                                                   focusNode: commentFocusNode,
-                                                  cursorColor: const Color(
-                                                      0xFFFF8E7C),
+                                                  cursorColor: const Color(0xFFFF8E7C),
                                                   minLines: 1,
                                                   maxLines: 4,
-                                                  textInputAction: TextInputAction
-                                                      .newline,
+                                                  textInputAction: TextInputAction.newline,
                                                   onTap: () {
                                                     scrollToCommentSectionTop();
-                                                    Future.delayed(
-                                                        const Duration(
-                                                            milliseconds: 120), () {
-                                                      if (!sheetAlive ||
-                                                          isSheetClosing)
-                                                        return;
+                                                    Future.delayed(const Duration(milliseconds: 120), () {
+                                                      if (!sheetAlive || isSheetClosing) return;
                                                       scrollToCommentSectionTop();
                                                     });
-                                                    Future.delayed(
-                                                        const Duration(
-                                                            milliseconds: 260), () {
-                                                      if (!sheetAlive ||
-                                                          isSheetClosing)
-                                                        return;
+                                                    Future.delayed(const Duration(milliseconds: 260), () {
+                                                      if (!sheetAlive || isSheetClosing) return;
                                                       scrollToCommentSectionTop();
                                                     });
                                                   },
                                                   decoration: InputDecoration(
-                                                    hintText: replyTarget ==
-                                                        null
+                                                    hintText: replyTarget == null
                                                         ? '댓글을 입력해주세요.'
                                                         : '답글을 입력해주세요.',
                                                     hintStyle: const TextStyle(
                                                       color: Color(0xFFADB5C2),
-                                                      fontWeight: FontWeight
-                                                          .w700,
+                                                      fontWeight: FontWeight.w700,
                                                       fontSize: 13,
                                                     ),
                                                     filled: true,
-                                                    fillColor: const Color(
-                                                        0xFFFFFBFA),
-                                                    contentPadding:
-                                                    const EdgeInsets.symmetric(
+                                                    fillColor: const Color(0xFFFFFBFA),
+                                                    contentPadding: const EdgeInsets.symmetric(
                                                       horizontal: 14,
                                                       vertical: 13,
                                                     ),
                                                     border: OutlineInputBorder(
-                                                      borderRadius:
-                                                      BorderRadius.circular(16),
+                                                      borderRadius: BorderRadius.circular(16),
                                                       borderSide: const BorderSide(
-                                                        color: Color(
-                                                            0xFFF1E4DE),
+                                                        color: Color(0xFFF1E4DE),
                                                       ),
                                                     ),
                                                     enabledBorder: OutlineInputBorder(
-                                                      borderRadius:
-                                                      BorderRadius.circular(16),
+                                                      borderRadius: BorderRadius.circular(16),
                                                       borderSide: const BorderSide(
-                                                        color: Color(
-                                                            0xFFF1E4DE),
+                                                        color: Color(0xFFF1E4DE),
                                                       ),
                                                     ),
                                                     focusedBorder: OutlineInputBorder(
-                                                      borderRadius:
-                                                      BorderRadius.circular(16),
+                                                      borderRadius: BorderRadius.circular(16),
                                                       borderSide: const BorderSide(
-                                                        color: Color(
-                                                            0xFFFFCFC5),
+                                                        color: Color(0xFFFFCFC5),
                                                         width: 1.2,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                                  : Material(
+                                                color: Colors.transparent,
+                                                borderRadius: BorderRadius.circular(16),
+                                                child: InkWell(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  onTap: commentUidChecking
+                                                      ? null
+                                                      : () async {
+                                                    await openUidVerificationFromComment();
+                                                    if (!context.mounted || !sheetAlive || isSheetClosing) return;
+                                                    setSheetState(() {});
+                                                  },
+                                                  child: Container(
+                                                    constraints: const BoxConstraints(minHeight: 50),
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 14,
+                                                      vertical: 13,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFFFFBFA),
+                                                      borderRadius: BorderRadius.circular(16),
+                                                      border: Border.all(color: const Color(0xFFF1E4DE)),
+                                                    ),
+                                                    alignment: Alignment.centerLeft,
+                                                    child: Text(
+                                                      commentUidChecking
+                                                          ? 'UID 인증 상태를 확인하고 있어요.'
+                                                          : 'UID 인증 후 댓글을 달 수 있어요. UID 인증하러 가기 >',
+                                                      style: const TextStyle(
+                                                        color: Color(0xFFADB5C2),
+                                                        fontWeight: FontWeight.w800,
+                                                        fontSize: 13,
                                                       ),
                                                     ),
                                                   ),
@@ -6657,20 +6789,21 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                             ),
                                             const SizedBox(width: 10),
                                             GestureDetector(
-                                              onTap: localSubmitting
+                                              onTap: localSubmitting || !detailPost.allowComments || !commentUidVerified || commentUidChecking
                                                   ? null
                                                   : submitLocalComment,
                                               child: Container(
                                                 width: 50,
                                                 height: 50,
                                                 decoration: BoxDecoration(
-                                                  color: localSubmitting
-                                                      ? const Color(0xFFFFD9D1)
+                                                  color: localSubmitting || !detailPost.allowComments || !commentUidVerified || commentUidChecking
+                                                      ? const Color(0xFFE6E0DD)
                                                       : const Color(0xFFFFEEE9),
                                                   shape: BoxShape.circle,
                                                   border: Border.all(
-                                                    color: const Color(
-                                                        0xFFFFD8CF),
+                                                    color: localSubmitting || !detailPost.allowComments || !commentUidVerified || commentUidChecking
+                                                        ? const Color(0xFFD8D0CC)
+                                                        : const Color(0xFFFFD8CF),
                                                   ),
                                                 ),
                                                 child: localSubmitting
@@ -6684,10 +6817,12 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                     ),
                                                   ),
                                                 )
-                                                    : const Icon(
+                                                    : Icon(
                                                   Icons.send_rounded,
                                                   size: 20,
-                                                  color: Color(0xFFFF7E69),
+                                                  color: localSubmitting || !detailPost.allowComments || !commentUidVerified || commentUidChecking
+                                                      ? const Color(0xFFAAA19C)
+                                                      : const Color(0xFFFF7E69),
                                                 ),
                                               ),
                                             ),
@@ -6772,7 +6907,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     final resolved = _resolveProfileImagePath(comment.profileImageUrl);
     Widget avatar;
     if (resolved.isEmpty) {
-      avatar = CircleAvatar(
+      return CircleAvatar(
         radius: radius,
         backgroundColor: const Color(0xFFFFF2EE),
         child: Text(
@@ -6794,10 +6929,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         border: Border.all(color: const Color(0xFFFFE1DA)),
       ),
       child: ClipOval(
-        child: Image.network(
-          resolved,
+        child: _KeepersCachedNetworkImage(
+          url: resolved,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => CircleAvatar(
+          errorWidget: CircleAvatar(
             radius: radius,
             backgroundColor: const Color(0xFFFFF2EE),
             child: Text(
@@ -6914,6 +7049,52 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       idleColor: const Color(0xFFD0A49A),
       iconTopOffset: 0.0,
       circular: true,
+    );
+  }
+
+  Widget _buildGridStatPill({
+    required IconData icon,
+    required int count,
+    bool active = false,
+  }) {
+    final Color iconColor = active
+        ? const Color(0xFFFF8E7C)
+        : const Color(0xFFB9948B);
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 30),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      decoration: BoxDecoration(
+        color: active
+            ? const Color(0xFFFFF2EF)
+            : Colors.white.withOpacity(0.90),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: active
+              ? const Color(0xFFFFD7CF)
+              : const Color(0xFFF2E3DE),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12.5, color: iconColor),
+          const SizedBox(width: 2.5),
+          Text(
+            count > 99 ? '99+' : count.toString(),
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            style: TextStyle(
+              fontSize: 10.2,
+              fontWeight: FontWeight.w900,
+              color: active
+                  ? const Color(0xFFFF8E7C)
+                  : const Color(0xFFB9948B),
+              height: 1.0,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -7242,25 +7423,11 @@ class _PostImageCarouselState extends State<_PostImageCarousel> {
     if (resolved.startsWith('http')) {
       if (useCover) {
         return SizedBox.expand(
-          child: Image.network(
-            resolved,
+          child: _KeepersCachedNetworkImage(
+            url: resolved,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => fallback,
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) return child;
-              return Container(
-                color: const Color(0xFFFFFBF9),
-                alignment: Alignment.center,
-                child: const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: Color(0xFFFF8E7C),
-                  ),
-                ),
-              );
-            },
+            errorWidget: fallback,
+            placeholderColor: const Color(0xFFFFFBF9),
           ),
         );
       }
@@ -7268,26 +7435,12 @@ class _PostImageCarouselState extends State<_PostImageCarousel> {
       return Container(
         color: const Color(0xFFFFFBF9),
         alignment: Alignment.center,
-        child: Image.network(
-          resolved,
+        child: _KeepersCachedNetworkImage(
+          url: resolved,
           fit: BoxFit.contain,
           width: double.infinity,
-          errorBuilder: (_, __, ___) => fallback,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return Container(
-              color: const Color(0xFFFFFBF9),
-              alignment: Alignment.center,
-              child: const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  color: Color(0xFFFF8E7C),
-                ),
-              ),
-            );
-          },
+          errorWidget: fallback,
+          placeholderColor: const Color(0xFFFFFBF9),
         ),
       );
     }
@@ -7554,11 +7707,12 @@ class _CommunityImageViewerScreenState
 
     Widget imageWidget;
     if (resolved.startsWith('http')) {
-      imageWidget = Image.network(
-        resolved,
+      imageWidget = _KeepersCachedNetworkImage(
+        url: resolved,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.high,
-        errorBuilder: (_, __, ___) => Container(
+        placeholderColor: Colors.black,
+        errorWidget: Container(
           color: Colors.black,
           alignment: Alignment.center,
           child: const Icon(
@@ -7849,6 +8003,92 @@ class _AnimatedCommunityLikeButtonState
           ),
         ),
       ),
+    );
+  }
+}
+
+
+class _KeepersNetworkImageCache {
+  static final Map<String, NetworkImage> _providers = <String, NetworkImage>{};
+
+  static void configure() {
+    final ImageCache cache = PaintingBinding.instance.imageCache;
+    if (cache.maximumSize < 1000) {
+      cache.maximumSize = 1000;
+    }
+    const int targetBytes = 250 * 1024 * 1024;
+    if (cache.maximumSizeBytes < targetBytes) {
+      cache.maximumSizeBytes = targetBytes;
+    }
+  }
+
+  static NetworkImage provider(String url) {
+    return _providers.putIfAbsent(url, () => NetworkImage(url));
+  }
+}
+
+class _KeepersCachedNetworkImage extends StatelessWidget {
+  final String url;
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+  final Widget? errorWidget;
+  final Color placeholderColor;
+  final FilterQuality filterQuality;
+
+  const _KeepersCachedNetworkImage({
+    required this.url,
+    required this.fit,
+    this.width,
+    this.height,
+    this.errorWidget,
+    this.placeholderColor = const Color(0xFFFFF6F2),
+    this.filterQuality = FilterQuality.medium,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget placeholder = Container(
+      width: width,
+      height: height,
+      color: placeholderColor,
+      alignment: Alignment.center,
+      child: const SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.2,
+          color: Color(0xFFFF8E7C),
+        ),
+      ),
+    );
+
+    return Image(
+      image: _KeepersNetworkImageCache.provider(url),
+      fit: fit,
+      width: width,
+      height: height,
+      gaplessPlayback: true,
+      filterQuality: filterQuality,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) {
+          return child;
+        }
+        return placeholder;
+      },
+      errorBuilder: (_, __, ___) =>
+      errorWidget ??
+          Container(
+            width: width,
+            height: height,
+            color: placeholderColor,
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.image_not_supported_outlined,
+              size: 30,
+              color: Color(0xFFE1B3A8),
+            ),
+          ),
     );
   }
 }
