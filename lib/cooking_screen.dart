@@ -182,11 +182,18 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '레드빈': 'assets/images/ingredients/red-bean.webp',
     '봄날 카라멜 슈가': 'assets/images/ingredients/springday-brown-sugar.webp',
 
+    '레몬 버베나': 'assets/images/crops/lemon-verbena.webp',
+    '버베나': 'assets/images/crops/lemon-verbena.webp',
+    '연유': 'assets/images/ingredients/condensed-milk.webp',
+    '브릭 얼음': 'assets/images/ingredients/brick-ice.webp',
+    '브릭 패티': 'assets/images/ingredients/brick-meat-patty.webp',
+
     '코코아': 'assets/images/crops/cocoa-tree.webp',
 
     //생선류
     '황금 킹크랩': 'assets/images/fish/golden-king-crab.webp',
     '유럽민물가재': 'assets/images/fish/european-crayfish.webp',
+    '북유럽 파란가재': 'assets/images/fish/blue-euro-crayfish.webp',
 
     // 완성 요리인데 다른 요리 재료로도 쓰이는 것들
     '케첩': 'assets/images/cooking/tomato-sauce.webp',
@@ -299,6 +306,12 @@ String? _ingredientPreferredAssetPath(String ingredientName) {
     '부활절 초록 달걀': 'assets/images/cooking/green-egg.webp',
     '부활절 주황 달걀': 'assets/images/cooking/orange-egg.webp',
     '부활절 이스터에그 파티': 'assets/images/cooking/colorful-egg-feast.webp',
+
+    '레몬 버베나': 'assets/images/crops/lemon-verbena.webp',
+    '버베나': 'assets/images/crops/lemon-verbena.webp',
+    '연유': 'assets/images/ingredients/condensed-milk.webp',
+    '브릭 얼음': 'assets/images/ingredients/brick-ice.webp',
+    '브릭 패티': 'assets/images/ingredients/brick-meat-patty.webp',
   };
 
   return map[normalized];
@@ -2166,9 +2179,15 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       }
 
       if (_selectedFilter == '일반 레시피') {
-        filtered = filtered.where((item) => !item.isHiddenRecipe).toList();
+        filtered = filtered
+            .where((item) => !item.isHiddenRecipe && !_isEventRecipe(item))
+            .toList();
       } else if (_selectedFilter == '히든 레시피') {
-        filtered = filtered.where((item) => item.isHiddenRecipe).toList();
+        filtered = filtered
+            .where((item) => item.isHiddenRecipe && !_isEventRecipe(item))
+            .toList();
+      } else if (_selectedFilter == '이벤트 레시피') {
+        filtered = filtered.where(_isEventRecipe).toList();
       }
 
       if (_selectedLevelFilters.isNotEmpty) {
@@ -3018,7 +3037,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   }
 
   List<String> _currentFilters() => _tabController.index == 0
-      ? const ['전체', '일반 레시피', '히든 레시피']
+      ? const ['전체', '일반 레시피', '히든 레시피', '이벤트 레시피']
       : const ['전체', '작물', '마시모 구매', '행운상점 구매'];
 
   void _onSortSelected(String sort) { setState(() => _selectedSort = sort); _applyFilters(); }
@@ -3487,7 +3506,47 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     );
   }
 
-  bool _isEventRecipe(Gourmet item) => item.nameKo.contains('(이벤트)');
+  bool _isEventRecipe(Gourmet item) {
+    final id = item.id.trim();
+
+    const eventRecipeIds = {
+      'brick_bowl_fruit_shaved_ice',
+      'brick_bowl_apple_shaved_ice',
+      'brick_bowl_mandarin_shaved_ice',
+      'brick_bowl_blueberry_shaved_ice',
+      'brick_bowl_raspberry_shaved_ice',
+      'brick_bowl_pineapple_shaved_ice',
+      'brick_bowl_strawberry_shaved_ice',
+      'brick_bowl_grape_shaved_ice',
+      'fruit_verbena_pie',
+      'apple_verbena_pie',
+      'pineapple_verbena_pie',
+      'mandarin_verbena_pie',
+      'blueberry_verbena_pie',
+      'raspberry_verbena_pie',
+      'strawberry_verbena_pie',
+      'grape_verbena_pie',
+      'brick_mushroom_patty_burger',
+      'brick_button_mushroom_patty_burger',
+      'brick_black_truffle_patty_burger',
+      'brick_oyster_mushroom_patty_burger',
+      'brick_shiitake_patty_burger',
+      'brick_penny_bun_patty_burger',
+      'brick_fun_set',
+    };
+
+    if (eventRecipeIds.contains(id)) return true;
+
+    final normalizedName = item.nameKo.replaceAll(' ', '');
+    if (normalizedName.contains('이벤트')) return true;
+
+    final normalizedIngredients =
+    item.ingredients.join(' ').replaceAll(' ', '');
+
+    return normalizedIngredients.contains('연유') ||
+        normalizedIngredients.contains('브릭얼음') ||
+        normalizedIngredients.contains('브릭패티');
+  }
   String _displayRecipeName(Gourmet item) => item.nameKo.replaceAll(' (이벤트)', '').replaceAll('(이벤트)', '').trim();
 
   void _dismissKeyboard() {
