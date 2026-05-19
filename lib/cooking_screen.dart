@@ -133,6 +133,10 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '수박': 'assets/images/crops/watermelon.webp',
     '무': 'assets/images/crops/white-radish.webp',
 
+    // 꽃류
+    '데이지': 'assets/images/flowers/colors/daisy-white.webp',
+    '장미': 'assets/images/flowers/colors/rose-red.webp',
+
     // 상점구매 / ingredients 폴더
     '버터': 'assets/images/ingredients/butter.webp',
     '치즈': 'assets/images/ingredients/cheese.webp',
@@ -148,14 +152,16 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '슈가파우더': 'assets/images/ingredients/frosted.webp',
     '설탕가루': 'assets/images/ingredients/frosted.webp',
     '프로스티드': 'assets/images/ingredients/frosted.webp',
-    '말차가루': 'assets/images/ingredients/matcha-powder.webp',
-    '말차 파우더': 'assets/images/ingredients/matcha-powder.webp',
+    '홍차': 'assets/images/ingredients/black-tea.png',
+    '말차': 'assets/images/ingredients/matcha-powder.png',
+    '말차가루': 'assets/images/ingredients/matcha-powder.png',
+    '말차 파우더': 'assets/images/ingredients/matcha-powder.png',
     '쌀가루': 'assets/images/ingredients/rice-flour.webp',
     '살사소스': 'assets/images/ingredients/salsa-sauce.webp',
     '살사 소스': 'assets/images/ingredients/salsa-sauce.webp',
-    '찻잎': 'assets/images/ingredients/tea-leaves.webp',
-    '차잎': 'assets/images/ingredients/tea-leaves.webp',
-    '티트리': 'assets/images/ingredients/tea-leaves.webp',
+    '찻잎': 'assets/images/crops/tea-tree.webp',
+    '차잎': 'assets/images/crops/tea-tree.webp',
+    '티트리': 'assets/images/crops/tea-tree.webp',
 
     // 색 사탕류
     '노란색 사탕': 'assets/images/ingredients/yellow-sugar.webp',
@@ -188,13 +194,23 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '토마토소스': 'assets/images/cooking/tomato-sauce.webp',
     '토마토 소스': 'assets/images/cooking/tomato-sauce.webp',
     '티라미수': 'assets/images/cooking/tiramisu.webp',
+    '치즈케이크': 'assets/images/cooking/cheese-cake.webp',
+    '진한 홍차': 'assets/images/cooking/mellow-black-tea.png',
     '베지 샐러드': 'assets/images/cooking/house-salad.webp',
     '훈제 연어 베이글': 'assets/images/cooking/smoked-fish-bagel.webp',
     '씨푸드 덮밥': 'assets/images/cooking/seafood-rice-bowl.webp',
     '씨푸드 피자': 'assets/images/cooking/seafood-pizza.webp',
     '애플파이': 'assets/images/cooking/apple-pie.webp',
     '피시 앤 칩스': 'assets/images/cooking/fish-chips.webp',
+    '커피': 'assets/images/cooking/coffee.webp',
 
+    '잡초': 'assets/images/ingredients/weed.png',
+
+    '부활절 달걀': 'assets/images/cooking/egg.webp',
+    '부활절 보라 달걀': 'assets/images/cooking/purple-egg.webp',
+    '부활절 초록 달걀': 'assets/images/cooking/green-egg.webp',
+    '부활절 주황 달걀': 'assets/images/cooking/orange-egg.webp',
+    '부활절 이스터에그 파티': 'assets/images/cooking/colorful-egg-feast.webp',
 
     // 범용 아이콘
     '아무 채소': 'assets/images/icon_veg_any.png',
@@ -208,6 +224,7 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '아무 해산물': 'assets/images/icon_lobster_any.png',
     '아무 커피': 'assets/images/cooking/coffee.webp',
     '아무 음식': 'assets/images/icon_food_any.png',
+    '아무 식재료': 'assets/images/icon_ingredient_any.png',
     '아무 음료': 'assets/images/icon_drink_any.png',
   };
 
@@ -254,9 +271,37 @@ String _resolveTypeLabel({
       return '상점 구매';
     case 'gourmet':
       return '요리';
+    case 'plant':
+      return '꽃';
     default:
       return '';
   }
+}
+
+String? _ingredientPreferredAssetPath(String ingredientName) {
+  final normalized = _normalizeIngredientDisplayName(ingredientName).trim();
+
+  const map = {
+    '찻잎': 'assets/images/crops/tea-tree.webp',
+    '차잎': 'assets/images/crops/tea-tree.webp',
+    '티트리': 'assets/images/crops/tea-tree.webp',
+
+    '홍차': 'assets/images/ingredients/black-tea.png',
+
+    '말차': 'assets/images/ingredients/matcha-powder.png',
+    '말차가루': 'assets/images/ingredients/matcha-powder.png',
+    '말차 파우더': 'assets/images/ingredients/matcha-powder.png',
+
+    '잡초': 'assets/images/ingredients/weed.png',
+
+    '부활절 달걀': 'assets/images/cooking/egg.webp',
+    '부활절 보라 달걀': 'assets/images/cooking/purple-egg.webp',
+    '부활절 초록 달걀': 'assets/images/cooking/green-egg.webp',
+    '부활절 주황 달걀': 'assets/images/cooking/orange-egg.webp',
+    '부활절 이스터에그 파티': 'assets/images/cooking/colorful-egg-feast.webp',
+  };
+
+  return map[normalized];
 }
 
 Widget _buildIngredientImage({
@@ -265,7 +310,8 @@ Widget _buildIngredientImage({
   double padding = 4,
   double iconSize = 16,
 }) {
-  final resolvedPath = _resolveIngredientImagePath(imagePath);
+  final preferredPath = _ingredientPreferredAssetPath(ingredientNameKo);
+  final resolvedPath = preferredPath ?? _resolveIngredientImagePath(imagePath);
   final fallbackPath = _ingredientFallbackAssetPath(ingredientNameKo);
 
   if (resolvedPath.isNotEmpty) {
@@ -602,6 +648,8 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   String _selectedFilter = '전체';
   String _searchQuery = '';
   String _selectedSort = '레벨순';
+  final Set<int> _selectedLevelFilters = {};
+  int _lastTabIndex = 0;
 
   List<Gourmet> _allRecipeList = [];
   List<Gourmet> _visibleRecipeList = [];
@@ -651,9 +699,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
-        if (!mounted) return;
-        setState(() => _selectedFilter = '전체');
-        _applyFilters();
+        _resetTabScopedFiltersIfNeeded(_tabController.index);
       }
     });
 
@@ -687,6 +733,21 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _fetchMaterialData();
 
     widget.searchController?.addListener(_handleExternalSearch);
+  }
+
+
+  void _resetTabScopedFiltersIfNeeded(int newIndex) {
+    if (_lastTabIndex == newIndex) return;
+    _lastTabIndex = newIndex;
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedFilter = '전체';
+      _selectedLevelFilters.clear();
+    });
+
+    _applyFilters();
   }
 
   @override
@@ -908,6 +969,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       ),
       child: TabBar(
         controller: _tabController,
+        onTap: _resetTabScopedFiltersIfNeeded,
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
         labelPadding: EdgeInsets.zero,
@@ -2109,6 +2171,12 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         filtered = filtered.where((item) => item.isHiddenRecipe).toList();
       }
 
+      if (_selectedLevelFilters.isNotEmpty) {
+        filtered = filtered
+            .where((item) => _selectedLevelFilters.contains(item.level))
+            .toList();
+      }
+
       switch (_selectedSort) {
         case '레벨순':
           filtered.sort((a, b) {
@@ -2189,6 +2257,12 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       filtered = filtered.where((item) =>
           _isLuckyShopItem(item.nameKo)
       ).toList();
+    }
+
+    if (_selectedLevelFilters.isNotEmpty) {
+      filtered = filtered
+          .where((item) => _selectedLevelFilters.contains(item.level))
+          .toList();
     }
 
     switch (_selectedSort) {
@@ -2374,6 +2448,8 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         bg = const Color(0xFFF3E5F5); border = const Color(0xFFE1BEE7); textColor = const Color(0xFF7B1FA2);
       } else if (level == 9) {
         bg = const Color(0xFFFCE4EC); border = const Color(0xFFF8BBD0); textColor = const Color(0xFFC2185B);
+      } else if (level == 10) {
+        bg = const Color(0xFFFFF8E1); border = const Color(0xFFFFECB3); textColor = const Color(0xFFEF6C00);
       } else {
         textColor = const Color(0xFF424242);
         border = const Color(0xFFBDBDBD).withOpacity(0.5);
@@ -2382,7 +2458,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     final bool isMasterLevel =
         rawText.contains('레벨') &&
-            (int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0) >= 10;
+            (int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0) >= 11;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
@@ -2635,6 +2711,15 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                 return;
               }
 
+              // 3-1) 꽃 재료인 경우 -> 채집 꽃 탭으로
+              if (ingredient.targetType == 'plant') {
+                _jumpToPlantInGathering(
+                  plantId: ingredient.targetId,
+                  plantNameKo: ingredient.ingredientNameKo,
+                );
+                return;
+              }
+
               // 4) 나머지는 기존 재료 탭 이동
               if (ingredient.targetId != null && ingredient.targetId!.isNotEmpty) {
                 _jumpToMaterialById(
@@ -2670,6 +2755,15 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                 _jumpToFishInGathering(
                   fishId: ingredient.targetId,
                   fishNameKo: ingredient.ingredientNameKo,
+                );
+                return;
+              }
+
+              // 꽃 재료인 경우 -> 채집 꽃 탭으로
+              if (ingredient.targetType == 'plant') {
+                _jumpToPlantInGathering(
+                  plantId: ingredient.targetId,
+                  plantNameKo: ingredient.ingredientNameKo,
                 );
                 return;
               }
@@ -2717,8 +2811,21 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       if (!mounted || requestToken != _recipeRequestToken) return;
 
       if (response.statusCode == 200) {
-        final List<dynamic> data =
-        jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        final body = utf8.decode(response.bodyBytes);
+
+        debugPrint('🍳 gourmet api status: ${response.statusCode}');
+        debugPrint('🍳 body has green_milk_tea: ${body.contains('green_milk_tea')}');
+        debugPrint('🍳 body has 찻잎: ${body.contains('찻잎')}');
+        debugPrint('🍳 body has 홍차: ${body.contains('홍차')}');
+
+        final greenIndex = body.indexOf('green_milk_tea');
+        if (greenIndex >= 0) {
+          final start = (greenIndex - 200).clamp(0, body.length);
+          final end = (greenIndex + 800).clamp(0, body.length);
+          debugPrint('🍳 green_milk_tea json: ${body.substring(start, end)}');
+        }
+
+        final List<dynamic> data = jsonDecode(body) as List<dynamic>;
 
         _allRecipeList = data.map((json) => Gourmet.fromJson(json)).toList();
       }
@@ -2847,6 +2954,26 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     widget.onExternalSearchRequested?.call(item);
   }
 
+  void _jumpToPlantInGathering({
+    String? plantId,
+    required String plantNameKo,
+  }) {
+    final item = GlobalSearchItem(
+      id: (plantId != null && plantId.trim().isNotEmpty)
+          ? 'plant_${plantId.trim()}'
+          : 'plant_${plantNameKo.trim()}',
+      title: plantNameKo.trim(),
+      subtitle: '꽃',
+      iconPath: _ingredientFallbackAssetPath(plantNameKo)
+          .replaceFirst('assets/', ''),
+      screen: SearchTargetScreen.gathering,
+      gatheringTab: GatheringTabType.plant,
+      keyword: plantNameKo.trim(),
+    );
+
+    widget.onExternalSearchRequested?.call(item);
+  }
+
   void _jumpToMaterialById(String materialId, {String? displayName}) {
     _pendingSearchItem = null;
 
@@ -2942,6 +3069,300 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     });
   }
 
+  List<int> _currentLevelOptions() {
+    final Iterable<int> levels = _tabController.index == 0
+        ? _allRecipeList.map((e) => e.level)
+        : _allMaterialList.map((e) => e.level);
+
+    int maxLevel = 1;
+    for (final level in levels) {
+      if (level > maxLevel) maxLevel = level;
+    }
+
+    return List<int>.generate(maxLevel, (index) => index + 1);
+  }
+
+  bool _hasActiveFilterSortSheetSettings() {
+    return _selectedLevelFilters.isNotEmpty || _selectedSort != '레벨순';
+  }
+
+  Widget _buildFilterSortActionButton() {
+    final bool isActive = _hasActiveFilterSortSheetSettings();
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: _showFilterSortSheet,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 38,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isActive
+                ? const Color(0xFFFFF1EC)
+                : Colors.white.withOpacity(0.82),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: isActive
+                  ? const Color(0xFFFFD6CC)
+                  : const Color(0xFFE9EEF4),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(isActive ? 0.12 : 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(
+                Icons.tune_rounded,
+                size: 19,
+                color: isActive
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF94A3B8),
+              ),
+              if (_selectedLevelFilters.isNotEmpty)
+                Positioned(
+                  right: 7,
+                  top: 7,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF8E7C),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSheetChoiceChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFFFFF1EC)
+                : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFFFB8AA)
+                  : const Color(0xFFE5E7EB),
+              width: 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: isSelected
+                  ? const Color(0xFFFF7E68)
+                  : const Color(0xFF64748B),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFilterSortSheet() {
+    _dismissSearchFocus();
+
+    final tempLevels = Set<int>.from(_selectedLevelFilters);
+    String tempSort = _selectedSort;
+    final levelOptions = _currentLevelOptions();
+    const sortOptions = ['레벨순', '이름순', '가격순', '좋아요순'];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Widget sectionTitle(String title) {
+              return Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF64748B),
+                ),
+              );
+            }
+
+            return SafeArea(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 22,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            '필터 / 정렬',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF2D3436),
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            splashRadius: 20,
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      sectionTitle('정렬'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: sortOptions.map((sort) {
+                          return _buildSheetChoiceChip(
+                            label: sort,
+                            isSelected: tempSort == sort,
+                            onTap: () => setSheetState(() => tempSort = sort),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 22),
+                      sectionTitle('레벨'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildSheetChoiceChip(
+                            label: '전체',
+                            isSelected: tempLevels.isEmpty,
+                            onTap: () => setSheetState(tempLevels.clear),
+                          ),
+                          ...levelOptions.map((level) {
+                            return _buildSheetChoiceChip(
+                              label: '$level레벨',
+                              isSelected: tempLevels.contains(level),
+                              onTap: () {
+                                setSheetState(() {
+                                  if (tempLevels.contains(level)) {
+                                    tempLevels.remove(level);
+                                  } else {
+                                    tempLevels.add(level);
+                                  }
+                                });
+                              },
+                            );
+                          }),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setSheetState(() {
+                                  tempLevels.clear();
+                                  tempSort = '레벨순';
+                                });
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF94A3B8),
+                                side: const BorderSide(color: Color(0xFFE5E7EB)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 13),
+                              ),
+                              child: const Text(
+                                '초기화',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _selectedLevelFilters
+                                    ..clear()
+                                    ..addAll(tempLevels);
+                                  _selectedSort = tempSort;
+                                });
+                                _applyFilters();
+                                Navigator.pop(context);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF8E7C),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 13),
+                              ),
+                              child: const Text(
+                                '적용',
+                                style: TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildFilterBarArea() {
     final filters = _currentFilters();
 
@@ -2966,58 +3387,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
             ),
           ),
           const SizedBox(width: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: PopupMenuButton<String>(
-              onSelected: _onSortSelected,
-              color: Colors.white,
-              elevation: 10,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(
-                  color: Color(0xFFE9EEF4),
-                  width: 1,
-                ),
-              ),
-              itemBuilder: (context) => [
-                _buildSortPopupItem('레벨순'),
-                _buildSortPopupItem('이름순'),
-                _buildSortPopupItem('가격순'),
-                _buildSortPopupItem('좋아요순'),
-              ],
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: null,
-                child: Padding(
-                  padding: const EdgeInsets.only(
-                    left: 4,
-                    right: 4,
-                    top: 7,
-                    bottom: 7,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _selectedSort,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 18,
-                        color: Color(0xFF94A3B8),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _buildFilterSortActionButton(),
         ],
       ),
     );
@@ -3130,6 +3500,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _highlightedId = null;
     _selectedFilter = '전체';
     _selectedSort = '레벨순';
+    _selectedLevelFilters.clear();
 
     if (_searchController.text.isNotEmpty) {
       _searchController.clear();

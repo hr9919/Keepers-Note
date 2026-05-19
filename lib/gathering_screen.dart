@@ -404,6 +404,8 @@ class _GatheringScreenState extends State<GatheringScreen>
   String _selectedFilter = '전체';
   String _searchQuery = '';
   String _selectedSort = '레벨순';
+  final Set<int> _selectedLevelFilters = {};
+  int _lastTabIndex = 0;
 
   bool _showTopBtn = false;
   bool _isFilterVisible = true;
@@ -1284,19 +1286,30 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
-        setState(() {
-          _selectedFilter = '전체';
-        });
-        _applyFilters();
+        _resetTabScopedFiltersIfNeeded(_tabController.index);
       }
     });
-
     _searchController.addListener(_onSearchChanged);
 
     _loadFavorites();
     _fetchAllData();
 
     widget.searchController?.addListener(_handleExternalSearch);
+  }
+
+
+  void _resetTabScopedFiltersIfNeeded(int newIndex) {
+    if (_lastTabIndex == newIndex) return;
+    _lastTabIndex = newIndex;
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedFilter = '전체';
+      _selectedLevelFilters.clear();
+    });
+
+    _applyFilters();
   }
 
   @override
@@ -1395,6 +1408,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
     _searchQuery = keyword;
     _selectedFilter = '전체';
+    _selectedLevelFilters.clear();
 
     switch (item.gatheringTab!) {
       case GatheringTabType.fish:
@@ -2069,6 +2083,7 @@ class _GatheringScreenState extends State<GatheringScreen>
       _searchQuery = '';
       _highlightedId = null;
       _selectedFilter = '전체';
+      _selectedLevelFilters.clear();
     });
 
     _applyFilters();
@@ -2112,6 +2127,11 @@ class _GatheringScreenState extends State<GatheringScreen>
           .where((item) => _matchesFishFilter(item, _selectedFilter))
           .toList();
     }
+    if (_selectedLevelFilters.isNotEmpty) {
+      filteredFish = filteredFish
+          .where((item) => item.level != null && _selectedLevelFilters.contains(item.level))
+          .toList();
+    }
     _sortFish(filteredFish);
 
     List<BirdItem> filteredBirds = List.from(_birdList);
@@ -2125,6 +2145,11 @@ class _GatheringScreenState extends State<GatheringScreen>
     if (tabIndex == 1 && _selectedFilter != '전체') {
       filteredBirds = filteredBirds
           .where((item) => _matchesBirdFilter(item, _selectedFilter))
+          .toList();
+    }
+    if (_selectedLevelFilters.isNotEmpty) {
+      filteredBirds = filteredBirds
+          .where((item) => _selectedLevelFilters.contains(item.level))
           .toList();
     }
     _sortBirds(filteredBirds);
@@ -2142,6 +2167,11 @@ class _GatheringScreenState extends State<GatheringScreen>
           .where((item) => _matchesInsectFilter(item, _selectedFilter))
           .toList();
     }
+    if (_selectedLevelFilters.isNotEmpty) {
+      filteredInsects = filteredInsects
+          .where((item) => _selectedLevelFilters.contains(item.level))
+          .toList();
+    }
     _sortInsects(filteredInsects);
 
     List<PlantItem> filteredPlants = List.from(_plantList);
@@ -2155,6 +2185,11 @@ class _GatheringScreenState extends State<GatheringScreen>
     if (tabIndex == 3 && _selectedFilter != '전체') {
       filteredPlants = filteredPlants
           .where((item) => _matchesPlantFilter(item, _selectedFilter))
+          .toList();
+    }
+    if (_selectedLevelFilters.isNotEmpty) {
+      filteredPlants = filteredPlants
+          .where((item) => _selectedLevelFilters.contains(item.level))
           .toList();
     }
     _sortPlants(filteredPlants);
@@ -2328,6 +2363,14 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   void _sortPlants(List<PlantItem> list) {
     switch (_selectedSort) {
+      case '레벨순':
+        list.sort((a, b) {
+          final levelCompare = a.level.compareTo(b.level);
+          if (levelCompare != 0) return levelCompare;
+          return _displayPlantName(a).compareTo(_displayPlantName(b));
+        });
+        break;
+
       case '가격순':
         list.sort((a, b) {
           final compare = _maxPrice(b.prices).compareTo(_maxPrice(a.prices));
@@ -2485,6 +2528,315 @@ class _GatheringScreenState extends State<GatheringScreen>
       },
     );
   }
+  List<int> _currentLevelOptions() {
+    Iterable<int> levels;
+
+    switch (_tabController.index) {
+      case 0:
+        levels = _fishList.map((e) => e.level ?? 0);
+        break;
+      case 1:
+        levels = _birdList.map((e) => e.level);
+        break;
+      case 2:
+        levels = _insectList.map((e) => e.level);
+        break;
+      case 3:
+        levels = _plantList.map((e) => e.level);
+        break;
+      default:
+        levels = const [1];
+    }
+
+    int maxLevel = 1;
+    for (final level in levels) {
+      if (level > maxLevel) maxLevel = level;
+    }
+
+    return List<int>.generate(maxLevel, (index) => index + 1);
+  }
+
+  bool _hasActiveFilterSortSheetSettings() {
+    return _selectedLevelFilters.isNotEmpty || _selectedSort != '레벨순';
+  }
+
+  Widget _buildFilterSortActionButton() {
+    final bool isActive = _hasActiveFilterSortSheetSettings();
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: _showFilterSortSheet,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 38,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isActive
+                ? const Color(0xFFFFF1EC)
+                : Colors.white.withOpacity(0.82),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: isActive
+                  ? const Color(0xFFFFD6CC)
+                  : const Color(0xFFE9EEF4),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFF8E7C).withOpacity(isActive ? 0.12 : 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(
+                Icons.tune_rounded,
+                size: 19,
+                color: isActive
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF94A3B8),
+              ),
+              if (_selectedLevelFilters.isNotEmpty)
+                Positioned(
+                  right: 7,
+                  top: 7,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF8E7C),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSheetChoiceChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFFFFF1EC)
+                : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFFFB8AA)
+                  : const Color(0xFFE5E7EB),
+              width: 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: isSelected
+                  ? const Color(0xFFFF7E68)
+                  : const Color(0xFF64748B),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFilterSortSheet() {
+    _dismissKeyboard();
+
+    final tempLevels = Set<int>.from(_selectedLevelFilters);
+    String tempSort = _selectedSort;
+    final levelOptions = _currentLevelOptions();
+    const sortOptions = ['레벨순', '이름순', '가격순', '좋아요순'];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Widget sectionTitle(String title) {
+              return Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF64748B),
+                ),
+              );
+            }
+
+            return SafeArea(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 22,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            '필터 / 정렬',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF2D3436),
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            splashRadius: 20,
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      sectionTitle('정렬'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: sortOptions.map((sort) {
+                          return _buildSheetChoiceChip(
+                            label: sort,
+                            isSelected: tempSort == sort,
+                            onTap: () => setSheetState(() => tempSort = sort),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 22),
+                      sectionTitle('레벨'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildSheetChoiceChip(
+                            label: '전체',
+                            isSelected: tempLevels.isEmpty,
+                            onTap: () => setSheetState(tempLevels.clear),
+                          ),
+                          ...levelOptions.map((level) {
+                            return _buildSheetChoiceChip(
+                              label: '$level레벨',
+                              isSelected: tempLevels.contains(level),
+                              onTap: () {
+                                setSheetState(() {
+                                  if (tempLevels.contains(level)) {
+                                    tempLevels.remove(level);
+                                  } else {
+                                    tempLevels.add(level);
+                                  }
+                                });
+                              },
+                            );
+                          }),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setSheetState(() {
+                                  tempLevels.clear();
+                                  tempSort = '레벨순';
+                                });
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF94A3B8),
+                                side: const BorderSide(color: Color(0xFFE5E7EB)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 13),
+                              ),
+                              child: const Text(
+                                '초기화',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _selectedLevelFilters
+                                    ..clear()
+                                    ..addAll(tempLevels);
+                                  _selectedSort = tempSort;
+                                });
+                                _applyFilters();
+                                Navigator.pop(context);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF8E7C),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 13),
+                              ),
+                              child: const Text(
+                                '적용',
+                                style: TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildFilterBarArea() {
     final filters = _getCurrentFilterList();
 
@@ -2509,58 +2861,7 @@ class _GatheringScreenState extends State<GatheringScreen>
             ),
           ),
           const SizedBox(width: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: PopupMenuButton<String>(
-              onSelected: _onSortSelected,
-              color: Colors.white,
-              elevation: 10,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(
-                  color: Color(0xFFE9EEF4),
-                  width: 1,
-                ),
-              ),
-              itemBuilder: (context) => [
-                _buildSortPopupItem('레벨순'),
-                _buildSortPopupItem('이름순'),
-                _buildSortPopupItem('가격순'),
-                _buildSortPopupItem('좋아요순'),
-              ],
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: null,
-                child: Padding(
-                  padding: const EdgeInsets.only(
-                    left: 4,
-                    right: 4,
-                    top: 7,
-                    bottom: 7,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _selectedSort,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 18,
-                        color: Color(0xFF94A3B8),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _buildFilterSortActionButton(),
         ],
       ),
     );
@@ -3264,13 +3565,29 @@ class _GatheringScreenState extends State<GatheringScreen>
         Color border = const Color(0xFFE5E7EB),
         Color textColor = const Color(0xFF6B7280),
       }) {
+    final int? level = text.contains('레벨')
+        ? int.tryParse(text.replaceAll(RegExp(r'[^0-9]'), ''))
+        : null;
+    final bool isRainbowLevel = level != null && level >= 11;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
       decoration: BoxDecoration(
-        color: bg,
+        gradient: isRainbowLevel
+            ? const LinearGradient(
+          colors: [
+            Color(0xFFFFD1D1),
+            Color(0xFFFFF4D1),
+            Color(0xFFD1FFDA),
+            Color(0xFFD1E3FF),
+            Color(0xFFE5D1FF),
+          ],
+        )
+            : null,
+        color: isRainbowLevel ? null : bg,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: border,
+          color: isRainbowLevel ? const Color(0xFFE7D8FF) : border,
           width: 0.8,
         ),
       ),
@@ -3281,8 +3598,8 @@ class _GatheringScreenState extends State<GatheringScreen>
           style: TextStyle(
             fontSize: 9.5,
             height: 1.0,
-            fontWeight: FontWeight.w600,
-            color: textColor,
+            fontWeight: isRainbowLevel ? FontWeight.w800 : FontWeight.w600,
+            color: isRainbowLevel ? const Color(0xFF424242) : textColor,
           ),
         ),
       ),
@@ -3828,6 +4145,11 @@ class _GatheringScreenState extends State<GatheringScreen>
       textColor = colors['text']!;
     }
 
+    final int? levelValue = rawText.contains('레벨')
+        ? int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), ''))
+        : null;
+    final bool isRainbowLevel = levelValue != null && levelValue >= 11;
+
     final String displayText = isLocation
         ? rawText
         : rawText;
@@ -3837,17 +4159,31 @@ class _GatheringScreenState extends State<GatheringScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: bg,
+        gradient: isRainbowLevel
+            ? const LinearGradient(
+          colors: [
+            Color(0xFFFFD1D1),
+            Color(0xFFFFF4D1),
+            Color(0xFFD1FFDA),
+            Color(0xFFD1E3FF),
+            Color(0xFFE5D1FF),
+          ],
+        )
+            : null,
+        color: isRainbowLevel ? null : bg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border, width: 0.8),
+        border: Border.all(
+          color: isRainbowLevel ? const Color(0xFFE7D8FF) : border,
+          width: 0.8,
+        ),
       ),
       child: Text(
         displayText,
         style: TextStyle(
           fontSize: 10,
           height: 1.0,
-          fontWeight: FontWeight.w700,
-          color: textColor,
+          fontWeight: isRainbowLevel ? FontWeight.w800 : FontWeight.w700,
+          color: isRainbowLevel ? const Color(0xFF424242) : textColor,
         ),
       ),
     );
@@ -3965,6 +4301,7 @@ class _GatheringScreenState extends State<GatheringScreen>
       ),
       child: TabBar(
         controller: _tabController,
+        onTap: _resetTabScopedFiltersIfNeeded,
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
         labelPadding: EdgeInsets.zero,

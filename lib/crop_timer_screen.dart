@@ -21,6 +21,8 @@ const Map<String, int> _cropMinutesById = {
   'corn': 720,
   'grape': 600,
   'eggplant': 420,
+  'tea-tree': 45,
+  'cocoa-tree': 300,
 };
 
 const Map<String, int> _cropMinutesByName = {
@@ -34,6 +36,8 @@ const Map<String, int> _cropMinutesByName = {
   '옥수수': 720,
   '포도': 600,
   '가지': 420,
+  '찻잎': 45,
+  '카카오': 300,
 };
 
 const Map<String, int> _cropSortOrder = {
@@ -47,6 +51,8 @@ const Map<String, int> _cropSortOrder = {
   'lettuce': 8,
   'grape': 9,
   'corn': 10,
+  'tea-tree': 11,
+  'cocoa-tree': 12,
 };
 
 class CropTimerScreen extends StatefulWidget {
@@ -1698,6 +1704,8 @@ String _cropFallbackAssetPath(String name) {
     '가지': 'assets/images/crops/eggplant.webp',
     '토마토': 'assets/images/crops/tomato.webp',
     '파인애플': 'assets/images/resources/pineapple.png',
+    '찻잎': 'assets/images/crops/tea-tree.webp',
+    '카카오': 'assets/images/crops/cocoa-tree.webp',
   };
 
   return map[normalized] ?? 'assets/images/default.png';

@@ -5080,8 +5080,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                 ),
                               ),
                               Positioned(
-                                right: 9,
-                                bottom: 9,
+                                right: 7,
+                                bottom: 7,
                                 child: IgnorePointer(
                                   child: _buildGridCountOverlay(post),
                                 ),
@@ -5092,7 +5092,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                      padding: const EdgeInsets.fromLTRB(10, 2, 10, 9),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -5103,6 +5103,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                   ? _buildContentTagChip(
                                 post.tags.first,
                                 compact: true,
+                                tiny: true,
                               )
                                   : const SizedBox.shrink(),
                             ),
@@ -7267,14 +7268,14 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         children: [
           Icon(
             icon,
-            size: 13,
-            color: contentColor.withOpacity(0.92),
+            size: 11.5,
+            color: contentColor.withOpacity(0.90),
           ),
-          const SizedBox(width: 3),
+          const SizedBox(width: 2.5),
           Text(
             count > 99 ? '99+' : count.toString(),
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 9.8,
               fontWeight: FontWeight.w900,
               color: contentColor.withOpacity(0.95),
               height: 1.0,
@@ -7294,15 +7295,15 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         ),
         child: Container(
           padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 5.5,
+            horizontal: 6.5,
+            vertical: 4.2,
           ),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.58),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: Colors.white.withOpacity(0.58),
-              width: 0.9,
+              width: 0.75,
             ),
             boxShadow: [
               BoxShadow(
@@ -7326,8 +7327,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
               ),
               Container(
                 width: 1,
-                height: 11,
-                margin: const EdgeInsets.symmetric(horizontal: 6),
+                height: 9,
+                margin: const EdgeInsets.symmetric(horizontal: 4.5),
                 color: Colors.white.withOpacity(0.48),
               ),
               countItem(

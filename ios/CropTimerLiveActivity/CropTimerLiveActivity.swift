@@ -1,4 +1,4 @@
-//
+﻿//
 //  CropTimerLiveActivity.swift
 //  CropTimerLiveActivity
 //
@@ -175,6 +175,10 @@ struct CropTimerLockScreenView: View {
             return "crop_grape"
         case "eggplant":
             return "crop_eggplant"
+        case "tea-tree":
+            return "crop_tea_tree"
+        case "cocoa-tree":
+            return "crop_cocoa_tree"
         default:
             return "crop_tomato"
         }
@@ -307,3 +311,4 @@ struct CropTimerCountdownText: View {
             .multilineTextAlignment(.trailing)
     }
 }
+
