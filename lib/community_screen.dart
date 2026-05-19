@@ -5079,6 +5079,13 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                   onTap: () => _toggleLike(post.id),
                                 ),
                               ),
+                              Positioned(
+                                right: 9,
+                                bottom: 9,
+                                child: IgnorePointer(
+                                  child: _buildGridCountOverlay(post),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -5104,30 +5111,6 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                             const SizedBox(width: 5),
                             _buildVerifiedBadge(),
                           ],
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerRight,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildGridStatPill(
-                                    icon: Icons.chat_bubble_outline_rounded,
-                                    count: post.commentCount,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  _buildGridStatPill(
-                                    icon: liked
-                                        ? Icons.favorite_rounded
-                                        : Icons.favorite_border_rounded,
-                                    count: post.likeCount,
-                                    active: liked,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -6773,15 +6756,74 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                                       border: Border.all(color: const Color(0xFFF1E4DE)),
                                                     ),
                                                     alignment: Alignment.centerLeft,
-                                                    child: Text(
-                                                      commentUidChecking
-                                                          ? 'UID 인증 상태를 확인하고 있어요.'
-                                                          : 'UID 인증 후 댓글을 달 수 있어요. UID 인증하러 가기 >',
-                                                      style: const TextStyle(
+                                                    child: commentUidChecking
+                                                        ? const Text(
+                                                      'UID 인증 상태를 확인하고 있어요.',
+                                                      style: TextStyle(
                                                         color: Color(0xFFADB5C2),
                                                         fontWeight: FontWeight.w800,
                                                         fontSize: 13,
                                                       ),
+                                                    )
+                                                        : Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        const Text(
+                                                          'UID 인증 후 댓글을 달 수 있어요.',
+                                                          style: TextStyle(
+                                                            color: Color(0xFF9D8F88),
+                                                            fontWeight: FontWeight.w800,
+                                                            fontSize: 13,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 8),
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 7,
+                                                          ),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0xFFFFEEE9),
+                                                            borderRadius: BorderRadius.circular(999),
+                                                            border: Border.all(
+                                                              color: const Color(0xFFFFD4CA),
+                                                            ),
+                                                            boxShadow: [
+                                                              BoxShadow(
+                                                                color: const Color(0xFFFF8E7C).withOpacity(0.10),
+                                                                blurRadius: 8,
+                                                                offset: const Offset(0, 2),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          child: const Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              Icon(
+                                                                Icons.verified_user_outlined,
+                                                                size: 14,
+                                                                color: Color(0xFFFF8E7C),
+                                                              ),
+                                                              SizedBox(width: 5),
+                                                              Text(
+                                                                'UID 인증하러 가기',
+                                                                style: TextStyle(
+                                                                  color: Color(0xFFFF8E7C),
+                                                                  fontWeight: FontWeight.w900,
+                                                                  fontSize: 12.3,
+                                                                ),
+                                                              ),
+                                                              SizedBox(width: 2),
+                                                              Icon(
+                                                                Icons.chevron_right_rounded,
+                                                                size: 16,
+                                                                color: Color(0xFFFF8E7C),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
                                                 ),
@@ -7052,52 +7094,6 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     );
   }
 
-  Widget _buildGridStatPill({
-    required IconData icon,
-    required int count,
-    bool active = false,
-  }) {
-    final Color iconColor = active
-        ? const Color(0xFFFF8E7C)
-        : const Color(0xFFB9948B);
-
-    return Container(
-      constraints: const BoxConstraints(minWidth: 30),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-      decoration: BoxDecoration(
-        color: active
-            ? const Color(0xFFFFF2EF)
-            : Colors.white.withOpacity(0.90),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: active
-              ? const Color(0xFFFFD7CF)
-              : const Color(0xFFF2E3DE),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12.5, color: iconColor),
-          const SizedBox(width: 2.5),
-          Text(
-            count > 99 ? '99+' : count.toString(),
-            maxLines: 1,
-            overflow: TextOverflow.clip,
-            style: TextStyle(
-              fontSize: 10.2,
-              fontWeight: FontWeight.w900,
-              color: active
-                  ? const Color(0xFFFF8E7C)
-                  : const Color(0xFFB9948B),
-              height: 1.0,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildVerifiedBadge() {
     return Container(
       width: 17,
@@ -7254,6 +7250,98 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     final String url = 'https://keepersnote.app/community/post/${post.id}';
 
     await Share.share('$title\n\n$body\n\n$url');
+  }
+
+  Widget _buildGridCountOverlay(CommunityPost post) {
+    Widget countItem({
+      required IconData icon,
+      required int count,
+      bool active = false,
+    }) {
+      final Color contentColor = active
+          ? const Color(0xFFFF7F72)
+          : const Color(0xFF7B6D64);
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 13,
+            color: contentColor.withOpacity(0.92),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            count > 99 ? '99+' : count.toString(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: contentColor.withOpacity(0.95),
+              height: 1.0,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: 18,
+          sigmaY: 18,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 5.5,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.58),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.58),
+              width: 0.9,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withOpacity(0.18),
+                blurRadius: 3,
+                offset: const Offset(-1, -1),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              countItem(
+                icon: Icons.mode_comment_outlined,
+                count: post.commentCount,
+              ),
+              Container(
+                width: 1,
+                height: 11,
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                color: Colors.white.withOpacity(0.48),
+              ),
+              countItem(
+                icon: post.likedByMe
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                count: post.likeCount,
+                active: post.likedByMe,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildGridMoreButton({

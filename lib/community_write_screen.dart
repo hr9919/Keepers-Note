@@ -561,53 +561,88 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
 
   _WriteTagChipStyle _tagChipStyle(String text) {
     switch (text) {
-      case '인테리어':
-        return const _WriteTagChipStyle(
-          selectedBackground: Color(0xFFFFE8DF),
-          selectedBorder: Color(0xFFF1BEAA),
-          selectedText: Color(0xFFC96547),
-        );
-      case '익스테리어':
-        return const _WriteTagChipStyle(
-          selectedBackground: Color(0xFFE5F5EB),
-          selectedBorder: Color(0xFFBFE2CB),
-          selectedText: Color(0xFF43885B),
-        );
-      case '코디':
-        return const _WriteTagChipStyle(
-          selectedBackground: Color(0xFFFFE8F4),
-          selectedBorder: Color(0xFFEAB8D6),
-          selectedText: Color(0xFFB75689),
-        );
-      case '반려동물':
-        return const _WriteTagChipStyle(
-          selectedBackground: Color(0xFFEEE7FF),
-          selectedBorder: Color(0xFFD1C2F0),
-          selectedText: Color(0xFF775BB8),
-        );
-      case '도트 도안':
-        return const _WriteTagChipStyle(
-          selectedBackground: Color(0xFFFFF2D9),
-          selectedBorder: Color(0xFFEBCF8D),
-          selectedText: Color(0xFFB78718),
-        );
-      case '꿀팁 영상':
-        return const _WriteTagChipStyle(
-          selectedBackground: Color(0xFFE1F1FC),
-          selectedBorder: Color(0xFFB6DBF2),
-          selectedText: Color(0xFF427FA7),
-        );
-      case '공략':
-        return const _WriteTagChipStyle(
-          selectedBackground: Color(0xFFE3EDFF),
-          selectedBorder: Color(0xFFBFD4FF),
-          selectedText: Color(0xFF2F5FBF),
-        );
-      default:
+      case '전체':
         return const _WriteTagChipStyle(
           selectedBackground: Color(0xFFFFEDE7),
           selectedBorder: Color(0xFFFFD8CF),
           selectedText: Color(0xFFFF8E7C),
+        );
+
+      case '인테리어':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFFFE8E2),
+          selectedBorder: Color(0xFFFFBFAA),
+          selectedText: Color(0xFFD96A4A),
+        );
+
+      case '익스테리어':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFFFF0DC),
+          selectedBorder: Color(0xFFFFD29A),
+          selectedText: Color(0xFFC97818),
+        );
+
+      case '코디':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFFFF8D9),
+          selectedBorder: Color(0xFFEEDB83),
+          selectedText: Color(0xFFA88713),
+        );
+
+      case '반려동물':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFECF8DA),
+          selectedBorder: Color(0xFFCBE99B),
+          selectedText: Color(0xFF6D9B22),
+        );
+
+      case '도트 도안':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFE3F6E8),
+          selectedBorder: Color(0xFFB7E2C3),
+          selectedText: Color(0xFF3F925A),
+        );
+
+      case '꿀팁 영상':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFDFF8F3),
+          selectedBorder: Color(0xFFAEE4D8),
+          selectedText: Color(0xFF2F8D7B),
+        );
+
+      case '공략':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFE3F3FF),
+          selectedBorder: Color(0xFFB9DDF7),
+          selectedText: Color(0xFF397EAF),
+        );
+
+      case '일상':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFE6ECFF),
+          selectedBorder: Color(0xFFC1CDF8),
+          selectedText: Color(0xFF5068C8),
+        );
+
+      case '질문':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFF0E8FF),
+          selectedBorder: Color(0xFFD5C3F6),
+          selectedText: Color(0xFF7B5BC9),
+        );
+
+      case '그림':
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFFFE8F3),
+          selectedBorder: Color(0xFFF0BED8),
+          selectedText: Color(0xFFC05E91),
+        );
+
+      default:
+        return const _WriteTagChipStyle(
+          selectedBackground: Color(0xFFF3F4F6),
+          selectedBorder: Color(0xFFDADDE3),
+          selectedText: Color(0xFF7B8493),
         );
     }
   }
@@ -882,7 +917,10 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+        constraints: const BoxConstraints(
+          minWidth: 104,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? _accentSoft : Colors.white,
           borderRadius: BorderRadius.circular(19),
@@ -907,6 +945,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
