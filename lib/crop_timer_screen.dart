@@ -12,47 +12,47 @@ import 'services/crop_timer_notification_service.dart';
 
 const Map<String, int> _cropMinutesById = {
   'tomato': 15,
+  'tea-tree': 45,
   'potato': 60,
   'wheat': 240,
   'lettuce': 480,
   'pineapple': 30,
   'carrot': 120,
+  'cocoa-tree': 300,
   'strawberry': 360,
   'corn': 720,
   'grape': 600,
   'eggplant': 420,
-  'tea-tree': 45,
-  'cocoa-tree': 300,
 };
 
 const Map<String, int> _cropMinutesByName = {
   '토마토': 15,
+  '찻잎': 45,
   '감자': 60,
   '밀': 240,
   '상추': 480,
   '파인애플': 30,
   '당근': 120,
+  '카카오': 300,
   '딸기': 360,
   '옥수수': 720,
   '포도': 600,
   '가지': 420,
-  '찻잎': 45,
-  '카카오': 300,
 };
 
 const Map<String, int> _cropSortOrder = {
-  'tomato': 1,
-  'pineapple': 2,
-  'potato': 3,
-  'carrot': 4,
-  'wheat': 5,
-  'strawberry': 6,
-  'eggplant': 7,
-  'lettuce': 8,
-  'grape': 9,
-  'corn': 10,
-  'tea-tree': 11,
-  'cocoa-tree': 12,
+  'tomato': 1,       // 토마토 15분
+  'pineapple': 2,    // 파인애플 30분
+  'tea-tree': 3,     // 찻잎 45분
+  'potato': 4,       // 감자 60분
+  'carrot': 5,       // 당근 120분
+  'wheat': 6,        // 밀 240분
+  'cocoa-tree': 7,   // 카카오 300분
+  'strawberry': 8,   // 딸기 360분
+  'eggplant': 9,     // 가지 420분
+  'lettuce': 10,     // 상추 480분
+  'grape': 11,       // 포도 600분
+  'corn': 12,        // 옥수수 720분
 };
 
 class CropTimerScreen extends StatefulWidget {

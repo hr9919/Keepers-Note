@@ -451,18 +451,18 @@ class _GatheringScreenState extends State<GatheringScreen>
     final index = _tabController.index;
 
     if (index == 0) {
-      return ['전체', '강 물고기', '호수 물고기', '바다 물고기'];
+      return ['전체', '이벤트', '강 물고기', '호수 물고기', '바다 물고기'];
     }
 
     if (index == 1) {
-      return ['전체', '숲', '호수', '강', '바다/해변', '어촌', '도시', '꽃밭', '주거지', '온천산', '특수'];
+      return ['전체', '이벤트', '숲', '호수', '강', '바다/해변', '어촌', '도시', '꽃밭', '주거지', '온천산', '특수'];
     }
 
     if (index == 2) {
-      return ['전체', '숲', '집 앞', '호수', '도시', '어촌'];
+      return ['전체', '이벤트', '숲', '집 앞', '호수', '도시', '어촌'];
     }
 
-    return ['전체'];
+    return ['전체', '이벤트'];
   }
 
   void _dismissKeyboard() {
@@ -580,23 +580,83 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   String _normalizeInsectTimeLabel(String raw) {
-    final value = raw.trim().replaceAll(' ', '');
+    return _formatTimeRangeLabel(raw, allDayLabel: '');
+  }
 
-    if (value.isEmpty) return '';
-    if (value == '0~24' || value == '0-24') return '';
+  String _formatTimeRangeLabel(String? raw, {required String allDayLabel}) {
+    if (raw == null || raw.trim().isEmpty) return allDayLabel;
 
-    if (value == '6-18' || value == '6~18') return '낮 6시~18시';
-    if (value == '0-18' || value == '0~18') return '0시~18시';
-    if (value == '0-6,18-24' || value == '0~6,18~24') return '밤 0시~6시, 18시~24시';
-    if (value == '0-6,6-18' || value == '0~6,6~18') return '0시~18시';
-    if (value == '6-18,18-24' || value == '6~18,18~24') return '6시~24시';
-    if (value == '0-6,6-18,18-24' || value == '0~6,6~18,18~24') return '';
+    final original = raw.trim();
+    final compact = original.replaceAll(' ', '').toLowerCase();
 
-    return raw
-        .replaceAll('~', '시~')
-        .replaceAll('-', '시~')
-        .replaceAll(',', ' / ')
-        .replaceAllMapped(RegExp(r'(\d{1,2})(?=시~| /|$)'), (m) => '${m[1]}');
+    if (compact == 'allday' ||
+        compact == 'all' ||
+        compact == 'any' ||
+        compact == '0~24' ||
+        compact == '0-24' ||
+        compact == '상시' ||
+        compact == '하루종일') {
+      return allDayLabel;
+    }
+
+    final Map<String, List<int>> timeKeyRanges = {
+      'dawn': [0, 6],
+      'day': [6, 12],
+      'dusk': [12, 18],
+      'night': [18, 24],
+    };
+
+    final keyParts = compact.split('_').where((part) => part.isNotEmpty).toList();
+    if (keyParts.isNotEmpty && keyParts.every(timeKeyRanges.containsKey)) {
+      final ranges = keyParts.map((part) => timeKeyRanges[part]!).toList();
+      return _joinTimeRanges(ranges, allDayLabel: allDayLabel);
+    }
+
+    final normalized = compact
+        .replaceAll('／', '/')
+        .replaceAll('/', ',')
+        .replaceAll('，', ',');
+
+    final matches = RegExp(r'(\d{1,2})[~-](\d{1,2})').allMatches(normalized).toList();
+    if (matches.isNotEmpty) {
+      final ranges = matches.map((m) {
+        final start = int.tryParse(m.group(1) ?? '') ?? 0;
+        final end = int.tryParse(m.group(2) ?? '') ?? 0;
+        return [start, end];
+      }).where((range) {
+        return range[0] >= 0 && range[1] <= 24 && range[0] < range[1];
+      }).toList();
+
+      if (ranges.isNotEmpty) {
+        return _joinTimeRanges(ranges, allDayLabel: allDayLabel);
+      }
+    }
+
+    return original;
+  }
+
+  String _joinTimeRanges(List<List<int>> ranges, {required String allDayLabel}) {
+    if (ranges.isEmpty) return allDayLabel;
+
+    final sorted = ranges
+        .map((range) => [range[0], range[1]])
+        .toList()
+      ..sort((a, b) => a[0].compareTo(b[0]));
+
+    final List<List<int>> merged = [];
+    for (final range in sorted) {
+      if (merged.isEmpty || range[0] > merged.last[1]) {
+        merged.add([range[0], range[1]]);
+      } else if (range[1] > merged.last[1]) {
+        merged.last[1] = range[1];
+      }
+    }
+
+    if (merged.length == 1 && merged.first[0] == 0 && merged.first[1] == 24) {
+      return allDayLabel;
+    }
+
+    return merged.map((range) => '${range[0]}시~${range[1]}시').join(', ');
   }
 
   Map<String, Color> _locationChipColors(String raw) {
@@ -1179,33 +1239,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   String _formatAvailableTimeChip(String? time) {
-    if (time == null || time.trim().isEmpty) return '';
-
-    final compact = time.trim().replaceAll(' ', '').toLowerCase();
-
-    // 🔥 여기 추가 (핵심)
-    if (compact == 'allday' ||
-        compact == 'all' ||
-        compact == '0~24' ||
-        compact == '0-24' ||
-        compact == '상시' ||
-        compact == '하루종일') {
-      return '';
-    }
-
-    switch (compact) {
-      case 'day_night':
-        return '6시~24시';
-      case 'dawn_night':
-        return '0시~6시, 18시~24시';
-    }
-
-    final match = RegExp(r'^(\d{1,2})[~-](\d{1,2})$').firstMatch(compact);
-    if (match != null) {
-      return '${match.group(1)}시~${match.group(2)}시';
-    }
-
-    return time.trim();
+    return _formatTimeRangeLabel(time, allDayLabel: '');
   }
 
   Color _growthTimeChipColor(String raw) {
@@ -1556,7 +1590,7 @@ class _GatheringScreenState extends State<GatheringScreen>
           ),
           locationText: bird.location.trim().isEmpty
               ? '-'
-              : _normalizeBirdLocationLabel(bird.location),
+              : bird.location.trim(),
           weatherText: _formatDetailWeather(bird.weather),
         ),
       ),
@@ -1577,7 +1611,7 @@ class _GatheringScreenState extends State<GatheringScreen>
           timeText: _formatDetailAvailableTime(insect.availableTime),
           locationText: insect.location.trim().isEmpty
               ? '-'
-              : _normalizeInsectLocationLabel(insect.location),
+              : insect.location.trim(),
           weatherText: '모든 날씨',
         ),
       ),
@@ -1585,36 +1619,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   String _formatDetailAvailableTime(String? time) {
-    if (time == null || time.trim().isEmpty) return '하루종일';
-
-    final raw = time.trim();
-    final compact = raw.replaceAll(' ', '').toLowerCase();
-
-    if (compact == 'allday' ||
-        compact == 'all' ||
-        compact == '0~24' ||
-        compact == '0-24' ||
-        compact == '상시' ||
-        compact == '하루종일') {
-      return '하루종일';
-    }
-
-    switch (compact) {
-      case 'day_night':
-        return '6시~24시';
-      case 'dawn_night':
-        return '0시~6시, 18시~24시';
-    }
-
-    final match = RegExp(r'^(\d{1,2})[~-](\d{1,2})$').firstMatch(compact);
-    if (match != null) {
-      return '${match.group(1)}시~${match.group(2)}시';
-    }
-
-    final insectTime = _normalizeInsectTimeLabel(raw);
-    if (insectTime.isNotEmpty) return insectTime;
-
-    return raw;
+    return _formatTimeRangeLabel(time, allDayLabel: '하루종일');
   }
 
   String _formatDetailWeather(String raw) {
@@ -1844,6 +1849,13 @@ class _GatheringScreenState extends State<GatheringScreen>
     return keywords.any((k) => value.contains(k.toLowerCase().replaceAll(' ', '')));
   }
 
+  bool _containsBrickKeyword(List<String?> values) {
+    return values.any((value) {
+      final compact = (value ?? '').toLowerCase().replaceAll(' ', '');
+      return compact.contains('brick') || compact.contains('브릭');
+    });
+  }
+
   bool _matchesFishFilter(FishItem fish, String filter) {
     final location = fish.location.toLowerCase();
     final weather = fish.weather.toLowerCase();
@@ -1863,6 +1875,14 @@ class _GatheringScreenState extends State<GatheringScreen>
         return isLake;
       case '바다 물고기':
         return isSea;
+      case '이벤트':
+        return _containsBrickKeyword([
+          fish.id,
+          fish.name,
+          fish.nameKo,
+          fish.image,
+          fish.location,
+        ]);
       case '맑음':
       case '비':
       case '눈':
@@ -1959,12 +1979,31 @@ class _GatheringScreenState extends State<GatheringScreen>
           '블랑코머리위',
         ]);
 
+      case '이벤트':
+        return _containsBrickKeyword([
+          bird.id,
+          bird.name,
+          bird.nameKo,
+          bird.image,
+          bird.location,
+        ]);
+
       default:
         return true;
     }
   }
 
   bool _matchesPlantFilter(PlantItem plant, String filter) {
+    if (filter == '이벤트') {
+      return _containsBrickKeyword([
+        plant.id,
+        plant.name,
+        plant.nameKo,
+        plant.image,
+        plant.location,
+      ]);
+    }
+
     return true;
   }
 
@@ -1989,6 +2028,14 @@ class _GatheringScreenState extends State<GatheringScreen>
             normalized == '어촌 등대' ||
             normalized == '어촌 부두' ||
             normalized == '어촌 광장';
+      case '이벤트':
+        return _containsBrickKeyword([
+          insect.id,
+          insect.name,
+          insect.nameKo,
+          insect.image,
+          insect.location,
+        ]);
       default:
         return true;
     }
@@ -3195,7 +3242,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   Widget _buildInsectCard(InsectItem insect) {
     final bool isHighlighted = _highlightedId == insect.id;
     final timeChip = _normalizeInsectTimeLabel(insect.availableTime);
-    final locationChip = _normalizeInsectLocationLabel(insect.location);
+    final locationChip = insect.location.trim();
     final levelColors = _levelChipColors(insect.level);
     final timeColors = _timeChipColors(timeChip);
 
@@ -3611,7 +3658,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     final timeChip = _formatAvailableTimeChip(
       bird.timeKey.isNotEmpty ? bird.timeKey : bird.availableTime,
     );
-    final locationChip = _normalizeBirdLocationLabel(bird.location);
+    final locationChip = bird.location.trim();
     final weatherLabels = _normalizeWeatherLabel(bird.weather);
     final timeColors = _timeChipColors(timeChip);
 
