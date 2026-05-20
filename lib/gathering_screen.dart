@@ -9,6 +9,35 @@ import 'setting_screen.dart';
 
 import 'models/global_search_item.dart';
 
+int _parseIntFlexible(dynamic value, {int fallback = 0}) {
+  if (value == null) return fallback;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  final text = value.toString().replaceAll(RegExp(r'[^0-9-]'), '').trim();
+  if (text.isEmpty) return fallback;
+  return int.tryParse(text) ?? fallback;
+}
+
+String _parseTextFlexible(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value == null) continue;
+    final text = value.toString().trim();
+    if (text.isNotEmpty) return text;
+  }
+  return '';
+}
+
+List<int> _parseEventTokenPrices(Map<String, dynamic> json) {
+  return [
+    _parseIntFlexible(json['eventTokenPrice1'] ?? json['event_token_price_1']),
+    _parseIntFlexible(json['eventTokenPrice2'] ?? json['event_token_price_2']),
+    _parseIntFlexible(json['eventTokenPrice3'] ?? json['event_token_price_3']),
+    _parseIntFlexible(json['eventTokenPrice4'] ?? json['event_token_price_4']),
+    _parseIntFlexible(json['eventTokenPrice5'] ?? json['event_token_price_5']),
+  ];
+}
+
 class GatheringSearchController extends ChangeNotifier {
   GlobalSearchItem? _pendingItem;
 
@@ -142,7 +171,12 @@ class BirdItem {
   final String timeKey;
   final String weather;
   final int level;
+  final int masteryCount;
+  final String captureDistance;
+  final String wingSpread;
+  final String whistle;
   final List<int> prices;
+  final List<int> eventTokenPrices;
 
   BirdItem({
     required this.id,
@@ -154,7 +188,12 @@ class BirdItem {
     required this.timeKey,
     required this.weather,
     required this.level,
+    required this.masteryCount,
+    required this.captureDistance,
+    required this.wingSpread,
+    required this.whistle,
     required this.prices,
+    required this.eventTokenPrices,
   });
 
   factory BirdItem.fromJson(Map<String, dynamic> json) {
@@ -178,6 +217,10 @@ class BirdItem {
       timeKey: timeKey,
       weather: (json['weather'] ?? '').toString(),
       level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      captureDistance: _parseTextFlexible(json, ['captureDistance', 'capture_distance']),
+      wingSpread: _parseTextFlexible(json, ['wingSpread', 'wing_spread']),
+      whistle: _parseTextFlexible(json, ['whistle', 'whistleRequired', 'whistle_required']),
       prices: [
         parsePrice(json['price1'], json['price_1']),
         parsePrice(json['price2'], json['price_2']),
@@ -185,6 +228,7 @@ class BirdItem {
         parsePrice(json['price4'], json['price_4']),
         parsePrice(json['price5'], json['price_5']),
       ],
+      eventTokenPrices: _parseEventTokenPrices(json),
     );
   }
 }
@@ -216,7 +260,9 @@ class PlantItem {
   final String growthTime;
   final String weather;
   final int level;
+  final int masteryCount;
   final List<int> prices;
+  final List<int> eventTokenPrices;
   final List<FlowerColorSummary> flowerColorSummaries;
 
   PlantItem({
@@ -229,7 +275,9 @@ class PlantItem {
     required this.growthTime,
     required this.weather,
     required this.level,
+    required this.masteryCount,
     required this.prices,
+    required this.eventTokenPrices,
     required this.flowerColorSummaries,
   });
 
@@ -252,6 +300,7 @@ class PlantItem {
       growthTime: (json['growthTime'] ?? json['growth_time'] ?? '-').toString(),
       weather: (json['weather'] ?? '').toString(),
       level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
       prices: [
         parsePrice(json['price1'], json['price_1']),
         parsePrice(json['price2'], json['price_2']),
@@ -259,6 +308,7 @@ class PlantItem {
         parsePrice(json['price4'], json['price_4']),
         parsePrice(json['price5'], json['price_5']),
       ],
+      eventTokenPrices: _parseEventTokenPrices(json),
       flowerColorSummaries: summariesJson
           .whereType<Map<String, dynamic>>()
           .map((e) => FlowerColorSummary.fromJson(e))
@@ -274,8 +324,11 @@ class InsectItem {
   final String image;
   final String location;
   final String availableTime;
+  final String weather;
   final int level;
+  final int masteryCount;
   final List<int> prices;
+  final List<int> eventTokenPrices;
 
   InsectItem({
     required this.id,
@@ -284,8 +337,11 @@ class InsectItem {
     required this.image,
     required this.location,
     required this.availableTime,
+    required this.weather,
     required this.level,
+    required this.masteryCount,
     required this.prices,
+    required this.eventTokenPrices,
   });
 
   factory InsectItem.fromJson(Map<String, dynamic> json) {
@@ -301,7 +357,9 @@ class InsectItem {
       image: (json['image'] ?? '').toString(),
       location: (json['location'] ?? '').toString(),
       availableTime: (json['available_time'] ?? json['availableTime'] ?? '').toString(),
+      weather: (json['weather'] ?? '').toString(),
       level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
       prices: [
         parsePrice(json['price1'], json['price_1']),
         parsePrice(json['price2'], json['price_2']),
@@ -309,6 +367,7 @@ class InsectItem {
         parsePrice(json['price4'], json['price_4']),
         parsePrice(json['price5'], json['price_5']),
       ],
+      eventTokenPrices: _parseEventTokenPrices(json),
     );
   }
 }
@@ -328,6 +387,9 @@ class FishItem {
   final int? price4;
   final int? price5;
   final String weather; // 날씨 속성 추가
+  final int masteryCount;
+  final String shadowSize;
+  final List<int> eventTokenPrices;
 
   FishItem({
     required this.id,
@@ -344,6 +406,9 @@ class FishItem {
     this.price4,
     this.price5,
     required this.weather, // 날씨 속성
+    required this.masteryCount,
+    required this.shadowSize,
+    required this.eventTokenPrices,
   });
 
   factory FishItem.fromJson(Map<String, dynamic> json) {
@@ -373,6 +438,9 @@ class FishItem {
       price4: parseNullableInt(json['price_4'] ?? json['price4']),
       price5: parseNullableInt(json['price_5'] ?? json['price5']),
       weather: (json['weather'] ?? '').toString(),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      shadowSize: _parseTextFlexible(json, ['shadowSize', 'shadow_size']),
+      eventTokenPrices: _parseEventTokenPrices(json),
     );
   }
 }
@@ -396,6 +464,7 @@ class GatheringScreen extends StatefulWidget {
 class _GatheringScreenState extends State<GatheringScreen>
     with SingleTickerProviderStateMixin {
   static const String _favoritesKey = 'favorite_gathering_ids';
+  static const String _achievementStarsKey = 'gathering_achievement_stars';
 
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
@@ -405,6 +474,9 @@ class _GatheringScreenState extends State<GatheringScreen>
   String _searchQuery = '';
   String _selectedSort = '레벨순';
   final Set<int> _selectedLevelFilters = {};
+  final Set<int> _selectedAchievementStarFilters = {};
+  final Set<String> _selectedWeatherFilters = {};
+  final Set<String> _selectedFishShadowFilters = {};
   int _lastTabIndex = 0;
 
   bool _showTopBtn = false;
@@ -433,6 +505,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   List<InsectItem> _insectList = [];
   List<InsectItem> _visibleInsectList = [];
   Set<String> _favoriteIds = {};
+  Map<String, int> _achievementStars = {};
 
   final String _fishApiUrl = 'https://api.keepers-note.o-r.kr/api/fish';
   final String _insectApiUrl = 'https://api.keepers-note.o-r.kr/api/insects';
@@ -1326,6 +1399,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     _searchController.addListener(_onSearchChanged);
 
     _loadFavorites();
+    _loadAchievementStars();
     _fetchAllData();
 
     widget.searchController?.addListener(_handleExternalSearch);
@@ -1341,6 +1415,9 @@ class _GatheringScreenState extends State<GatheringScreen>
     setState(() {
       _selectedFilter = '전체';
       _selectedLevelFilters.clear();
+      _selectedAchievementStarFilters.clear();
+      _selectedWeatherFilters.clear();
+      _selectedFishShadowFilters.clear();
     });
 
     _applyFilters();
@@ -1443,6 +1520,9 @@ class _GatheringScreenState extends State<GatheringScreen>
     _searchQuery = keyword;
     _selectedFilter = '전체';
     _selectedLevelFilters.clear();
+    _selectedAchievementStarFilters.clear();
+    _selectedWeatherFilters.clear();
+    _selectedFishShadowFilters.clear();
 
     switch (item.gatheringTab!) {
       case GatheringTabType.fish:
@@ -1566,9 +1646,16 @@ class _GatheringScreenState extends State<GatheringScreen>
           image: fish.image,
           fallbackIcon: Icons.set_meal_rounded,
           prices: fishPrices,
+          eventTokenPrices: fish.eventTokenPrices,
           timeText: _formatDetailAvailableTime(fish.availableTime),
           locationText: fish.location.trim().isEmpty ? '-' : fish.location.trim(),
           weatherText: _formatDetailWeather(fish.weather),
+          extraInfo: [
+            if (fish.shadowSize.trim().isNotEmpty)
+              {'label': '그림자 크기', 'value': _normalizeShadowSize(fish.shadowSize)},
+            if (fish.masteryCount > 0)
+              {'label': '명인 필요', 'value': '${fish.masteryCount}마리'},
+          ],
         ),
       ),
     );
@@ -1585,6 +1672,7 @@ class _GatheringScreenState extends State<GatheringScreen>
           image: bird.image,
           fallbackIcon: Icons.flutter_dash_rounded,
           prices: bird.prices,
+          eventTokenPrices: bird.eventTokenPrices,
           timeText: _formatDetailAvailableTime(
             bird.timeKey.isNotEmpty ? bird.timeKey : bird.availableTime,
           ),
@@ -1592,6 +1680,16 @@ class _GatheringScreenState extends State<GatheringScreen>
               ? '-'
               : bird.location.trim(),
           weatherText: _formatDetailWeather(bird.weather),
+          extraInfo: [
+            if (bird.captureDistance.trim().isNotEmpty)
+              {'label': '포착 거리', 'value': bird.captureDistance.trim()},
+            if (bird.wingSpread.trim().isNotEmpty)
+              {'label': '날개 펴기', 'value': bird.wingSpread.trim()},
+            if (bird.whistle.trim().isNotEmpty)
+              {'label': '호루라기', 'value': bird.whistle.trim()},
+            if (bird.masteryCount > 0)
+              {'label': '명인 필요', 'value': '${bird.masteryCount}마리'},
+          ],
         ),
       ),
     );
@@ -1608,11 +1706,16 @@ class _GatheringScreenState extends State<GatheringScreen>
           image: insect.image,
           fallbackIcon: Icons.bug_report,
           prices: insect.prices,
+          eventTokenPrices: insect.eventTokenPrices,
           timeText: _formatDetailAvailableTime(insect.availableTime),
           locationText: insect.location.trim().isEmpty
               ? '-'
               : insect.location.trim(),
-          weatherText: '모든 날씨',
+          weatherText: _formatDetailWeather(insect.weather),
+          extraInfo: [
+            if (insect.masteryCount > 0)
+              {'label': '명인 필요', 'value': '${insect.masteryCount}마리'},
+          ],
         ),
       ),
     );
@@ -1653,6 +1756,103 @@ class _GatheringScreenState extends State<GatheringScreen>
   Future<void> _saveFavorites() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_favoritesKey, _favoriteIds.toList());
+  }
+
+
+  Future<void> _loadAchievementStars() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_achievementStarsKey);
+    if (raw == null || raw.isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final parsed = <String, int>{};
+        decoded.forEach((key, value) {
+          final star = _parseIntFlexible(value);
+          if (star >= 1 && star <= 5) {
+            parsed[key.toString()] = star;
+          }
+        });
+        if (mounted) setState(() => _achievementStars = parsed);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveAchievementStars() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_achievementStarsKey, jsonEncode(_achievementStars));
+  }
+
+  Future<void> _setAchievementStar(String itemKey, int star) async {
+    setState(() {
+      if (_achievementStars[itemKey] == star) {
+        _achievementStars.remove(itemKey);
+      } else {
+        _achievementStars[itemKey] = star;
+      }
+    });
+    await _saveAchievementStars();
+    _applyFilters();
+  }
+
+  int _achievementStarFor(String itemKey) => _achievementStars[itemKey] ?? 0;
+
+  bool _matchesAchievementStar(String itemKey) {
+    if (_selectedAchievementStarFilters.isEmpty) return true;
+    return _selectedAchievementStarFilters.contains(_achievementStarFor(itemKey));
+  }
+
+  bool _matchesSelectedWeather(String rawWeather) {
+    if (_selectedWeatherFilters.isEmpty) return true;
+    final labels = _normalizeWeatherLabel(rawWeather);
+    if (labels.isEmpty) {
+      return _selectedWeatherFilters.contains('모든 날씨');
+    }
+    return labels.any(_selectedWeatherFilters.contains);
+  }
+
+  String _normalizeShadowSize(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+    final lower = value.toLowerCase();
+    if (lower.contains('tiny') || value.contains('매우 작')) return '매우 작음';
+    if (lower.contains('small') || value.contains('작')) return '작음';
+    if (lower.contains('medium') || value.contains('중')) return '중간';
+    if (lower.contains('large') || value.contains('큼') || value.contains('크')) return '큼';
+    if (lower.contains('huge') || lower.contains('giant') || value.contains('매우 큼')) return '매우 큼';
+    return value;
+  }
+
+  bool _matchesSelectedShadowSize(FishItem fish) {
+    if (_selectedFishShadowFilters.isEmpty) return true;
+    return _selectedFishShadowFilters.contains(_normalizeShadowSize(fish.shadowSize));
+  }
+
+  Widget _buildAchievementStars(String itemKey) {
+    final selected = _achievementStarFor(itemKey);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        final star = index + 1;
+        final active = selected == star;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _setAchievementStar(itemKey, star),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 1.5, vertical: 5),
+            child: Icon(
+              active ? Icons.star_rounded : Icons.star_border_rounded,
+              size: 20,
+              color: active
+                  ? const Color(0xFFFFB84D)
+                  : const Color(0xFFD6DEE8),
+            ),
+          ),
+        );
+      }),
+    );
   }
 
   Future<void> _toggleFavorite(String itemId) async {
@@ -2179,6 +2379,12 @@ class _GatheringScreenState extends State<GatheringScreen>
           .where((item) => item.level != null && _selectedLevelFilters.contains(item.level))
           .toList();
     }
+
+    filteredFish = filteredFish
+        .where((item) => _matchesAchievementStar('fish:${item.id}'))
+        .where(_matchesSelectedShadowSize)
+        .where((item) => _matchesSelectedWeather(item.weather))
+        .toList();
     _sortFish(filteredFish);
 
     List<BirdItem> filteredBirds = List.from(_birdList);
@@ -2199,6 +2405,11 @@ class _GatheringScreenState extends State<GatheringScreen>
           .where((item) => _selectedLevelFilters.contains(item.level))
           .toList();
     }
+
+    filteredBirds = filteredBirds
+        .where((item) => _matchesAchievementStar('bird:${item.id}'))
+        .where((item) => _matchesSelectedWeather(item.weather))
+        .toList();
     _sortBirds(filteredBirds);
 
     List<InsectItem> filteredInsects = List.from(_insectList);
@@ -2219,6 +2430,11 @@ class _GatheringScreenState extends State<GatheringScreen>
           .where((item) => _selectedLevelFilters.contains(item.level))
           .toList();
     }
+
+    filteredInsects = filteredInsects
+        .where((item) => _matchesAchievementStar('insect:${item.id}'))
+        .where((item) => _matchesSelectedWeather(item.weather))
+        .toList();
     _sortInsects(filteredInsects);
 
     List<PlantItem> filteredPlants = List.from(_plantList);
@@ -2239,6 +2455,11 @@ class _GatheringScreenState extends State<GatheringScreen>
           .where((item) => _selectedLevelFilters.contains(item.level))
           .toList();
     }
+
+    filteredPlants = filteredPlants
+        .where((item) => _matchesAchievementStar('plant:${item.id}'))
+        .where((item) => _matchesSelectedWeather(item.weather))
+        .toList();
     _sortPlants(filteredPlants);
 
     if (_pendingSearchItem != null && _pendingSearchItem!.gatheringTab != null) {
@@ -2604,7 +2825,11 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   bool _hasActiveFilterSortSheetSettings() {
-    return _selectedLevelFilters.isNotEmpty || _selectedSort != '레벨순';
+    return _selectedLevelFilters.isNotEmpty ||
+        _selectedAchievementStarFilters.isNotEmpty ||
+        _selectedWeatherFilters.isNotEmpty ||
+        _selectedFishShadowFilters.isNotEmpty ||
+        _selectedSort != '레벨순';
   }
 
   Widget _buildFilterSortActionButton() {
@@ -2712,9 +2937,14 @@ class _GatheringScreenState extends State<GatheringScreen>
     _dismissKeyboard();
 
     final tempLevels = Set<int>.from(_selectedLevelFilters);
+    final tempAchievementStars = Set<int>.from(_selectedAchievementStarFilters);
+    final tempWeatherFilters = Set<String>.from(_selectedWeatherFilters);
+    final tempShadowFilters = Set<String>.from(_selectedFishShadowFilters);
     String tempSort = _selectedSort;
     final levelOptions = _currentLevelOptions();
     const sortOptions = ['레벨순', '이름순', '가격순', '좋아요순'];
+    const weatherOptions = ['모든 날씨', '맑음', '흐림', '비', '눈', '무지개'];
+    const shadowOptions = ['매우 작음', '작음', '중간', '큼', '매우 큼'];
 
     showModalBottomSheet(
       context: context,
@@ -2819,6 +3049,96 @@ class _GatheringScreenState extends State<GatheringScreen>
                         ],
                       ),
                       const SizedBox(height: 22),
+                      sectionTitle('달성 성급'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildSheetChoiceChip(
+                            label: '전체',
+                            isSelected: tempAchievementStars.isEmpty,
+                            onTap: () => setSheetState(tempAchievementStars.clear),
+                          ),
+                          ...List.generate(5, (index) {
+                            final star = index + 1;
+                            return _buildSheetChoiceChip(
+                              label: '$star성 달성',
+                              isSelected: tempAchievementStars.contains(star),
+                              onTap: () {
+                                setSheetState(() {
+                                  if (tempAchievementStars.contains(star)) {
+                                    tempAchievementStars.remove(star);
+                                  } else {
+                                    tempAchievementStars.add(star);
+                                  }
+                                });
+                              },
+                            );
+                          }),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                      sectionTitle('등장 날씨'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildSheetChoiceChip(
+                            label: '전체',
+                            isSelected: tempWeatherFilters.isEmpty,
+                            onTap: () => setSheetState(tempWeatherFilters.clear),
+                          ),
+                          ...weatherOptions.map((weather) {
+                            return _buildSheetChoiceChip(
+                              label: weather,
+                              isSelected: tempWeatherFilters.contains(weather),
+                              onTap: () {
+                                setSheetState(() {
+                                  if (tempWeatherFilters.contains(weather)) {
+                                    tempWeatherFilters.remove(weather);
+                                  } else {
+                                    tempWeatherFilters.add(weather);
+                                  }
+                                });
+                              },
+                            );
+                          }),
+                        ],
+                      ),
+                      if (_tabController.index == 0) ...[
+                        const SizedBox(height: 22),
+                        sectionTitle('그림자 크기'),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _buildSheetChoiceChip(
+                              label: '전체',
+                              isSelected: tempShadowFilters.isEmpty,
+                              onTap: () => setSheetState(tempShadowFilters.clear),
+                            ),
+                            ...shadowOptions.map((shadow) {
+                              return _buildSheetChoiceChip(
+                                label: shadow,
+                                isSelected: tempShadowFilters.contains(shadow),
+                                onTap: () {
+                                  setSheetState(() {
+                                    if (tempShadowFilters.contains(shadow)) {
+                                      tempShadowFilters.remove(shadow);
+                                    } else {
+                                      tempShadowFilters.add(shadow);
+                                    }
+                                  });
+                                },
+                              );
+                            }),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 22),
                       Row(
                         children: [
                           Expanded(
@@ -2826,6 +3146,9 @@ class _GatheringScreenState extends State<GatheringScreen>
                               onPressed: () {
                                 setSheetState(() {
                                   tempLevels.clear();
+                                  tempAchievementStars.clear();
+                                  tempWeatherFilters.clear();
+                                  tempShadowFilters.clear();
                                   tempSort = '레벨순';
                                 });
                               },
@@ -2851,6 +3174,15 @@ class _GatheringScreenState extends State<GatheringScreen>
                                   _selectedLevelFilters
                                     ..clear()
                                     ..addAll(tempLevels);
+                                  _selectedAchievementStarFilters
+                                    ..clear()
+                                    ..addAll(tempAchievementStars);
+                                  _selectedWeatherFilters
+                                    ..clear()
+                                    ..addAll(tempWeatherFilters);
+                                  _selectedFishShadowFilters
+                                    ..clear()
+                                    ..addAll(tempShadowFilters);
                                   _selectedSort = tempSort;
                                 });
                                 _applyFilters();
@@ -3232,10 +3564,13 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
 
-  Widget _buildCardBottomAction(List<int> prices) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: _buildPriceButton(prices),
+  Widget _buildCardBottomAction(List<int> prices, {String? itemKey}) {
+    return Row(
+      children: [
+        if (itemKey != null) _buildAchievementStars(itemKey),
+        const Spacer(),
+        _buildPriceButton(prices),
+      ],
     );
   }
 
@@ -3297,7 +3632,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                       ],
                     ),
                     const SizedBox(height: 8),
-                    _buildCardBottomAction(insect.prices),
+                    _buildCardBottomAction(insect.prices, itemKey: 'insect:${insect.id}'),
                   ],
                 ),
               ),
@@ -3469,9 +3804,12 @@ class _GatheringScreenState extends State<GatheringScreen>
                                 ),
                               ),
                             const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: _buildPriceButton(plant.prices),
+                            Row(
+                              children: [
+                                _buildAchievementStars('plant:${plant.id}'),
+                                const Spacer(),
+                                _buildPriceButton(plant.prices),
+                              ],
                             ),
                           ],
                         ),
@@ -3594,7 +3932,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                       ],
                     ),
                     const SizedBox(height: 8),
-                    _buildCardBottomAction(fishPrices),
+                    _buildCardBottomAction(fishPrices, itemKey: 'fish:${fish.id}'),
                   ],
                 ),
               ),
@@ -3753,7 +4091,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                       ],
                     ),
                     const SizedBox(height: 8),
-                    _buildCardBottomAction(bird.prices),
+                    _buildCardBottomAction(bird.prices, itemKey: 'bird:${bird.id}'),
                   ],
                 ),
               ),
@@ -4823,6 +5161,8 @@ class GatheringSimpleDetailPage extends StatelessWidget {
   final String timeText;
   final String locationText;
   final String weatherText;
+  final List<Map<String, String>> extraInfo;
+  final List<int> eventTokenPrices;
 
   const GatheringSimpleDetailPage({
     super.key,
@@ -4835,6 +5175,8 @@ class GatheringSimpleDetailPage extends StatelessWidget {
     required this.timeText,
     required this.locationText,
     required this.weatherText,
+    this.extraInfo = const [],
+    this.eventTokenPrices = const [],
   });
 
   String _formatPrice(int price) {
@@ -5028,6 +5370,14 @@ class GatheringSimpleDetailPage extends StatelessWidget {
       },
     );
     final bool hasPrice = prices.any((price) => price > 0);
+    final visibleEventTokenPrices = List<Map<String, int>>.generate(
+      5,
+          (index) => {
+        'star': index + 1,
+        'price': index < eventTokenPrices.length ? eventTokenPrices[index] : 0,
+      },
+    );
+    final bool hasEventTokenPrice = eventTokenPrices.any((price) => price > 0);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBFA),
@@ -5149,6 +5499,26 @@ class GatheringSimpleDetailPage extends StatelessWidget {
                   Expanded(child: _infoTile('출현 장소', locationText)),
                 ],
               ),
+              if (extraInfo.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _sectionTitle('추가 정보'),
+                const SizedBox(height: 10),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: extraInfo.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 7,
+                    mainAxisSpacing: 7,
+                    childAspectRatio: 2.35,
+                  ),
+                  itemBuilder: (context, index) {
+                    final info = extraInfo[index];
+                    return _infoTile(info['label'] ?? '-', info['value'] ?? '-');
+                  },
+                ),
+              ],
               const SizedBox(height: 20),
               _sectionTitle('성급별 판매가'),
               const SizedBox(height: 10),
@@ -5188,6 +5558,26 @@ class GatheringSimpleDetailPage extends StatelessWidget {
                     return _priceTile(item['star']!, item['price']!);
                   },
                 ),
+              if (hasEventTokenPrice) ...[
+                const SizedBox(height: 20),
+                _sectionTitle('이벤트 토큰 판매가'),
+                const SizedBox(height: 10),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: visibleEventTokenPrices.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 5,
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 6,
+                    childAspectRatio: 0.82,
+                  ),
+                  itemBuilder: (context, index) {
+                    final item = visibleEventTokenPrices[index];
+                    return _priceTile(item['star']!, item['price']!);
+                  },
+                ),
+              ],
             ],
           ),
         ),

@@ -9,6 +9,35 @@ import 'map_screen.dart';
 import 'setting_screen.dart';
 import 'dart:ui';
 
+int _parseIntFlexible(dynamic value, {int fallback = 0}) {
+  if (value == null) return fallback;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  final text = value.toString().replaceAll(RegExp(r'[^0-9-]'), '').trim();
+  if (text.isEmpty) return fallback;
+  return int.tryParse(text) ?? fallback;
+}
+
+String _parseTextFlexible(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value == null) continue;
+    final text = value.toString().trim();
+    if (text.isNotEmpty) return text;
+  }
+  return '';
+}
+
+List<int> _parseEventTokenPrices(Map<String, dynamic> json) {
+  return [
+    _parseIntFlexible(json['eventTokenPrice1'] ?? json['event_token_price_1']),
+    _parseIntFlexible(json['eventTokenPrice2'] ?? json['event_token_price_2']),
+    _parseIntFlexible(json['eventTokenPrice3'] ?? json['event_token_price_3']),
+    _parseIntFlexible(json['eventTokenPrice4'] ?? json['event_token_price_4']),
+    _parseIntFlexible(json['eventTokenPrice5'] ?? json['event_token_price_5']),
+  ];
+}
+
 int _parseLevel(Map<String, dynamic> json) {
   final dynamic raw =
       json['level'] ??
@@ -376,6 +405,7 @@ class RecipeIngredientDetail {
   final String? image;
   final bool isCultivable;
   final int level;
+  final int masteryCount;
   final List<int> prices;
 
   RecipeIngredientDetail({
@@ -389,6 +419,7 @@ class RecipeIngredientDetail {
     this.image,
     required this.isCultivable,
     required this.level,
+    required this.masteryCount,
     required this.prices,
   });
 
@@ -407,6 +438,7 @@ class RecipeIngredientDetail {
       image: json['image']?.toString(),
       isCultivable: (json['isCultivable'] ?? false) == true,
       level: _parseLevel(json),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price2'] ?? json['price_2'] ?? '0').toString()) ?? 0,
@@ -424,6 +456,7 @@ class CookingMaterialDetail {
   final String? image;
   final bool isCultivable;
   final int level;
+  final int masteryCount;
   final List<int> prices;
 
   CookingMaterialDetail({
@@ -432,6 +465,7 @@ class CookingMaterialDetail {
     this.image,
     required this.isCultivable,
     required this.level,
+    required this.masteryCount,
     required this.prices,
   });
 
@@ -442,6 +476,7 @@ class CookingMaterialDetail {
       image: json['image']?.toString(),
       isCultivable: (json['isCultivable'] ?? json['is_cultivable'] ?? false) == true,
       level: _parseLevel(json),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price2'] ?? json['price_2'] ?? '0').toString()) ?? 0,
@@ -518,6 +553,9 @@ class Gourmet {
   final int level;
   final String? image;
   final List<int> prices;
+  final List<int> eventTokenPrices;
+  final int masteryCount;
+  final String energyBuffs;
   final bool isHiddenRecipe;
 
   Gourmet({
@@ -528,6 +566,9 @@ class Gourmet {
     required this.level,
     this.image,
     required this.prices,
+    required this.eventTokenPrices,
+    required this.masteryCount,
+    required this.energyBuffs,
     required this.isHiddenRecipe,
   });
 
@@ -559,6 +600,9 @@ class Gourmet {
         int.tryParse((json['price4'] ?? json['price_4'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price5'] ?? json['price_5'] ?? '0').toString()) ?? 0,
       ],
+      eventTokenPrices: _parseEventTokenPrices(json),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      energyBuffs: _parseTextFlexible(json, ['energyBuffs', 'energy_buffs', 'energyAndBuffs', 'energy_and_buffs']),
       isHiddenRecipe: _parseHiddenRecipe(json),
     );
   }
@@ -638,6 +682,7 @@ class CookingScreen extends StatefulWidget {
 
 class _CookingScreenState extends State<CookingScreen> with SingleTickerProviderStateMixin {
   static const String _favoritesKey = 'favorite_gourmet_ids';
+  static const String _achievementStarsKey = 'cooking_achievement_stars';
 
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
@@ -662,6 +707,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   String _searchQuery = '';
   String _selectedSort = '레벨순';
   final Set<int> _selectedLevelFilters = {};
+  final Set<int> _selectedAchievementStarFilters = {};
   int _lastTabIndex = 0;
 
   List<Gourmet> _allRecipeList = [];
@@ -700,6 +746,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   }
 
   Set<String> _favoriteIds = {};
+  Map<String, int> _achievementStars = {};
   final Color snackAccent = const Color(0xFFFF8E7C);
   final String _recipeApiUrl = 'https://api.keepers-note.o-r.kr/api/gourmet';
   final String _materialApiUrl = 'https://api.keepers-note.o-r.kr/api/cooking/materials';
@@ -742,6 +789,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _attachScrollListener(_materialScrollController);
 
     _loadFavorites();
+    _loadAchievementStars();
     _fetchRecipeData();
     _fetchMaterialData();
 
@@ -758,6 +806,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     setState(() {
       _selectedFilter = '전체';
       _selectedLevelFilters.clear();
+      _selectedAchievementStarFilters.clear();
     });
 
     _applyFilters();
@@ -1900,9 +1949,12 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                               ),
                             ),
                             const SizedBox(height: 6),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: _buildPriceButton(item.prices),
+                            Row(
+                              children: [
+                                _buildAchievementStars('recipe:${item.id}'),
+                                const Spacer(),
+                                _buildPriceButton(item.prices),
+                              ],
                             ),
                           ],
                         ),
@@ -2118,7 +2170,14 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                               alignment: Alignment.centerRight,
                               child: isShopItem
                                   ? _buildPurchasePriceButton(purchasePrice)
-                                  : _buildPriceButton(item.prices),
+                                  : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildAchievementStars('material:${item.id}'),
+                                  const SizedBox(width: 8),
+                                  _buildPriceButton(item.prices),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -2195,6 +2254,10 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
             .where((item) => _selectedLevelFilters.contains(item.level))
             .toList();
       }
+
+      filtered = filtered
+          .where((item) => _matchesAchievementStar('recipe:${item.id}'))
+          .toList();
 
       switch (_selectedSort) {
         case '레벨순':
@@ -2283,6 +2346,10 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           .where((item) => _selectedLevelFilters.contains(item.level))
           .toList();
     }
+
+    filtered = filtered
+        .where((item) => _matchesAchievementStar('material:${item.id}'))
+        .toList();
 
     switch (_selectedSort) {
       case '레벨순':
@@ -2812,6 +2879,77 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     await prefs.setStringList(_favoritesKey, _favoriteIds.toList());
   }
 
+
+  Future<void> _loadAchievementStars() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_achievementStarsKey);
+    if (raw == null || raw.isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final parsed = <String, int>{};
+        decoded.forEach((key, value) {
+          final star = _parseIntFlexible(value);
+          if (star >= 1 && star <= 5) {
+            parsed[key.toString()] = star;
+          }
+        });
+        if (mounted) setState(() => _achievementStars = parsed);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveAchievementStars() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_achievementStarsKey, jsonEncode(_achievementStars));
+  }
+
+  Future<void> _setAchievementStar(String itemKey, int star) async {
+    setState(() {
+      if (_achievementStars[itemKey] == star) {
+        _achievementStars.remove(itemKey);
+      } else {
+        _achievementStars[itemKey] = star;
+      }
+    });
+    await _saveAchievementStars();
+    _applyFilters();
+  }
+
+  int _achievementStarFor(String itemKey) => _achievementStars[itemKey] ?? 0;
+
+  bool _matchesAchievementStar(String itemKey) {
+    if (_selectedAchievementStarFilters.isEmpty) return true;
+    return _selectedAchievementStarFilters.contains(_achievementStarFor(itemKey));
+  }
+
+  Widget _buildAchievementStars(String itemKey) {
+    final selected = _achievementStarFor(itemKey);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        final star = index + 1;
+        final active = selected == star;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _setAchievementStar(itemKey, star),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 1.5, vertical: 5),
+            child: Icon(
+              active ? Icons.star_rounded : Icons.star_border_rounded,
+              size: 20,
+              color: active
+                  ? const Color(0xFFFFB84D)
+                  : const Color(0xFFD6DEE8),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
   Future<void> _toggleFavorite(String id) async {
     setState(() { if (_favoriteIds.contains(id)) _favoriteIds.remove(id); else _favoriteIds.add(id); });
     await _saveFavorites(); _applyFilters();
@@ -3102,7 +3240,9 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   }
 
   bool _hasActiveFilterSortSheetSettings() {
-    return _selectedLevelFilters.isNotEmpty || _selectedSort != '레벨순';
+    return _selectedLevelFilters.isNotEmpty ||
+        _selectedAchievementStarFilters.isNotEmpty ||
+        _selectedSort != '레벨순';
   }
 
   Widget _buildFilterSortActionButton() {
@@ -3210,6 +3350,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _dismissSearchFocus();
 
     final tempLevels = Set<int>.from(_selectedLevelFilters);
+    final tempAchievementStars = Set<int>.from(_selectedAchievementStarFilters);
     String tempSort = _selectedSort;
     final levelOptions = _currentLevelOptions();
     const sortOptions = ['레벨순', '이름순', '가격순', '좋아요순'];
@@ -3317,6 +3458,36 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                         ],
                       ),
                       const SizedBox(height: 22),
+                      sectionTitle('달성 성급'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildSheetChoiceChip(
+                            label: '전체',
+                            isSelected: tempAchievementStars.isEmpty,
+                            onTap: () => setSheetState(tempAchievementStars.clear),
+                          ),
+                          ...List.generate(5, (index) {
+                            final star = index + 1;
+                            return _buildSheetChoiceChip(
+                              label: '$star성 달성',
+                              isSelected: tempAchievementStars.contains(star),
+                              onTap: () {
+                                setSheetState(() {
+                                  if (tempAchievementStars.contains(star)) {
+                                    tempAchievementStars.remove(star);
+                                  } else {
+                                    tempAchievementStars.add(star);
+                                  }
+                                });
+                              },
+                            );
+                          }),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
                       Row(
                         children: [
                           Expanded(
@@ -3324,6 +3495,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                               onPressed: () {
                                 setSheetState(() {
                                   tempLevels.clear();
+                                  tempAchievementStars.clear();
                                   tempSort = '레벨순';
                                 });
                               },
@@ -3349,6 +3521,9 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                                   _selectedLevelFilters
                                     ..clear()
                                     ..addAll(tempLevels);
+                                  _selectedAchievementStarFilters
+                                    ..clear()
+                                    ..addAll(tempAchievementStars);
                                   _selectedSort = tempSort;
                                 });
                                 _applyFilters();
@@ -3560,6 +3735,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _selectedFilter = '전체';
     _selectedSort = '레벨순';
     _selectedLevelFilters.clear();
+    _selectedAchievementStarFilters.clear();
 
     if (_searchController.text.isNotEmpty) {
       _searchController.clear();
@@ -3695,6 +3871,14 @@ class CookingRecipeDetailPage extends StatelessWidget {
       },
     );
     final bool hasPrice = recipe.prices.any((price) => price > 0);
+    final visibleEventTokenPrices = List<Map<String, int>>.generate(
+      5,
+          (index) => {
+        'star': index + 1,
+        'price': index < recipe.eventTokenPrices.length ? recipe.eventTokenPrices[index] : 0,
+      },
+    );
+    final bool hasEventTokenPrice = recipe.eventTokenPrices.any((price) => price > 0);
 
     return Scaffold(
       appBar: AppBar(
@@ -3908,6 +4092,26 @@ class CookingRecipeDetailPage extends StatelessWidget {
                 return _priceTile(item['star']!, item['price']!);
               },
             ),
+          if (hasEventTokenPrice) ...[
+            const SizedBox(height: 22),
+            _sectionTitle('이벤트 토큰 판매가'),
+            const SizedBox(height: 10),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: visibleEventTokenPrices.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                crossAxisSpacing: 6,
+                mainAxisSpacing: 6,
+                childAspectRatio: 0.82,
+              ),
+              itemBuilder: (context, index) {
+                final item = visibleEventTokenPrices[index];
+                return _priceTile(item['star']!, item['price']!);
+              },
+            ),
+          ],
         ],
       ),
     );
