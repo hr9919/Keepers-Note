@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'setting_screen.dart';
@@ -36,6 +37,47 @@ List<int> _parseEventTokenPrices(Map<String, dynamic> json) {
     _parseIntFlexible(json['eventTokenPrice4'] ?? json['event_token_price_4']),
     _parseIntFlexible(json['eventTokenPrice5'] ?? json['event_token_price_5']),
   ];
+}
+
+
+List<Map<String, String>> _buildMasteryStageExtraInfo(
+    String actionLabel,
+    int masterCount, {
+      int entryCount = 0,
+      int skilledCount = 0,
+      int exactMasterCount = 0,
+      String unit = '회',
+    }) {
+  final int master = exactMasterCount > 0 ? exactMasterCount : masterCount;
+  if (master <= 0 && entryCount <= 0 && skilledCount <= 0) return const [];
+
+  final int entry = entryCount > 0 ? entryCount : (master > 0 ? (master * 0.333).ceil() : 0);
+  final int skilled = skilledCount > 0 ? skilledCount : (master > 0 ? (master * 0.666).ceil() : 0);
+
+  final stages = <Map<String, String>>[
+    if (entry > 0)
+      {'label': '$actionLabel 초보자', 'value': '${entry}$unit 미만'},
+    if (entry > 0)
+      {'label': '$actionLabel 입문자', 'value': '${entry}$unit'},
+    if (skilled > 0)
+      {'label': '$actionLabel 숙련자', 'value': '${skilled}$unit'},
+    if (master > 0)
+      {'label': '$actionLabel 명인', 'value': '${master}$unit'},
+  ];
+
+  return stages;
+}
+
+String _masteryDoneStorageKey(String itemKey) => 'mastery_done:$itemKey';
+
+Future<bool> _loadMasteryDoneValue(String itemKey) async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(_masteryDoneStorageKey(itemKey)) ?? false;
+}
+
+Future<void> _saveMasteryDoneValue(String itemKey, bool value) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(_masteryDoneStorageKey(itemKey), value);
 }
 
 class GatheringSearchController extends ChangeNotifier {
@@ -114,6 +156,11 @@ class FlowerDetail {
   final int seedCost;
   final int seedSell;
   final List<int> prices;
+  final int masteryCount;
+  final int masteryEntryCount;
+  final int masterySkilledCount;
+  final int masteryMasterCount;
+  final List<int> eventTokenPrices;
   final List<FlowerColorDetail> flowerColors;
   final List<FlowerBreedingRule> breedingRules;
 
@@ -126,6 +173,11 @@ class FlowerDetail {
     required this.seedCost,
     required this.seedSell,
     required this.prices,
+    required this.masteryCount,
+    required this.masteryEntryCount,
+    required this.masterySkilledCount,
+    required this.masteryMasterCount,
+    required this.eventTokenPrices,
     required this.flowerColors,
     required this.breedingRules,
   });
@@ -151,6 +203,11 @@ class FlowerDetail {
         int.tryParse((json['price4'] ?? json['price_4'] ?? 0).toString()) ?? 0,
         int.tryParse((json['price5'] ?? json['price_5'] ?? 0).toString()) ?? 0,
       ],
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count'] ?? json['masteryMasterCount'] ?? json['mastery_master_count']),
+      masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
+      masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
+      masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
+      eventTokenPrices: _parseEventTokenPrices(json),
       flowerColors: colorsJson
           .map((e) => FlowerColorDetail.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -172,6 +229,9 @@ class BirdItem {
   final String weather;
   final int level;
   final int masteryCount;
+  final int masteryEntryCount;
+  final int masterySkilledCount;
+  final int masteryMasterCount;
   final String captureDistance;
   final String wingSpread;
   final String whistle;
@@ -189,6 +249,9 @@ class BirdItem {
     required this.weather,
     required this.level,
     required this.masteryCount,
+    required this.masteryEntryCount,
+    required this.masterySkilledCount,
+    required this.masteryMasterCount,
     required this.captureDistance,
     required this.wingSpread,
     required this.whistle,
@@ -217,7 +280,10 @@ class BirdItem {
       timeKey: timeKey,
       weather: (json['weather'] ?? '').toString(),
       level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
-      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count'] ?? json['masteryMasterCount'] ?? json['mastery_master_count']),
+      masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
+      masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
+      masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
       captureDistance: _parseTextFlexible(json, ['captureDistance', 'capture_distance']),
       wingSpread: _parseTextFlexible(json, ['wingSpread', 'wing_spread']),
       whistle: _parseTextFlexible(json, ['whistle', 'whistleRequired', 'whistle_required']),
@@ -261,6 +327,9 @@ class PlantItem {
   final String weather;
   final int level;
   final int masteryCount;
+  final int masteryEntryCount;
+  final int masterySkilledCount;
+  final int masteryMasterCount;
   final List<int> prices;
   final List<int> eventTokenPrices;
   final List<FlowerColorSummary> flowerColorSummaries;
@@ -276,6 +345,9 @@ class PlantItem {
     required this.weather,
     required this.level,
     required this.masteryCount,
+    required this.masteryEntryCount,
+    required this.masterySkilledCount,
+    required this.masteryMasterCount,
     required this.prices,
     required this.eventTokenPrices,
     required this.flowerColorSummaries,
@@ -300,7 +372,10 @@ class PlantItem {
       growthTime: (json['growthTime'] ?? json['growth_time'] ?? '-').toString(),
       weather: (json['weather'] ?? '').toString(),
       level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
-      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count'] ?? json['masteryMasterCount'] ?? json['mastery_master_count']),
+      masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
+      masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
+      masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
       prices: [
         parsePrice(json['price1'], json['price_1']),
         parsePrice(json['price2'], json['price_2']),
@@ -327,6 +402,9 @@ class InsectItem {
   final String weather;
   final int level;
   final int masteryCount;
+  final int masteryEntryCount;
+  final int masterySkilledCount;
+  final int masteryMasterCount;
   final List<int> prices;
   final List<int> eventTokenPrices;
 
@@ -340,6 +418,9 @@ class InsectItem {
     required this.weather,
     required this.level,
     required this.masteryCount,
+    required this.masteryEntryCount,
+    required this.masterySkilledCount,
+    required this.masteryMasterCount,
     required this.prices,
     required this.eventTokenPrices,
   });
@@ -359,7 +440,10 @@ class InsectItem {
       availableTime: (json['available_time'] ?? json['availableTime'] ?? '').toString(),
       weather: (json['weather'] ?? '').toString(),
       level: int.tryParse(json['level']?.toString() ?? '1') ?? 1,
-      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count'] ?? json['masteryMasterCount'] ?? json['mastery_master_count']),
+      masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
+      masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
+      masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
       prices: [
         parsePrice(json['price1'], json['price_1']),
         parsePrice(json['price2'], json['price_2']),
@@ -388,6 +472,9 @@ class FishItem {
   final int? price5;
   final String weather; // 날씨 속성 추가
   final int masteryCount;
+  final int masteryEntryCount;
+  final int masterySkilledCount;
+  final int masteryMasterCount;
   final String shadowSize;
   final List<int> eventTokenPrices;
 
@@ -407,6 +494,9 @@ class FishItem {
     this.price5,
     required this.weather, // 날씨 속성
     required this.masteryCount,
+    required this.masteryEntryCount,
+    required this.masterySkilledCount,
+    required this.masteryMasterCount,
     required this.shadowSize,
     required this.eventTokenPrices,
   });
@@ -438,7 +528,10 @@ class FishItem {
       price4: parseNullableInt(json['price_4'] ?? json['price4']),
       price5: parseNullableInt(json['price_5'] ?? json['price5']),
       weather: (json['weather'] ?? '').toString(),
-      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count'] ?? json['masteryMasterCount'] ?? json['mastery_master_count']),
+      masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
+      masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
+      masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
       shadowSize: _parseTextFlexible(json, ['shadowSize', 'shadow_size']),
       eventTokenPrices: _parseEventTokenPrices(json),
     );
@@ -477,6 +570,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   final Set<int> _selectedAchievementStarFilters = {};
   final Set<String> _selectedWeatherFilters = {};
   final Set<String> _selectedFishShadowFilters = {};
+  final Set<String> _selectedMasteryCompletionFilters = {};
   int _lastTabIndex = 0;
 
   bool _showTopBtn = false;
@@ -506,6 +600,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   List<InsectItem> _visibleInsectList = [];
   Set<String> _favoriteIds = {};
   Map<String, int> _achievementStars = {};
+  Map<String, bool> _masteryDoneMap = {};
 
   final String _fishApiUrl = 'https://api.keepers-note.o-r.kr/api/fish';
   final String _insectApiUrl = 'https://api.keepers-note.o-r.kr/api/insects';
@@ -1400,6 +1495,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     _loadFavorites();
     _loadAchievementStars();
+    _loadMasteryDoneMap();
     _fetchAllData();
 
     widget.searchController?.addListener(_handleExternalSearch);
@@ -1610,9 +1706,40 @@ class _GatheringScreenState extends State<GatheringScreen>
         return;
       }
 
-      final detail = FlowerDetail.fromJson(
-        jsonDecode(utf8.decode(response.bodyBytes)),
-      );
+      final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+      // 상세 API가 아직 mastery/event 값을 안 내려주는 경우,
+      // 목록 API에서 이미 받은 PlantItem 값으로 보강해서 상세페이지에 표시합니다.
+      final detail = FlowerDetail.fromJson({
+        ...json,
+        'masteryCount': json['masteryCount'] ??
+            json['mastery_count'] ??
+            plant.masteryCount,
+        'masteryEntryCount': json['masteryEntryCount'] ??
+            json['mastery_entry_count'] ??
+            plant.masteryEntryCount,
+        'masterySkilledCount': json['masterySkilledCount'] ??
+            json['mastery_skilled_count'] ??
+            plant.masterySkilledCount,
+        'masteryMasterCount': json['masteryMasterCount'] ??
+            json['mastery_master_count'] ??
+            plant.masteryMasterCount,
+        'eventTokenPrice1': json['eventTokenPrice1'] ??
+            json['event_token_price_1'] ??
+            (plant.eventTokenPrices.isNotEmpty ? plant.eventTokenPrices[0] : 0),
+        'eventTokenPrice2': json['eventTokenPrice2'] ??
+            json['event_token_price_2'] ??
+            (plant.eventTokenPrices.length > 1 ? plant.eventTokenPrices[1] : 0),
+        'eventTokenPrice3': json['eventTokenPrice3'] ??
+            json['event_token_price_3'] ??
+            (plant.eventTokenPrices.length > 2 ? plant.eventTokenPrices[2] : 0),
+        'eventTokenPrice4': json['eventTokenPrice4'] ??
+            json['event_token_price_4'] ??
+            (plant.eventTokenPrices.length > 3 ? plant.eventTokenPrices[3] : 0),
+        'eventTokenPrice5': json['eventTokenPrice5'] ??
+            json['event_token_price_5'] ??
+            (plant.eventTokenPrices.length > 4 ? plant.eventTokenPrices[4] : 0),
+      });
 
       if (!mounted) return;
 
@@ -1622,6 +1749,9 @@ class _GatheringScreenState extends State<GatheringScreen>
           builder: (_) => FlowerDetailPage(detail: detail),
         ),
       );
+
+      await _loadMasteryDoneMap();
+      _applyFilters();
     } catch (e) {
       debugPrint('꽃 상세 로드 실패: $e');
     }
@@ -1647,18 +1777,31 @@ class _GatheringScreenState extends State<GatheringScreen>
           fallbackIcon: Icons.set_meal_rounded,
           prices: fishPrices,
           eventTokenPrices: fish.eventTokenPrices,
+          masteryDoneKey: 'fish:${fish.id}',
+          masteryDoneLabel: '낚시 명인 달성',
           timeText: _formatDetailAvailableTime(fish.availableTime),
           locationText: fish.location.trim().isEmpty ? '-' : fish.location.trim(),
           weatherText: _formatDetailWeather(fish.weather),
           extraInfo: [
             if (fish.shadowSize.trim().isNotEmpty)
-              {'label': '그림자 크기', 'value': _normalizeShadowSize(fish.shadowSize)},
-            if (fish.masteryCount > 0)
-              {'label': '명인 필요', 'value': '${fish.masteryCount}마리'},
+              {
+                'label': '그림자 크기',
+                'value': _normalizeShadowSize(fish.shadowSize),
+              },
+            ..._buildMasteryStageExtraInfo(
+              '낚시',
+              fish.masteryMasterCount > 0 ? fish.masteryMasterCount : fish.masteryCount,
+              entryCount: fish.masteryEntryCount,
+              skilledCount: fish.masterySkilledCount,
+              exactMasterCount: fish.masteryMasterCount,
+              unit: '마리',
+            ),
           ],
         ),
       ),
     );
+    await _loadMasteryDoneMap();
+    _applyFilters();
   }
 
   Future<void> _openBirdDetail(BirdItem bird) async {
@@ -1668,11 +1811,13 @@ class _GatheringScreenState extends State<GatheringScreen>
         builder: (_) => GatheringSimpleDetailPage(
           title: _displayBirdName(bird),
           categoryLabel: '새',
-          levelLabel: '관찰 ${bird.level}레벨',
+          levelLabel: '촬영 ${bird.level}레벨',
           image: bird.image,
           fallbackIcon: Icons.flutter_dash_rounded,
           prices: bird.prices,
           eventTokenPrices: bird.eventTokenPrices,
+          masteryDoneKey: 'bird:${bird.id}',
+          masteryDoneLabel: '촬영 명인 달성',
           timeText: _formatDetailAvailableTime(
             bird.timeKey.isNotEmpty ? bird.timeKey : bird.availableTime,
           ),
@@ -1687,12 +1832,13 @@ class _GatheringScreenState extends State<GatheringScreen>
               {'label': '날개 펴기', 'value': bird.wingSpread.trim()},
             if (bird.whistle.trim().isNotEmpty)
               {'label': '호루라기', 'value': bird.whistle.trim()},
-            if (bird.masteryCount > 0)
-              {'label': '명인 필요', 'value': '${bird.masteryCount}마리'},
+            ..._buildMasteryStageExtraInfo('촬영', bird.masteryCount, entryCount: bird.masteryEntryCount, skilledCount: bird.masterySkilledCount, exactMasterCount: bird.masteryMasterCount, unit: '회'),
           ],
         ),
       ),
     );
+    await _loadMasteryDoneMap();
+    _applyFilters();
   }
 
   Future<void> _openInsectDetail(InsectItem insect) async {
@@ -1702,23 +1848,26 @@ class _GatheringScreenState extends State<GatheringScreen>
         builder: (_) => GatheringSimpleDetailPage(
           title: _displayInsectName(insect),
           categoryLabel: '곤충',
-          levelLabel: '채집 ${insect.level}레벨',
+          levelLabel: '곤충 채집 ${insect.level}레벨',
           image: insect.image,
           fallbackIcon: Icons.bug_report,
           prices: insect.prices,
           eventTokenPrices: insect.eventTokenPrices,
+          masteryDoneKey: 'insect:${insect.id}',
+          masteryDoneLabel: '곤충 채집 명인 달성',
           timeText: _formatDetailAvailableTime(insect.availableTime),
           locationText: insect.location.trim().isEmpty
               ? '-'
               : insect.location.trim(),
           weatherText: _formatDetailWeather(insect.weather),
           extraInfo: [
-            if (insect.masteryCount > 0)
-              {'label': '명인 필요', 'value': '${insect.masteryCount}마리'},
+            ..._buildMasteryStageExtraInfo('곤충 채집', insect.masteryCount, entryCount: insect.masteryEntryCount, skilledCount: insect.masterySkilledCount, exactMasterCount: insect.masteryMasterCount, unit: '마리'),
           ],
         ),
       ),
     );
+    await _loadMasteryDoneMap();
+    _applyFilters();
   }
 
   String _formatDetailAvailableTime(String? time) {
@@ -1803,6 +1952,26 @@ class _GatheringScreenState extends State<GatheringScreen>
     return _selectedAchievementStarFilters.contains(_achievementStarFor(itemKey));
   }
 
+
+  Future<void> _loadMasteryDoneMap() async {
+    final prefs = await SharedPreferences.getInstance();
+    final allKeys = prefs.getKeys();
+    final parsed = <String, bool>{};
+    for (final key in allKeys) {
+      if (key.startsWith('mastery_done:')) {
+        parsed[key.substring('mastery_done:'.length)] = prefs.getBool(key) ?? false;
+      }
+    }
+    if (mounted) setState(() => _masteryDoneMap = parsed);
+  }
+
+  bool _matchesMasteryDone(String itemKey) {
+    if (_selectedMasteryCompletionFilters.isEmpty) return true;
+    final done = _masteryDoneMap[itemKey] == true;
+    return (done && _selectedMasteryCompletionFilters.contains('done')) ||
+        (!done && _selectedMasteryCompletionFilters.contains('not_done'));
+  }
+
   bool _matchesSelectedWeather(String rawWeather) {
     if (_selectedWeatherFilters.isEmpty) return true;
     final labels = _normalizeWeatherLabel(rawWeather);
@@ -1836,18 +2005,21 @@ class _GatheringScreenState extends State<GatheringScreen>
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (index) {
         final star = index + 1;
-        final active = selected == star;
+        final active = selected >= star;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _setAchievementStar(itemKey, star),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1.5, vertical: 5),
-            child: Icon(
-              active ? Icons.star_rounded : Icons.star_border_rounded,
-              size: 20,
-              color: active
-                  ? const Color(0xFFFFB84D)
-                  : const Color(0xFFD6DEE8),
+          child: SizedBox(
+            width: 20,
+            height: 28,
+            child: Center(
+              child: Icon(
+                active ? Icons.star_rounded : Icons.star_border_rounded,
+                size: 23,
+                color: active
+                    ? const Color(0xFFFFB84D)
+                    : const Color(0xFFD6DEE8),
+              ),
             ),
           ),
         );
@@ -2382,6 +2554,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     filteredFish = filteredFish
         .where((item) => _matchesAchievementStar('fish:${item.id}'))
+        .where((item) => _matchesMasteryDone('fish:${item.id}'))
         .where(_matchesSelectedShadowSize)
         .where((item) => _matchesSelectedWeather(item.weather))
         .toList();
@@ -2408,6 +2581,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     filteredBirds = filteredBirds
         .where((item) => _matchesAchievementStar('bird:${item.id}'))
+        .where((item) => _matchesMasteryDone('bird:${item.id}'))
         .where((item) => _matchesSelectedWeather(item.weather))
         .toList();
     _sortBirds(filteredBirds);
@@ -2433,6 +2607,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     filteredInsects = filteredInsects
         .where((item) => _matchesAchievementStar('insect:${item.id}'))
+        .where((item) => _matchesMasteryDone('insect:${item.id}'))
         .where((item) => _matchesSelectedWeather(item.weather))
         .toList();
     _sortInsects(filteredInsects);
@@ -2458,6 +2633,7 @@ class _GatheringScreenState extends State<GatheringScreen>
 
     filteredPlants = filteredPlants
         .where((item) => _matchesAchievementStar('plant:${item.id}'))
+        .where((item) => _matchesMasteryDone('plant:${item.id}'))
         .where((item) => _matchesSelectedWeather(item.weather))
         .toList();
     _sortPlants(filteredPlants);
@@ -2732,8 +2908,8 @@ class _GatheringScreenState extends State<GatheringScreen>
         fallbackIcon: Icons.local_florist_rounded,
       ),
       child: Container(
-        width: 32,
-        height: 32,
+        width: 28,
+        height: 28,
         margin: const EdgeInsets.only(right: 6),
         decoration: BoxDecoration(
           color: const Color(0xC6FFF8E7),
@@ -2829,6 +3005,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         _selectedAchievementStarFilters.isNotEmpty ||
         _selectedWeatherFilters.isNotEmpty ||
         _selectedFishShadowFilters.isNotEmpty ||
+        _selectedMasteryCompletionFilters.isNotEmpty ||
         _selectedSort != '레벨순';
   }
 
@@ -2940,6 +3117,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     final tempAchievementStars = Set<int>.from(_selectedAchievementStarFilters);
     final tempWeatherFilters = Set<String>.from(_selectedWeatherFilters);
     final tempShadowFilters = Set<String>.from(_selectedFishShadowFilters);
+    final tempMasteryCompletionFilters = Set<String>.from(_selectedMasteryCompletionFilters);
     String tempSort = _selectedSort;
     final levelOptions = _currentLevelOptions();
     const sortOptions = ['레벨순', '이름순', '가격순', '좋아요순'];
@@ -3007,7 +3185,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                       ),
                       const SizedBox(height: 8),
                       sectionTitle('정렬'),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 0),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -3021,7 +3199,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                       ),
                       const SizedBox(height: 22),
                       sectionTitle('레벨'),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 0),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -3050,7 +3228,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                       ),
                       const SizedBox(height: 22),
                       sectionTitle('달성 성급'),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 0),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -3063,7 +3241,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                           ...List.generate(5, (index) {
                             final star = index + 1;
                             return _buildSheetChoiceChip(
-                              label: '$star성 달성',
+                              label: '$star성',
                               isSelected: tempAchievementStars.contains(star),
                               onTap: () {
                                 setSheetState(() {
@@ -3078,9 +3256,50 @@ class _GatheringScreenState extends State<GatheringScreen>
                           }),
                         ],
                       ),
+
+                      const SizedBox(height: 22),
+                      sectionTitle('명인 달성'),
+                      const SizedBox(height: 0),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildSheetChoiceChip(
+                            label: '전체',
+                            isSelected: tempMasteryCompletionFilters.isEmpty,
+                            onTap: () => setSheetState(tempMasteryCompletionFilters.clear),
+                          ),
+                          _buildSheetChoiceChip(
+                            label: '완료',
+                            isSelected: tempMasteryCompletionFilters.contains('done'),
+                            onTap: () {
+                              setSheetState(() {
+                                if (tempMasteryCompletionFilters.contains('done')) {
+                                  tempMasteryCompletionFilters.remove('done');
+                                } else {
+                                  tempMasteryCompletionFilters.add('done');
+                                }
+                              });
+                            },
+                          ),
+                          _buildSheetChoiceChip(
+                            label: '미완료',
+                            isSelected: tempMasteryCompletionFilters.contains('not_done'),
+                            onTap: () {
+                              setSheetState(() {
+                                if (tempMasteryCompletionFilters.contains('not_done')) {
+                                  tempMasteryCompletionFilters.remove('not_done');
+                                } else {
+                                  tempMasteryCompletionFilters.add('not_done');
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 22),
                       sectionTitle('등장 날씨'),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 0),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -3110,7 +3329,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                       if (_tabController.index == 0) ...[
                         const SizedBox(height: 22),
                         sectionTitle('그림자 크기'),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 0),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
@@ -3138,7 +3357,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                           ],
                         ),
                       ],
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 0),
                       Row(
                         children: [
                           Expanded(
@@ -3149,6 +3368,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                                   tempAchievementStars.clear();
                                   tempWeatherFilters.clear();
                                   tempShadowFilters.clear();
+                                  tempMasteryCompletionFilters.clear();
                                   tempSort = '레벨순';
                                 });
                               },
@@ -3183,6 +3403,9 @@ class _GatheringScreenState extends State<GatheringScreen>
                                   _selectedFishShadowFilters
                                     ..clear()
                                     ..addAll(tempShadowFilters);
+                                  _selectedMasteryCompletionFilters
+                                    ..clear()
+                                    ..addAll(tempMasteryCompletionFilters);
                                   _selectedSort = tempSort;
                                 });
                                 _applyFilters();
@@ -3490,19 +3713,38 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-  Widget _buildPriceButton(List<int> prices, {int? seedCost}) {
+  Widget _buildPriceButton(List<int> prices, {int? seedCost, List<int> eventTokenPrices = const []}) {
     final validPrices = prices.where((e) => e > 0).toList();
+    final validEventTokenPrices = eventTokenPrices.where((e) => e > 0).toList();
+
+    String previewText(List<int> values, String suffix) {
+      if (values.isEmpty) return '-';
+      if (values.first == values.last) {
+        return '${_formatPrice(values.first)}$suffix';
+      }
+      return '${_formatPrice(values.first)}$suffix ~ ${_formatPrice(values.last)}$suffix';
+    }
+
     final pricePreview = validPrices.isEmpty
         ? '가격보기'
-        : (validPrices.first == validPrices.last
-        ? '${_formatPrice(validPrices.first)}원'
-        : '${_formatPrice(validPrices.first)}원 ~ ${_formatPrice(validPrices.last)}원');
+        : previewText(validPrices, '원');
+    final coinPreview = validEventTokenPrices.isEmpty
+        ? ''
+        : previewText(validEventTokenPrices, '코인');
+    final bool hasEventCoin = coinPreview.isNotEmpty;
 
     return GestureDetector(
-      onTap: () => _showPriceBottomSheet(prices, seedCost: seedCost),
+      onTap: () => _showPriceBottomSheet(
+        prices,
+        seedCost: seedCost,
+        eventTokenPrices: eventTokenPrices,
+      ),
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: hasEventCoin ? 4 : 5,
+        ),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.95),
           borderRadius: BorderRadius.circular(12),
@@ -3539,16 +3781,38 @@ class _GatheringScreenState extends State<GatheringScreen>
             ),
             const SizedBox(width: 6),
             Flexible(
-              child: Text(
-                pricePreview,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF2D3436),
-                  height: 1.0,
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    pricePreview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2D3436),
+                      height: 1.0,
+                    ),
+                  ),
+                  if (hasEventCoin) ...[
+                    const SizedBox(height: 0),
+                    Text(
+                      coinPreview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 9.6,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFF8E7C),
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             const SizedBox(width: 2),
@@ -3563,14 +3827,140 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-
-  Widget _buildCardBottomAction(List<int> prices, {String? itemKey}) {
-    return Row(
+  Widget _buildCardBottomAction(
+      List<int> prices, {
+        String? itemKey,
+        List<int> eventTokenPrices = const [],
+      }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (itemKey != null) _buildAchievementStars(itemKey),
-        const Spacer(),
-        _buildPriceButton(prices),
+        Align(
+          alignment: Alignment.centerRight,
+          child: _buildPriceButton(
+            prices,
+            eventTokenPrices: eventTokenPrices,
+          ),
+        ),
+        if (itemKey != null) ...[
+          const SizedBox(height: 0),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _buildAchievementStars(itemKey),
+                ),
+              ),
+              _buildCardMasteryDoneButton(itemKey),
+            ],
+          ),
+        ],
       ],
+    );
+  }
+
+
+
+  Widget _buildCardProgressRow(String itemKey) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _buildAchievementStars(itemKey),
+          ),
+        ),
+        _buildCardMasteryDoneButton(itemKey),
+      ],
+    );
+  }
+  Widget _buildCardMasteryDoneButton(String itemKey) {
+    final bool checked = _masteryDoneMap[itemKey] == true;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () async {
+        final next = !checked;
+        setState(() => _masteryDoneMap[itemKey] = next);
+        await _saveMasteryDoneValue(itemKey, next);
+        if (!mounted) return;
+        _applyFilters();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: checked
+              ? const Color(0xFFFFF4CF)
+              : const Color(0xFFFCF9FF),
+          border: Border.all(
+            color: checked
+                ? const Color(0xFFD8B4FE)
+                : const Color(0xFFF0E4FF),
+            width: 1.15,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (checked ? const Color(0xFFFBBF24) : const Color(0xFFD8B4FE))
+                  .withOpacity(checked ? 0.16 : 0.05),
+              blurRadius: checked ? 8 : 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          checked
+              ? Icons.workspace_premium_rounded
+              : Icons.workspace_premium_outlined,
+          size: 19,
+          color: checked
+              ? const Color(0xFFF59E0B)
+              : const Color(0xFFD8B4FE),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardFavoriteButton(String itemId, bool isFavorite) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _toggleFavorite(itemId),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isFavorite
+              ? const Color(0xFFFFEEF4)
+              : const Color(0xFFFFFBFC),
+          border: Border.all(
+            color: isFavorite
+                ? const Color(0xFFFFBFD0)
+                : const Color(0xFFFFE6EE),
+            width: 1.15,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFA6BA).withOpacity(isFavorite ? 0.14 : 0.05),
+              blurRadius: isFavorite ? 7 : 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          size: 19,
+          color: isFavorite
+              ? const Color(0xFFFF7F9F)
+              : const Color(0xFFFFC7D6),
+        ),
+      ),
     );
   }
 
@@ -3585,57 +3975,93 @@ class _GatheringScreenState extends State<GatheringScreen>
       isHighlighted: isHighlighted,
       onTap: () => _openInsectDetail(insect),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildCardImage(
-              insect.image,
-              Icons.bug_report,
-              previewTitle: _displayInsectName(insect),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 110),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCardImage(
+                  insect.image,
+                  Icons.bug_report,
+                  previewTitle: _displayInsectName(insect),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 106),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         _buildCardTitle(_displayInsectName(insect), insect.id),
-                        const SizedBox(height: 5),
-                        Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
+                        const SizedBox(height: 0),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            _buildBaseChip(
-                              '채집 ${insect.level}레벨',
-                              bg: levelColors['bg']!,
-                              border: levelColors['border']!,
-                              textColor: levelColors['text']!,
-                            ),
-                            if (timeChip.isNotEmpty)
-                              _buildBaseChip(
-                                timeChip,
-                                bg: timeColors['bg']!,
-                                border: timeColors['border']!,
-                                textColor: timeColors['text']!,
+                            Expanded(
+                              child: Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  _buildBaseChip(
+                                    'Lv.${insect.level}',
+                                    bg: levelColors['bg']!,
+                                    border: levelColors['border']!,
+                                    textColor: levelColors['text']!,
+                                  ),
+                                  if (timeChip.isNotEmpty)
+                                    _buildBaseChip(
+                                      timeChip,
+                                      bg: timeColors['bg']!,
+                                      border: timeColors['border']!,
+                                      textColor: timeColors['text']!,
+                                    ),
+                                  if (locationChip.isNotEmpty)
+                                    _buildLocationTag(locationChip),
+                                ],
                               ),
-                            if (locationChip.isNotEmpty)
-                              _buildLocationTag(locationChip),
+                            ),
+                            const SizedBox(width: 8),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _buildCardMasteryDoneButton('insect:${insect.id}'),
+                            ),
                           ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    _buildCardBottomAction(insect.prices, itemKey: 'insect:${insect.id}'),
-                  ],
+                  ),
                 ),
-              ),
+              ],
+            ),
+            const SizedBox(height: 0),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Flexible(
+                  flex: 5,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: _buildAchievementStars('insect:${insect.id}'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 7,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _buildPriceButton(
+                      insect.prices,
+                      eventTokenPrices: insect.eventTokenPrices,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -3646,180 +4072,138 @@ class _GatheringScreenState extends State<GatheringScreen>
 
   Widget _buildPlantCard(PlantItem plant) {
     final bool isHighlighted = _highlightedId == plant.id;
-    final bool isFavorite = _favoriteIds.contains(plant.id);
     final levelColors = _levelChipColors(plant.level);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Material(
-          color: isHighlighted
-              ? const Color(0xFFFFF4D8)
-              : Colors.white.withOpacity(0.92),
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            splashColor: const Color(0xFFFF8E7C).withOpacity(0.08),
-            highlightColor: const Color(0xFFFF8E7C).withOpacity(0.04),
-            onTap: () => _openFlowerDetail(plant),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isHighlighted
-                      ? const Color(0xFFFFB27A).withOpacity(0.55)
-                      : const Color(0xFFFF8E7C).withOpacity(0.12),
-                  width: 1,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _showAssetImagePreview(
-                        title: _displayPlantName(plant),
-                        image: plant.image,
-                        fallbackIcon: Icons.local_florist_rounded,
+    return _buildGatheringCardShell(
+      isHighlighted: isHighlighted,
+      onTap: () => _openFlowerDetail(plant),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showAssetImagePreview(
+                    title: _displayPlantName(plant),
+                    image: plant.image,
+                    fallbackIcon: Icons.local_florist_rounded,
+                  ),
+                  child: Container(
+                    width: 106,
+                    height: 106,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFAF8),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFFF8E7C).withOpacity(0.15),
                       ),
-                      child: Container(
-                        width: 116,
-                        height: 116,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFAF8),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFFFF8E7C).withOpacity(0.15),
-                          ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Image.asset(
-                              _imageAssetPath(plant.image),
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.local_florist_rounded,
-                                color: Colors.grey,
-                                size: 36,
-                              ),
-                            ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Image.asset(
+                          _imageAssetPath(plant.image),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.local_florist_rounded,
+                            color: Colors.grey,
+                            size: 36,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 116),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 106),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildCardTitle(_displayPlantName(plant), plant.id),
+                        const SizedBox(height: 0),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      top: 2,
-                                      right: 8,
-                                    ),
-                                    child: Text(
-                                      _displayPlantName(plant),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF333333),
-                                        height: 1.2,
-                                      ),
-                                    ),
+                            Expanded(
+                              child: Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  _buildBaseChip(
+                                    'Lv.${plant.level}',
+                                    bg: levelColors['bg']!,
+                                    border: levelColors['border']!,
+                                    textColor: levelColors['text']!,
                                   ),
-                                ),
-                                GestureDetector(
-                                  onTap: () => _toggleFavorite(plant.id),
-                                  behavior: HitTestBehavior.opaque,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 2,
-                                    ),
-                                    child: Icon(
-                                      isFavorite
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      size: 24,
-                                      color: isFavorite
-                                          ? const Color(0xFFFF8E7C)
-                                          : const Color(0xFFD9D9D9),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 4,
-                              runSpacing: 4,
-                              children: [
-                                _buildBaseChip(
-                                  '원예 ${plant.level}레벨',
-                                  bg: levelColors['bg']!,
-                                  border: levelColors['border']!,
-                                  textColor: levelColors['text']!,
-                                ),
-                                if (plant.growthTime.trim().isNotEmpty &&
-                                    plant.growthTime.trim() != '-')
-                                  _buildGrowthTimeTag(
-                                    plant.growthTime.trim(),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            if (plant.flowerColorSummaries.isNotEmpty)
-                              SizedBox(
-                                height: 34,
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  physics: const BouncingScrollPhysics(),
-                                  child: Row(
-                                    children: plant.flowerColorSummaries
-                                        .map((color) => _buildFlowerColorSummaryBox(color))
-                                        .toList(),
-                                  ),
-                                ),
+                                  if (plant.growthTime.trim().isNotEmpty && plant.growthTime.trim() != '-')
+                                    _buildGrowthTimeTag(plant.growthTime.trim()),
+                                ],
                               ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                _buildAchievementStars('plant:${plant.id}'),
-                                const Spacer(),
-                                _buildPriceButton(plant.prices),
-                              ],
+                            ),
+                            const SizedBox(width: 8),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _buildCardMasteryDoneButton('plant:${plant.id}'),
                             ),
                           ],
                         ),
-                      ),
+                        if (plant.flowerColorSummaries.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          SizedBox(
+                            height: 28,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              child: Row(
+                                children: plant.flowerColorSummaries
+                                    .map((color) => _buildFlowerColorSummaryBox(color))
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ),
+            const SizedBox(height: 0),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Flexible(
+                  flex: 5,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: _buildAchievementStars('plant:${plant.id}'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 7,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _buildPriceButton(
+                      plant.prices,
+                      eventTokenPrices: plant.eventTokenPrices,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -3844,98 +4228,134 @@ class _GatheringScreenState extends State<GatheringScreen>
       isHighlighted: isHighlighted,
       onTap: () => _openFishDetail(fish),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildCardImage(
-              fish.image,
-              Icons.set_meal_rounded,
-              previewTitle: _displayName(fish),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 110),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCardImage(
+                  fish.image,
+                  Icons.set_meal_rounded,
+                  previewTitle: _displayName(fish),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 106),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         _buildCardTitle(_displayName(fish), fish.id),
-                        const SizedBox(height: 5),
-                        Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
+                        const SizedBox(height: 0),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            if (fish.level != null)
-                              _buildBaseChip(
-                                '낚시 ${fish.level}레벨',
-                                bg: _levelChipColors(fish.level!)['bg']!,
-                                border: _levelChipColors(fish.level!)['border']!,
-                                textColor: _levelChipColors(fish.level!)['text']!,
-                              ),
-                            if (timeChip.isNotEmpty)
-                              _buildBaseChip(
-                                timeChip,
-                                bg: timeColors['bg']!,
-                                border: timeColors['border']!,
-                                textColor: timeColors['text']!,
-                              ),
-                            if (locationChip.isNotEmpty)
-                              _buildLocationTag(locationChip),
-                            ...weatherLabels.map((label) {
-                              Color bg = const Color(0xFFF0F7FF);
-                              Color border = const Color(0xFFD9E9FF);
-                              Color textColor = const Color(0xFF5B88C7);
+                            Expanded(
+                              child: Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  if (fish.level != null)
+                                    _buildBaseChip(
+                                      'Lv.${fish.level}',
+                                      bg: _levelChipColors(fish.level!)['bg']!,
+                                      border: _levelChipColors(fish.level!)['border']!,
+                                      textColor: _levelChipColors(fish.level!)['text']!,
+                                    ),
+                                  if (timeChip.isNotEmpty)
+                                    _buildBaseChip(
+                                      timeChip,
+                                      bg: timeColors['bg']!,
+                                      border: timeColors['border']!,
+                                      textColor: timeColors['text']!,
+                                    ),
+                                  if (locationChip.isNotEmpty)
+                                    _buildLocationTag(locationChip),
+                                  ...weatherLabels.map((label) {
+                                    Color bg = const Color(0xFFF0F7FF);
+                                    Color border = const Color(0xFFD9E9FF);
+                                    Color textColor = const Color(0xFF5B88C7);
 
-                              switch (label) {
-                                case '맑음':
-                                  bg = const Color(0xFFFFF7D6);
-                                  border = const Color(0xFFFFE6A3);
-                                  textColor = const Color(0xFFB7791F);
-                                  break;
-                                case '비':
-                                  bg = const Color(0xFFEAF3FF);
-                                  border = const Color(0xFFD4E4FF);
-                                  textColor = const Color(0xFF4A67A1);
-                                  break;
-                                case '눈':
-                                  bg = const Color(0xFFF3F4F6);
-                                  border = const Color(0xFFE5E7EB);
-                                  textColor = const Color(0xFF6B7280);
-                                  break;
-                                case '무지개':
-                                  bg = const Color(0xFFFFF0FA);
-                                  border = const Color(0xFFF6D6EC);
-                                  textColor = const Color(0xFFC05A9D);
-                                  break;
-                                case '흐림':
-                                  bg = const Color(0xFFF3F4F6);
-                                  border = const Color(0xFFE5E7EB);
-                                  textColor = const Color(0xFF6B7280);
-                                  break;
-                              }
+                                    switch (label) {
+                                      case '맑음':
+                                        bg = const Color(0xFFFFF7D6);
+                                        border = const Color(0xFFFFE6A3);
+                                        textColor = const Color(0xFFB7791F);
+                                        break;
+                                      case '비':
+                                        bg = const Color(0xFFEAF3FF);
+                                        border = const Color(0xFFD4E4FF);
+                                        textColor = const Color(0xFF4A67A1);
+                                        break;
+                                      case '눈':
+                                        bg = const Color(0xFFF3F4F6);
+                                        border = const Color(0xFFE5E7EB);
+                                        textColor = const Color(0xFF6B7280);
+                                        break;
+                                      case '무지개':
+                                        bg = const Color(0xFFFFF0FA);
+                                        border = const Color(0xFFF6D6EC);
+                                        textColor = const Color(0xFFC05A9D);
+                                        break;
+                                      case '흐림':
+                                        bg = const Color(0xFFF3F4F6);
+                                        border = const Color(0xFFE5E7EB);
+                                        textColor = const Color(0xFF6B7280);
+                                        break;
+                                    }
 
-                              return _buildBaseChip(
-                                label,
-                                bg: bg,
-                                border: border,
-                                textColor: textColor,
-                              );
-                            }),
+                                    return _buildBaseChip(
+                                      label,
+                                      bg: bg,
+                                      border: border,
+                                      textColor: textColor,
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _buildCardMasteryDoneButton('fish:${fish.id}'),
+                            ),
                           ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    _buildCardBottomAction(fishPrices, itemKey: 'fish:${fish.id}'),
-                  ],
+                  ),
                 ),
-              ),
+              ],
+            ),
+            const SizedBox(height: 0),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Flexible(
+                  flex: 5,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: _buildAchievementStars('fish:${fish.id}'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 7,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _buildPriceButton(
+                      fishPrices,
+                      eventTokenPrices: fish.eventTokenPrices,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -3950,7 +4370,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         Color border = const Color(0xFFE5E7EB),
         Color textColor = const Color(0xFF6B7280),
       }) {
-    final int? level = text.contains('레벨')
+    final int? level = (text.contains('레벨') || text.startsWith('Lv.'))
         ? int.tryParse(text.replaceAll(RegExp(r'[^0-9]'), ''))
         : null;
     final bool isRainbowLevel = level != null && level >= 11;
@@ -4004,97 +4424,126 @@ class _GatheringScreenState extends State<GatheringScreen>
       isHighlighted: isHighlighted,
       onTap: () => _openBirdDetail(bird),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildCardImage(
-              bird.image,
-              Icons.flutter_dash_rounded,
-              previewTitle: _displayBirdName(bird),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 110),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCardImage(
+                  bird.image,
+                  Icons.flutter_dash_rounded,
+                  previewTitle: _displayBirdName(bird),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 106),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         _buildCardTitle(_displayBirdName(bird), bird.id),
-                        const SizedBox(height: 5),
-                        Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
+                        const SizedBox(height: 0),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            _buildBaseChip(
-                              '관찰 ${bird.level}레벨',
-                              bg: _levelChipColors(bird.level)['bg']!,
-                              border: _levelChipColors(bird.level)['border']!,
-                              textColor: _levelChipColors(bird.level)['text']!,
-                            ),
-                            if (timeChip.isNotEmpty)
-                              _buildBaseChip(
-                                timeChip,
-                                bg: timeColors['bg']!,
-                                border: timeColors['border']!,
-                                textColor: timeColors['text']!,
+                            Expanded(
+                              child: Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  _buildBaseChip(
+                                    'Lv.${bird.level}',
+                                    bg: _levelChipColors(bird.level)['bg']!,
+                                    border: _levelChipColors(bird.level)['border']!,
+                                    textColor: _levelChipColors(bird.level)['text']!,
+                                  ),
+                                  if (timeChip.isNotEmpty)
+                                    _buildBaseChip(
+                                      timeChip,
+                                      bg: timeColors['bg']!,
+                                      border: timeColors['border']!,
+                                      textColor: timeColors['text']!,
+                                    ),
+                                  if (locationChip.isNotEmpty)
+                                    _buildLocationTag(locationChip),
+                                  ...weatherLabels.map((label) {
+                                    Color bg = const Color(0xFFF0F7FF);
+                                    Color border = const Color(0xFFD9E9FF);
+                                    Color textColor = const Color(0xFF5B88C7);
+                                    switch (label) {
+                                      case '맑음':
+                                        bg = const Color(0xFFFFF7D6);
+                                        border = const Color(0xFFFFE6A3);
+                                        textColor = const Color(0xFFB7791F);
+                                        break;
+                                      case '비':
+                                        bg = const Color(0xFFEAF3FF);
+                                        border = const Color(0xFFD4E4FF);
+                                        textColor = const Color(0xFF4A67A1);
+                                        break;
+                                      case '눈':
+                                        bg = const Color(0xFFF3F4F6);
+                                        border = const Color(0xFFE5E7EB);
+                                        textColor = const Color(0xFF6B7280);
+                                        break;
+                                      case '무지개':
+                                        bg = const Color(0xFFFFF0FA);
+                                        border = const Color(0xFFF6D6EC);
+                                        textColor = const Color(0xFFC05A9D);
+                                        break;
+                                      case '흐림':
+                                        bg = const Color(0xFFF3F4F6);
+                                        border = const Color(0xFFE5E7EB);
+                                        textColor = const Color(0xFF6B7280);
+                                        break;
+                                    }
+                                    return _buildBaseChip(label, bg: bg, border: border, textColor: textColor);
+                                  }),
+                                ],
                               ),
-                            if (locationChip.isNotEmpty)
-                              _buildLocationTag(locationChip),
-                            ...weatherLabels.map((label) {
-                              Color bg = const Color(0xFFF0F7FF);
-                              Color border = const Color(0xFFD9E9FF);
-                              Color textColor = const Color(0xFF5B88C7);
-
-                              switch (label) {
-                                case '맑음':
-                                  bg = const Color(0xFFFFF7D6);
-                                  border = const Color(0xFFFFE6A3);
-                                  textColor = const Color(0xFFB7791F);
-                                  break;
-                                case '비':
-                                  bg = const Color(0xFFEAF3FF);
-                                  border = const Color(0xFFD4E4FF);
-                                  textColor = const Color(0xFF4A67A1);
-                                  break;
-                                case '눈':
-                                  bg = const Color(0xFFF3F4F6);
-                                  border = const Color(0xFFE5E7EB);
-                                  textColor = const Color(0xFF6B7280);
-                                  break;
-                                case '무지개':
-                                  bg = const Color(0xFFFFF0FA);
-                                  border = const Color(0xFFF6D6EC);
-                                  textColor = const Color(0xFFC05A9D);
-                                  break;
-                                case '흐림':
-                                  bg = const Color(0xFFF3F4F6);
-                                  border = const Color(0xFFE5E7EB);
-                                  textColor = const Color(0xFF6B7280);
-                                  break;
-                              }
-
-                              return _buildBaseChip(
-                                label,
-                                bg: bg,
-                                border: border,
-                                textColor: textColor,
-                              );
-                            }),
+                            ),
+                            const SizedBox(width: 8),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _buildCardMasteryDoneButton('bird:${bird.id}'),
+                            ),
                           ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    _buildCardBottomAction(bird.prices, itemKey: 'bird:${bird.id}'),
-                  ],
+                  ),
                 ),
-              ),
+              ],
+            ),
+            const SizedBox(height: 0),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Flexible(
+                  flex: 5,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: _buildAchievementStars('bird:${bird.id}'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 7,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _buildPriceButton(
+                      bird.prices,
+                      eventTokenPrices: bird.eventTokenPrices,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -4138,8 +4587,8 @@ class _GatheringScreenState extends State<GatheringScreen>
         fallbackIcon: fallbackIcon,
       ),
       child: Container(
-        width: 110,
-        height: 110,
+        width: 106,
+        height: 106,
         decoration: BoxDecoration(
           color: const Color(0xFFFFFAF8),
           borderRadius: BorderRadius.circular(12),
@@ -4170,7 +4619,11 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
-  Widget _buildCardTitle(String text, String itemId) {
+  Widget _buildCardTitle(
+      String text,
+      String itemId, {
+        String? masteryItemKey,
+      }) {
     final isFavorite = _favoriteIds.contains(itemId);
 
     return Row(
@@ -4178,35 +4631,24 @@ class _GatheringScreenState extends State<GatheringScreen>
       children: [
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
+            padding: const EdgeInsets.only(top: 8),
+            child: AutoSizeText(
               text,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 15.2,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF333333),
-                height: 1.2,
+                height: 1.15,
               ),
               maxLines: 2,
+              minFontSize: 8,
+              stepGranularity: 0.5,
               overflow: TextOverflow.ellipsis,
             ),
           ),
         ),
         const SizedBox(width: 8),
-        GestureDetector(
-          onTap: () => _toggleFavorite(itemId),
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: Icon(
-              isFavorite ? Icons.favorite : Icons.favorite_border,
-              size: 24,
-              color: isFavorite
-                  ? const Color(0xFFFF8E7C)
-                  : const Color(0xFFD9D9D9),
-            ),
-          ),
-        ),
+        _buildCardFavoriteButton(itemId, isFavorite),
       ],
     );
   }
@@ -4834,7 +5276,7 @@ class _GatheringScreenState extends State<GatheringScreen>
             icon: const Icon(
               Icons.close_rounded,
               color: Color(0xFFB0B8C4),
-              size: 20,
+              size: 18,
             ),
             onPressed: () {
               _searchController.clear();
@@ -4940,7 +5382,7 @@ class _GatheringScreenState extends State<GatheringScreen>
     }
   }
 
-  void _showPriceBottomSheet(List<int> prices, {int? seedCost}) {
+  void _showPriceBottomSheet(List<int> prices, {int? seedCost, List<int> eventTokenPrices = const []}) {
     _dismissKeyboard();
     final visiblePrices = <Map<String, dynamic>>[];
 
@@ -4953,6 +5395,16 @@ class _GatheringScreenState extends State<GatheringScreen>
       }
     }
 
+    final visibleEventTokenPrices = <Map<String, dynamic>>[];
+    for (int i = 0; i < eventTokenPrices.length; i++) {
+      if (eventTokenPrices[i] > 0) {
+        visibleEventTokenPrices.add({
+          'star': i + 1,
+          'price': eventTokenPrices[i],
+        });
+      }
+    }
+
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.18),
@@ -4961,7 +5413,7 @@ class _GatheringScreenState extends State<GatheringScreen>
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.symmetric(horizontal: 36, vertical: 24),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.98),
               borderRadius: BorderRadius.circular(22),
@@ -4984,7 +5436,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                   children: [
                     Container(
                       width: 30,
-                      height: 30,
+                      height: 28,
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFF3EE),
                         borderRadius: BorderRadius.circular(10),
@@ -5021,7 +5473,7 @@ class _GatheringScreenState extends State<GatheringScreen>
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (visiblePrices.isEmpty && (seedCost == null || seedCost <= 0))
+                if (visiblePrices.isEmpty && visibleEventTokenPrices.isEmpty && (seedCost == null || seedCost <= 0))
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -5133,6 +5585,68 @@ class _GatheringScreenState extends State<GatheringScreen>
                           ),
                         );
                       }),
+                      if (visibleEventTokenPrices.isNotEmpty) ...[
+                        const SizedBox(height: 1),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '이벤트 코인 판매가',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFFFF7A65),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...visibleEventTokenPrices.map((item) {
+                          final int star = item['star'] as int;
+                          final int price = item['price'] as int;
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF7ED),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _getStarBadgeColor(star),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '$star성',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF3F3F46),
+                                    ),
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  '${_formatPrice(price)}코인',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF2D3436),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
                     ],
                   ),
               ],
@@ -5163,6 +5677,8 @@ class GatheringSimpleDetailPage extends StatelessWidget {
   final String weatherText;
   final List<Map<String, String>> extraInfo;
   final List<int> eventTokenPrices;
+  final String? masteryDoneKey;
+  final String masteryDoneLabel;
 
   const GatheringSimpleDetailPage({
     super.key,
@@ -5177,7 +5693,17 @@ class GatheringSimpleDetailPage extends StatelessWidget {
     required this.weatherText,
     this.extraInfo = const [],
     this.eventTokenPrices = const [],
+    this.masteryDoneKey,
+    this.masteryDoneLabel = '명인 달성',
   });
+
+  Color _masteryStageIconColor(String label) {
+    if (label.contains('초보자')) return const Color(0xFF94A3B8);
+    if (label.contains('입문자')) return const Color(0xFF60A5FA);
+    if (label.contains('숙련자')) return const Color(0xFFFBBF24);
+    if (label.contains('명인')) return const Color(0xFFA855F7);
+    return const Color(0xFFFF8E7C);
+  }
 
   String _formatPrice(int price) {
     return price.toString().replaceAllMapped(
@@ -5217,7 +5743,19 @@ class GatheringSimpleDetailPage extends StatelessWidget {
     }
   }
 
+  Color _infoIconColor(String label) {
+    if (label.contains('초보자')) return const Color(0xFF94A3B8); // 은색
+    if (label.contains('입문자')) return const Color(0xFF60A5FA); // 파란색
+    if (label.contains('숙련자')) return const Color(0xFFFBBF24); // 노란색
+    if (label.contains('명인')) return const Color(0xFFA855F7); // 보라색
+    return const Color(0xFFFF8E7C);
+  }
+
   IconData _infoIcon(String label) {
+    if (label.contains('낚시')) return Icons.set_meal_rounded;
+    if (label.contains('촬영')) return Icons.camera_alt_rounded;
+    if (label.contains('곤충 채집')) return Icons.bug_report_rounded;
+    if (label.contains('원예') || label.contains('재배')) return Icons.agriculture_rounded;
     switch (label) {
       case '출현 시간':
         return Icons.schedule_rounded;
@@ -5225,6 +5763,23 @@ class GatheringSimpleDetailPage extends StatelessWidget {
         return Icons.place_rounded;
       case '날씨':
         return Icons.wb_cloudy_rounded;
+      case '낚시 명인':
+        return Icons.set_meal_rounded;
+      case '촬영 명인':
+        return Icons.camera_alt_rounded;
+      case '곤충 채집 명인':
+        return Icons.bug_report_rounded;
+      case '원예 명인':
+      case '재배 명인':
+        return Icons.agriculture_rounded;
+      case '그림자 크기':
+        return Icons.waves_rounded;
+      case '포착 거리':
+        return Icons.social_distance_rounded;
+      case '날개 펴기':
+        return Icons.open_in_full_rounded;
+      case '호루라기':
+        return Icons.volume_up_rounded;
       default:
         return Icons.info_rounded;
     }
@@ -5258,9 +5813,9 @@ class GatheringSimpleDetailPage extends StatelessWidget {
           Icon(
             _infoIcon(label),
             size: 16,
-            color: const Color(0xFFFF8E7C),
+            color: _infoIconColor(label),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 1),
           Text(
             label,
             maxLines: 1,
@@ -5273,7 +5828,7 @@ class GatheringSimpleDetailPage extends StatelessWidget {
               height: 1.0,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 1),
           Text(
             display,
             maxLines: 2,
@@ -5306,8 +5861,8 @@ class GatheringSimpleDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _priceTile(int star, int price) {
-    final priceText = price > 0 ? '${_formatPrice(price)}원' : '-';
+  Widget _priceTile(int star, int price, {String suffix = '원'}) {
+    final priceText = price > 0 ? '${_formatPrice(price)}$suffix' : '-';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -5337,7 +5892,7 @@ class GatheringSimpleDetailPage extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 1),
           SizedBox(
             width: double.infinity,
             child: FittedBox(
@@ -5489,7 +6044,7 @@ class GatheringSimpleDetailPage extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               _sectionTitle('출현 정보'),
-              const SizedBox(height: 10),
+              const SizedBox(height: 0),
               Row(
                 children: [
                   Expanded(child: _infoTile('출현 시간', timeText)),
@@ -5501,7 +6056,7 @@ class GatheringSimpleDetailPage extends StatelessWidget {
               ),
               if (extraInfo.isNotEmpty) ...[
                 const SizedBox(height: 20),
-                _sectionTitle('추가 정보'),
+                _sectionTitle('명인 달성 기준'),
                 const SizedBox(height: 10),
                 GridView.builder(
                   shrinkWrap: true,
@@ -5516,6 +6071,55 @@ class GatheringSimpleDetailPage extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final info = extraInfo[index];
                     return _infoTile(info['label'] ?? '-', info['value'] ?? '-');
+                  },
+                ),
+              ],
+
+              if (masteryDoneKey != null) ...[
+                const SizedBox(height: 20),
+                FutureBuilder<bool>(
+                  future: _loadMasteryDoneValue(masteryDoneKey!),
+                  builder: (context, snapshot) {
+                    bool checked = snapshot.data ?? false;
+                    return StatefulBuilder(
+                      builder: (context, setInnerState) {
+                        return GestureDetector(
+                          onTap: () async {
+                            checked = !checked;
+                            setInnerState(() {});
+                            await _saveMasteryDoneValue(masteryDoneKey!, checked);
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                            decoration: BoxDecoration(
+                              color: checked ? const Color(0xFFFFF3EE) : Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: const Color(0xFFFFE2DB)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                  color: checked ? const Color(0xFFFF8E7C) : const Color(0xFFCBD5E1),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    masteryDoneLabel,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF2D3436),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
                   },
                 ),
               ],
@@ -5555,12 +6159,12 @@ class GatheringSimpleDetailPage extends StatelessWidget {
                   ),
                   itemBuilder: (context, index) {
                     final item = visiblePrices[index];
-                    return _priceTile(item['star']!, item['price']!);
+                    return _priceTile(item['star']!, item['price']!, suffix: '원');
                   },
                 ),
               if (hasEventTokenPrice) ...[
                 const SizedBox(height: 20),
-                _sectionTitle('이벤트 토큰 판매가'),
+                _sectionTitle('이벤트 코인 판매가'),
                 const SizedBox(height: 10),
                 GridView.builder(
                   shrinkWrap: true,
@@ -5574,7 +6178,7 @@ class GatheringSimpleDetailPage extends StatelessWidget {
                   ),
                   itemBuilder: (context, index) {
                     final item = visibleEventTokenPrices[index];
-                    return _priceTile(item['star']!, item['price']!);
+                    return _priceTile(item['star']!, item['price']!, suffix: '코인');
                   },
                 ),
               ],
@@ -5624,6 +6228,14 @@ class FlowerDetailPage extends StatelessWidget {
     return const Color(0xFF6B7280);
   }
 
+  Color _masteryStageIconColor(String label) {
+    if (label.contains('초보자')) return const Color(0xFF94A3B8); // 은색
+    if (label.contains('입문자')) return const Color(0xFF60A5FA); // 파란색
+    if (label.contains('숙련자')) return const Color(0xFFFBBF24); // 노란색
+    if (label.contains('명인')) return const Color(0xFFA855F7); // 보라색
+    return const Color(0xFFFF8E7C);
+  }
+
   Color _getStarBadgeColor(int star) {
     switch (star) {
       case 1:
@@ -5641,11 +6253,67 @@ class FlowerDetailPage extends StatelessWidget {
     }
   }
 
+  Widget _priceTile(int star, int price, {String suffix = '원'}) {
+    final priceText = price > 0 ? '${_formatPrice(price)}$suffix' : '-';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFE2DB)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: _getStarBadgeColor(star),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$star성',
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF3F3F46),
+                height: 1.0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 1),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              priceText,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2D3436),
+                height: 1.0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final imagePath = detail.image.startsWith('assets/')
         ? detail.image
         : 'assets/${detail.image}';
+    final visibleEventTokenPrices = List<Map<String, int>>.generate(
+      5,
+          (index) => {
+        'star': index + 1,
+        'price': index < detail.eventTokenPrices.length ? detail.eventTokenPrices[index] : 0,
+      },
+    );
+    final bool hasEventTokenPrice = detail.eventTokenPrices.any((price) => price > 0);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFAF8),
@@ -5734,7 +6402,7 @@ class FlowerDetailPage extends StatelessWidget {
                                   color: Color(0xFF7B8794),
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 0),
                               Wrap(
                                 spacing: 6,
                                 runSpacing: 6,
@@ -5758,6 +6426,129 @@ class FlowerDetailPage extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (detail.masteryCount > 0 || detail.masteryEntryCount > 0 || detail.masterySkilledCount > 0 || detail.masteryMasterCount > 0) ...[
+                    const SizedBox(height: 20),
+                    const Text(
+                      '재배 단계',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2D3436),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ..._buildMasteryStageExtraInfo('재배', detail.masteryCount, entryCount: detail.masteryEntryCount, skilledCount: detail.masterySkilledCount, exactMasterCount: detail.masteryMasterCount, unit: '회').map((stage) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFFFE2DB)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.workspace_premium_rounded,
+                              size: 18,
+                              color: _masteryStageIconColor(stage['label'] ?? ''),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                stage['label'] ?? '재배',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFFFF7A65),
+                                ),
+                              ),
+                            ),
+                            Text(
+                              stage['value'] ?? '-',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF2D3436),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    FutureBuilder<bool>(
+                      future: _loadMasteryDoneValue('plant:${detail.id}'),
+                      builder: (context, snapshot) {
+                        bool checked = snapshot.data ?? false;
+                        return StatefulBuilder(
+                          builder: (context, setInnerState) {
+                            return GestureDetector(
+                              onTap: () async {
+                                checked = !checked;
+                                setInnerState(() {});
+                                await _saveMasteryDoneValue('plant:${detail.id}', checked);
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                                decoration: BoxDecoration(
+                                  color: checked ? const Color(0xFFFFF3EE) : Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: const Color(0xFFFFE2DB)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                      color: checked ? const Color(0xFFFF8E7C) : const Color(0xFFCBD5E1),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Expanded(
+                                      child: Text(
+                                        '재배 명인 달성',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFF2D3436),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                  if (hasEventTokenPrice) ...[
+                    const SizedBox(height: 20),
+                    const Text(
+                      '이벤트 코인 판매가',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2D3436),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: visibleEventTokenPrices.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 5,
+                        crossAxisSpacing: 6,
+                        mainAxisSpacing: 6,
+                        childAspectRatio: 0.82,
+                      ),
+                      itemBuilder: (context, index) {
+                        final item = visibleEventTokenPrices[index];
+                        return _priceTile(item['star']!, item['price']!, suffix: '코인');
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   const Text(
                     '꽃 색 종류',
@@ -5810,19 +6601,19 @@ class FlowerDetailPage extends StatelessWidget {
                                     fit: BoxFit.contain,
                                     errorBuilder: (_, __, ___) => const Icon(
                                       Icons.local_florist_rounded,
-                                      size: 20,
+                                      size: 18,
                                       color: Colors.grey,
                                     ),
                                   )
                                       : const Icon(
                                     Icons.local_florist_rounded,
-                                    size: 20,
+                                    size: 18,
                                     color: Colors.grey,
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 1),
                             Text(
                               color.colorNameKo,
                               textAlign: TextAlign.center,
@@ -5871,7 +6662,7 @@ class FlowerDetailPage extends StatelessWidget {
                             ),
                           ),
                           if (rule.isCatalogOnly || rule.isFinalStep) ...[
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 0),
                             Wrap(
                               spacing: 6,
                               runSpacing: 6,

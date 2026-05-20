@@ -38,6 +38,47 @@ List<int> _parseEventTokenPrices(Map<String, dynamic> json) {
   ];
 }
 
+
+List<Map<String, String>> _buildMasteryStageInfo(
+    String actionLabel,
+    int masterCount, {
+      int entryCount = 0,
+      int skilledCount = 0,
+      int exactMasterCount = 0,
+      String unit = '회',
+    }) {
+  final int master = exactMasterCount > 0 ? exactMasterCount : masterCount;
+  if (master <= 0 && entryCount <= 0 && skilledCount <= 0) return const [];
+
+  final int entry = entryCount > 0 ? entryCount : (master > 0 ? (master * 0.333).ceil() : 0);
+  final int skilled = skilledCount > 0 ? skilledCount : (master > 0 ? (master * 0.666).ceil() : 0);
+
+  final stages = <Map<String, String>>[
+    if (entry > 0)
+      {'label': '$actionLabel 초보자', 'value': '${entry}$unit 미만'},
+    if (entry > 0)
+      {'label': '$actionLabel 입문자', 'value': '${entry}$unit'},
+    if (skilled > 0)
+      {'label': '$actionLabel 숙련자', 'value': '${skilled}$unit'},
+    if (master > 0)
+      {'label': '$actionLabel 명인', 'value': '${master}$unit'},
+  ];
+
+  return stages;
+}
+
+String _masteryDoneStorageKey(String itemKey) => 'mastery_done:$itemKey';
+
+Future<bool> _loadMasteryDoneValue(String itemKey) async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(_masteryDoneStorageKey(itemKey)) ?? false;
+}
+
+Future<void> _saveMasteryDoneValue(String itemKey, bool value) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(_masteryDoneStorageKey(itemKey), value);
+}
+
 int _parseLevel(Map<String, dynamic> json) {
   final dynamic raw =
       json['level'] ??
@@ -406,6 +447,9 @@ class RecipeIngredientDetail {
   final bool isCultivable;
   final int level;
   final int masteryCount;
+  final int masteryEntryCount;
+  final int masterySkilledCount;
+  final int masteryMasterCount;
   final List<int> prices;
 
   RecipeIngredientDetail({
@@ -420,6 +464,9 @@ class RecipeIngredientDetail {
     required this.isCultivable,
     required this.level,
     required this.masteryCount,
+    required this.masteryEntryCount,
+    required this.masterySkilledCount,
+    required this.masteryMasterCount,
     required this.prices,
   });
 
@@ -438,7 +485,10 @@ class RecipeIngredientDetail {
       image: json['image']?.toString(),
       isCultivable: (json['isCultivable'] ?? false) == true,
       level: _parseLevel(json),
-      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count'] ?? json['masteryMasterCount'] ?? json['mastery_master_count']),
+      masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
+      masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
+      masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price2'] ?? json['price_2'] ?? '0').toString()) ?? 0,
@@ -457,7 +507,11 @@ class CookingMaterialDetail {
   final bool isCultivable;
   final int level;
   final int masteryCount;
+  final int masteryEntryCount;
+  final int masterySkilledCount;
+  final int masteryMasterCount;
   final List<int> prices;
+  final List<int> eventTokenPrices;
 
   CookingMaterialDetail({
     required this.id,
@@ -466,7 +520,11 @@ class CookingMaterialDetail {
     required this.isCultivable,
     required this.level,
     required this.masteryCount,
+    required this.masteryEntryCount,
+    required this.masterySkilledCount,
+    required this.masteryMasterCount,
     required this.prices,
+    required this.eventTokenPrices,
   });
 
   factory CookingMaterialDetail.fromJson(Map<String, dynamic> json) {
@@ -476,7 +534,10 @@ class CookingMaterialDetail {
       image: json['image']?.toString(),
       isCultivable: (json['isCultivable'] ?? json['is_cultivable'] ?? false) == true,
       level: _parseLevel(json),
-      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count'] ?? json['masteryMasterCount'] ?? json['mastery_master_count']),
+      masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
+      masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
+      masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price2'] ?? json['price_2'] ?? '0').toString()) ?? 0,
@@ -484,6 +545,7 @@ class CookingMaterialDetail {
         int.tryParse((json['price4'] ?? json['price_4'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price5'] ?? json['price_5'] ?? '0').toString()) ?? 0,
       ],
+      eventTokenPrices: _parseEventTokenPrices(json),
     );
   }
 }
@@ -555,6 +617,9 @@ class Gourmet {
   final List<int> prices;
   final List<int> eventTokenPrices;
   final int masteryCount;
+  final int masteryEntryCount;
+  final int masterySkilledCount;
+  final int masteryMasterCount;
   final String energyBuffs;
   final bool isHiddenRecipe;
 
@@ -568,6 +633,9 @@ class Gourmet {
     required this.prices,
     required this.eventTokenPrices,
     required this.masteryCount,
+    required this.masteryEntryCount,
+    required this.masterySkilledCount,
+    required this.masteryMasterCount,
     required this.energyBuffs,
     required this.isHiddenRecipe,
   });
@@ -601,7 +669,10 @@ class Gourmet {
         int.tryParse((json['price5'] ?? json['price_5'] ?? '0').toString()) ?? 0,
       ],
       eventTokenPrices: _parseEventTokenPrices(json),
-      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count']),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count'] ?? json['masteryMasterCount'] ?? json['mastery_master_count']),
+      masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
+      masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
+      masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
       energyBuffs: _parseTextFlexible(json, ['energyBuffs', 'energy_buffs', 'energyAndBuffs', 'energy_and_buffs']),
       isHiddenRecipe: _parseHiddenRecipe(json),
     );
@@ -614,7 +685,12 @@ class CookingMaterialItem {
   final String? image;
   final bool isCultivable;
   final int level;
+  final int masteryCount;
+  final int masteryEntryCount;
+  final int masterySkilledCount;
+  final int masteryMasterCount;
   final List<int> prices;
+  final List<int> eventTokenPrices;
 
   CookingMaterialItem({
     required this.id,
@@ -622,7 +698,12 @@ class CookingMaterialItem {
     this.image,
     required this.isCultivable,
     required this.level,
+    required this.masteryCount,
+    required this.masteryEntryCount,
+    required this.masterySkilledCount,
+    required this.masteryMasterCount,
     required this.prices,
+    required this.eventTokenPrices,
   });
 
   factory CookingMaterialItem.fromJson(Map<String, dynamic> json) {
@@ -645,6 +726,10 @@ class CookingMaterialItem {
       image: json['image']?.toString(),
       isCultivable: parsedCultivable,
       level: _parseLevel(json),
+      masteryCount: _parseIntFlexible(json['masteryCount'] ?? json['mastery_count'] ?? json['masteryMasterCount'] ?? json['mastery_master_count']),
+      masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
+      masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
+      masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
       prices: [
         int.tryParse((json['price1'] ?? json['price_1'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price2'] ?? json['price_2'] ?? '0').toString()) ?? 0,
@@ -652,6 +737,7 @@ class CookingMaterialItem {
         int.tryParse((json['price4'] ?? json['price_4'] ?? '0').toString()) ?? 0,
         int.tryParse((json['price5'] ?? json['price_5'] ?? '0').toString()) ?? 0,
       ],
+      eventTokenPrices: _parseEventTokenPrices(json),
     );
   }
 }
@@ -708,6 +794,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   String _selectedSort = '레벨순';
   final Set<int> _selectedLevelFilters = {};
   final Set<int> _selectedAchievementStarFilters = {};
+  final Set<String> _selectedMasteryCompletionFilters = {};
   int _lastTabIndex = 0;
 
   List<Gourmet> _allRecipeList = [];
@@ -747,6 +834,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   Set<String> _favoriteIds = {};
   Map<String, int> _achievementStars = {};
+  Map<String, bool> _masteryDoneMap = {};
   final Color snackAccent = const Color(0xFFFF8E7C);
   final String _recipeApiUrl = 'https://api.keepers-note.o-r.kr/api/gourmet';
   final String _materialApiUrl = 'https://api.keepers-note.o-r.kr/api/cooking/materials';
@@ -790,6 +878,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     _loadFavorites();
     _loadAchievementStars();
+    _loadMasteryDoneMap();
     _fetchRecipeData();
     _fetchMaterialData();
 
@@ -835,7 +924,6 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     _materialScrollController.dispose();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
@@ -1118,7 +1206,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
             icon: const Icon(
               Icons.close_rounded,
               color: Color(0xFFB0B8C4),
-              size: 20,
+              size: 18,
             ),
             onPressed: () {
               _searchController.clear();
@@ -1292,7 +1380,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                     child: const Icon(
                       Icons.storefront_outlined,
                       color: Color(0xFFFF8E7C),
-                      size: 28,
+                      size: 24,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -1366,18 +1454,33 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildPriceButton(List<int> prices) {
+  Widget _buildPriceButton(List<int> prices, {List<int> eventTokenPrices = const []}) {
     final validPrices = prices.where((e) => e > 0).toList();
+    final validEventTokenPrices = eventTokenPrices.where((e) => e > 0).toList();
+
+    String previewText(List<int> values, String suffix) {
+      if (values.isEmpty) return '-';
+      if (values.first == values.last) {
+        return '${_formatPrice(values.first)}$suffix';
+      }
+      return '${_formatPrice(values.first)}$suffix ~ ${_formatPrice(values.last)}$suffix';
+    }
+
     final pricePreview = validPrices.isEmpty
         ? '-'
-        : (validPrices.first == validPrices.last
-        ? '${_formatPrice(validPrices.first)}원'
-        : '${_formatPrice(validPrices.first)}원 ~ ${_formatPrice(validPrices.last)}원');
+        : previewText(validPrices, '원');
+    final coinPreview = validEventTokenPrices.isEmpty
+        ? ''
+        : previewText(validEventTokenPrices, '코인');
+    final bool hasEventCoin = coinPreview.isNotEmpty;
 
     return GestureDetector(
-      onTap: () => _showPriceBottomSheet(prices),
+      onTap: () => _showPriceBottomSheet(prices, eventTokenPrices: eventTokenPrices),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: hasEventCoin ? 7 : 5,
+        ),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.95),
           borderRadius: BorderRadius.circular(12),
@@ -1406,13 +1509,39 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
               ),
             ),
             const SizedBox(width: 6),
-            Text(
-              pricePreview,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF2D3436),
-                height: 1.0,
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    pricePreview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2D3436),
+                      height: 1.0,
+                    ),
+                  ),
+                  if (hasEventCoin) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      coinPreview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFF8E7C),
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             const SizedBox(width: 2),
@@ -1484,7 +1613,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     );
   }
 
-  void _showPriceBottomSheet(List<int> prices) {
+  void _showPriceBottomSheet(List<int> prices, {List<int> eventTokenPrices = const []}) {
     _dismissKeyboard();
 
     final visiblePrices = <Map<String, dynamic>>[];
@@ -1498,6 +1627,16 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       }
     }
 
+    final visibleEventTokenPrices = <Map<String, dynamic>>[];
+    for (int i = 0; i < eventTokenPrices.length; i++) {
+      if (eventTokenPrices[i] > 0) {
+        visibleEventTokenPrices.add({
+          'star': i + 1,
+          'price': eventTokenPrices[i],
+        });
+      }
+    }
+
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.18),
@@ -1506,7 +1645,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.symmetric(horizontal: 36, vertical: 24),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.98),
               borderRadius: BorderRadius.circular(22),
@@ -1569,7 +1708,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (visiblePrices.isEmpty)
+                if (visiblePrices.isEmpty && visibleEventTokenPrices.isEmpty)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1636,6 +1775,68 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                       ),
                     );
                   }),
+                if (visibleEventTokenPrices.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '이벤트 코인 판매가',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFF7A65),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...visibleEventTokenPrices.map((item) {
+                    final int star = item['star'] as int;
+                    final int price = item['price'] as int;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7ED),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getStarBadgeColor(star),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '$star성',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF3F3F46),
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${_formatPrice(price)}코인',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF2D3436),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
               ],
             ),
           ),
@@ -1767,6 +1968,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     final isFavorite = _favoriteIds.contains(item.id);
     final isHighlighted = _highlightedId == item.id;
     final recipeImagePath = _resolveIngredientImagePath(item.image);
+    final bool showProgress = _shouldShowRecipeProgress(item);
 
     Widget recipeImageWidget({
       double padding = 8,
@@ -1774,26 +1976,15 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       double iconSize = 28,
     }) {
       return Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: padding,
-          vertical: padding,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding),
         child: item.image != null && item.image!.trim().isNotEmpty
             ? Image.asset(
           recipeImagePath,
           fit: BoxFit.contain,
           alignment: Alignment.center,
-          errorBuilder: (c, e, s) => Icon(
-            Icons.restaurant_menu,
-            color: iconColor,
-            size: iconSize,
-          ),
+          errorBuilder: (c, e, s) => Icon(Icons.restaurant_menu, color: iconColor, size: iconSize),
         )
-            : Icon(
-          Icons.restaurant_menu,
-          color: iconColor,
-          size: iconSize,
-        ),
+            : Icon(Icons.restaurant_menu, color: iconColor, size: iconSize),
       );
     }
 
@@ -1803,17 +1994,11 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 14, offset: const Offset(0, 4)),
           ],
         ),
         child: Material(
-          color: isHighlighted
-              ? const Color(0xFFFFF4D8)
-              : Colors.white.withOpacity(0.92),
+          color: isHighlighted ? const Color(0xFFFFF4D8) : Colors.white.withOpacity(0.92),
           borderRadius: BorderRadius.circular(16),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
@@ -1824,141 +2009,153 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isHighlighted
-                      ? const Color(0xFFFFB27A).withOpacity(0.55)
-                      : const Color(0xFFFF8E7C).withOpacity(0.12),
+                  color: isHighlighted ? const Color(0xFFFFB27A).withOpacity(0.55) : const Color(0xFFFF8E7C).withOpacity(0.12),
                   width: 1,
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _showCookingImagePreview(
-                        title: _displayRecipeName(item),
-                        imageWidget: Center(
-                          child: recipeImageWidget(
-                            padding: 18,
-                            iconColor: Colors.white.withOpacity(0.85),
-                            iconSize: 72,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _showCookingImagePreview(
+                            title: _displayRecipeName(item),
+                            imageWidget: Center(
+                              child: recipeImageWidget(
+                                padding: 18,
+                                iconColor: Colors.white.withOpacity(0.85),
+                                iconSize: 72,
+                              ),
+                            ),
+                          ),
+                          child: Container(
+                            width: 106,
+                            height: 106,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFAF8),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFFF8E7C).withOpacity(0.15)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Center(child: recipeImageWidget()),
+                            ),
                           ),
                         ),
-                      ),
-                      child: Container(
-                        width: 116,
-                        height: 116,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFAF8),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFFFF8E7C).withOpacity(0.15),
-                          ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Center(
-                            child: recipeImageWidget(),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 116),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 106),
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      top: 2,
-                                      right: 8,
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 10, right: 8),
+                                        child: AutoSizeText(
+                                          _displayRecipeName(item),
+                                          maxLines: 2,
+                                          minFontSize: 8,
+                                          stepGranularity: 0.5,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 15.2,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF333333),
+                                            height: 1.15,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                    child: AutoSizeText(
-                                      _displayRecipeName(item),
-                                      maxLines: 2,
-                                      minFontSize: 12,
-                                      stepGranularity: 0.5,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF333333),
-                                        height: 1.2,
+                                    _buildCardFavoriteButton(item.id, isFavorite),
+                                  ],
+                                ),
+                                const SizedBox(height: 0),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Expanded(
+                                      child: Wrap(
+                                        spacing: 5,
+                                        runSpacing: 4,
+                                        children: [
+                                          _buildSmallTag('Lv.${item.level}'),
+                                          if (_isEventRecipe(item)) _buildSmallTag('이벤트', isEvent: true),
+                                        ],
+                                      ),
+                                    ),
+                                    if (showProgress) ...[
+                                      const SizedBox(width: 8),
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: _buildCardMasteryDoneButton('recipe:${item.id}'),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                SizedBox(
+                                  height: 32,
+                                  child: Directionality(
+                                    textDirection: TextDirection.rtl,
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Directionality(
+                                        textDirection: TextDirection.ltr,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: item.ingredientSummaries.isNotEmpty
+                                              ? _buildIngredientSummaryIcons(item.ingredientSummaries)
+                                              : _buildIngredientIcons(item.ingredients),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                                GestureDetector(
-                                  onTap: () => _toggleFavorite(item.id),
-                                  behavior: HitTestBehavior.opaque,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 2,
-                                    ),
-                                    child: Icon(
-                                      isFavorite
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      size: 24,
-                                      color: isFavorite
-                                          ? const Color(0xFFFF8E7C)
-                                          : const Color(0xFFD9D9D9),
-                                    ),
-                                  ),
-                                ),
                               ],
                             ),
-                            const SizedBox(height: 6),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(
-                                  child: Wrap(
-                                    spacing: 5,
-                                    runSpacing: 4,
-                                    children: [
-                                      _buildSmallTag('요리 ${item.level}레벨'),
-                                      if (_isEventRecipe(item))
-                                        _buildSmallTag('이벤트', isEvent: true),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              height: 34,
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: item.ingredientSummaries.isNotEmpty
-                                      ? _buildIngredientSummaryIcons(
-                                    item.ingredientSummaries,
-                                  )
-                                      : _buildIngredientIcons(item.ingredients),
-                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 0),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        if (showProgress)
+                          Flexible(
+                            flex: 5,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: _buildAchievementStars('recipe:${item.id}'),
                               ),
                             ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                _buildAchievementStars('recipe:${item.id}'),
-                                const Spacer(),
-                                _buildPriceButton(item.prices),
-                              ],
+                          )
+                        else
+                          const Spacer(flex: 5),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 7,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: _buildPriceButton(
+                              item.prices,
+                              eventTokenPrices: item.eventTokenPrices,
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -1967,6 +2164,122 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           ),
         ),
       ),
+    );
+  }
+
+
+  bool _isWeirdRecipe(Gourmet item) {
+    final normalized = _displayRecipeName(item).replaceAll(' ', '');
+    return normalized == '괴상한음식' || normalized == '괴상한음료';
+  }
+
+  bool _shouldShowRecipeProgress(Gourmet item) {
+    return !_isWeirdRecipe(item);
+  }
+
+  bool _shouldShowMaterialProgress(CookingMaterialItem item) {
+    return item.isCultivable;
+  }
+
+  Widget _buildCardMasteryDoneButton(String itemKey) {
+    final bool checked = _masteryDoneMap[itemKey] == true;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () async {
+        final next = !checked;
+        setState(() => _masteryDoneMap[itemKey] = next);
+        await _saveMasteryDoneValue(itemKey, next);
+        if (!mounted) return;
+        _applyFilters();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: checked
+              ? const Color(0xFFFFF4CF)
+              : const Color(0xFFFCF9FF),
+          border: Border.all(
+            color: checked
+                ? const Color(0xFFD8B4FE)
+                : const Color(0xFFF0E4FF),
+            width: 1.15,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (checked ? const Color(0xFFFBBF24) : const Color(0xFFD8B4FE))
+                  .withOpacity(checked ? 0.16 : 0.05),
+              blurRadius: checked ? 8 : 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          checked
+              ? Icons.workspace_premium_rounded
+              : Icons.workspace_premium_outlined,
+          size: 19,
+          color: checked
+              ? const Color(0xFFF59E0B)
+              : const Color(0xFFD8B4FE),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardFavoriteButton(String itemId, bool isFavorite) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _toggleFavorite(itemId),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isFavorite
+              ? const Color(0xFFFFEEF4)
+              : const Color(0xFFFFFBFC),
+          border: Border.all(
+            color: isFavorite
+                ? const Color(0xFFFFBFD0)
+                : const Color(0xFFFFE6EE),
+            width: 1.15,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFA6BA).withOpacity(isFavorite ? 0.14 : 0.05),
+              blurRadius: isFavorite ? 7 : 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          size: 19,
+          color: isFavorite
+              ? const Color(0xFFFF7F9F)
+              : const Color(0xFFFFC7D6),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardProgressRow(String itemKey) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _buildAchievementStars(itemKey),
+          ),
+        ),
+        _buildCardMasteryDoneButton(itemKey),
+      ],
     );
   }
 
@@ -2024,6 +2337,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     final bool isLucky = _isLuckyShopItem(item.nameKo);
     final bool isShopItem = _isShopMaterial(item) && !isLucky;
+    final bool showProgress = _shouldShowMaterialProgress(item);
 
     final String typeLabel = isLucky
         ? '행운상점 구매'
@@ -2037,17 +2351,11 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 14, offset: const Offset(0, 4)),
           ],
         ),
         child: Material(
-          color: isHighlighted
-              ? const Color(0xFFFFF4D8)
-              : Colors.white.withOpacity(0.92),
+          color: isHighlighted ? const Color(0xFFFFF4D8) : Colors.white.withOpacity(0.92),
           borderRadius: BorderRadius.circular(16),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
@@ -2058,132 +2366,144 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isHighlighted
-                      ? const Color(0xFFFFB27A).withOpacity(0.55)
-                      : const Color(0xFFFF8E7C).withOpacity(0.12),
+                  color: isHighlighted ? const Color(0xFFFFB27A).withOpacity(0.55) : const Color(0xFFFF8E7C).withOpacity(0.12),
                   width: 1,
                 ),
               ),
-              child: IntrinsicHeight(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _showCookingImagePreview(
-                          title: item.nameKo,
-                          imageWidget: Center(
-                            child: _buildIngredientImage(
-                              ingredientNameKo: item.nameKo,
-                              imagePath: item.image,
-                              padding: 18,
-                              iconSize: 72,
-                            ),
-                          ),
-                        ),
-                        child: Container(
-                          width: 88,
-                          height: 88,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFFAF8),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: const Color(0xFFFF8E7C).withOpacity(0.15),
-                              width: 1,
-                            ),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: _buildIngredientImage(
-                              ingredientNameKo: item.nameKo,
-                              imagePath: item.image,
-                              padding: 8,
-                              iconSize: 28,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Text(
-                                      item.nameKo,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF333333),
-                                        height: 1.2,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                GestureDetector(
-                                  onTap: () => _toggleFavorite(item.id),
-                                  behavior: HitTestBehavior.opaque,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 2,
-                                    ),
-                                    child: Icon(
-                                      isFavorite
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      size: 24,
-                                      color: isFavorite
-                                          ? const Color(0xFFFF8E7C)
-                                          : const Color(0xFFD9D9D9),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 4,
-                              runSpacing: 4,
-                              children: [
-                                if (!isShopItem && !isLucky)
-                                  _buildSmallTag('원예 ${item.level}레벨'),
-                                _buildSmallTag(
-                                  typeLabel,
-                                  isLuckyShop: isLucky,
-                                  isEvent: isShopItem,
-                                ),
-                              ],
-                            ),
-                            const Spacer(),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: isShopItem
-                                  ? _buildPurchasePriceButton(purchasePrice)
-                                  : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildAchievementStars('material:${item.id}'),
-                                  const SizedBox(width: 8),
-                                  _buildPriceButton(item.prices),
-                                ],
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _showCookingImagePreview(
+                            title: item.nameKo,
+                            imageWidget: Center(
+                              child: _buildIngredientImage(
+                                ingredientNameKo: item.nameKo,
+                                imagePath: item.image,
+                                padding: 18,
+                                iconSize: 72,
                               ),
                             ),
-                          ],
+                          ),
+                          child: Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFAF8),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFFF8E7C).withOpacity(0.15), width: 1),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: _buildIngredientImage(
+                                ingredientNameKo: item.nameKo,
+                                imagePath: item.image,
+                                padding: 8,
+                                iconSize: 28,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 72),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 10, right: 8),
+                                        child: AutoSizeText(
+                                          item.nameKo,
+                                          maxLines: 2,
+                                          minFontSize: 8,
+                                          stepGranularity: 0.5,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 15.2,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF333333),
+                                            height: 1.15,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    _buildCardFavoriteButton(item.id, isFavorite),
+                                  ],
+                                ),
+                                const SizedBox(height: 0),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Expanded(
+                                      child: Wrap(
+                                        spacing: 5,
+                                        runSpacing: 4,
+                                        children: [
+                                          if (item.isCultivable) if (item.isCultivable) _buildSmallTag('Lv.${item.level}'),
+                                          _buildSmallTag(typeLabel, isEvent: isLucky || isShopItem),
+                                        ],
+                                      ),
+                                    ),
+                                    if (showProgress) ...[
+                                      const SizedBox(width: 8),
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: _buildCardMasteryDoneButton('material:${item.id}'),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 0),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        if (showProgress)
+                          Flexible(
+                            flex: 5,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: _buildAchievementStars('material:${item.id}'),
+                              ),
+                            ),
+                          )
+                        else
+                          const Spacer(flex: 5),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 7,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: isShopItem || isLucky
+                                ? _buildPurchasePriceButton(purchasePrice)
+                                : _buildPriceButton(
+                              item.prices,
+                              eventTokenPrices: item.eventTokenPrices,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -2257,13 +2577,24 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
       filtered = filtered
           .where((item) => _matchesAchievementStar('recipe:${item.id}'))
+          .where((item) => _matchesMasteryDone('recipe:${item.id}'))
           .toList();
 
       switch (_selectedSort) {
         case '레벨순':
           filtered.sort((a, b) {
+            final aWeird = _isWeirdRecipe(a);
+            final bWeird = _isWeirdRecipe(b);
+
             final levelCompare = a.level.compareTo(b.level);
             if (levelCompare != 0) return levelCompare;
+
+            // 괴상한 음식/음료는 전체 맨 아래가 아니라,
+            // 같은 1레벨 그룹 안에서만 맨 아래로 보냅니다.
+            if (a.level == 1 && b.level == 1 && aWeird != bWeird) {
+              return aWeird ? 1 : -1;
+            }
+
             return a.nameKo.compareTo(b.nameKo);
           });
           break;
@@ -2349,6 +2680,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     filtered = filtered
         .where((item) => _matchesAchievementStar('material:${item.id}'))
+        .where((item) => _matchesMasteryDone('material:${item.id}'))
         .toList();
 
     switch (_selectedSort) {
@@ -2434,7 +2766,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       final imagePath = _ingredientImagePath(name);
       for (int i = 0; i < count; i++) {
         widgets.add(Container(
-          width: 32, height: 32, margin: const EdgeInsets.only(right: 6),
+          width: 28, height: 28, margin: const EdgeInsets.only(right: 6),
           decoration: BoxDecoration(color: const Color(0xC6FFF8E7), borderRadius: BorderRadius.circular(4)),
           child: Center(child: Padding(padding: const EdgeInsets.all(4.0), child: Image.asset(imagePath, fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 16, color: Colors.grey)))),
         ));
@@ -2454,8 +2786,8 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       for (int i = 0; i < count; i++) {
         widgets.add(
           Container(
-            width: 32,
-            height: 32,
+            width: 28,
+            height: 28,
             margin: const EdgeInsets.only(right: 6),
             decoration: BoxDecoration(
               color: const Color(0xC6FFF8E7),
@@ -2512,7 +2844,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     }
 
     // 4. 레벨칩 (기존 유지)
-    if (rawText.contains('레벨')) {
+    if (rawText.contains('레벨') || rawText.startsWith('Lv.')) {
       int level =
           int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
 
@@ -2543,7 +2875,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     }
 
     final bool isMasterLevel =
-        rawText.contains('레벨') &&
+        (rawText.contains('레벨') || rawText.startsWith('Lv.')) &&
             (int.tryParse(rawText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0) >= 11;
 
     return Container(
@@ -2924,6 +3256,25 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     return _selectedAchievementStarFilters.contains(_achievementStarFor(itemKey));
   }
 
+
+  Future<void> _loadMasteryDoneMap() async {
+    final prefs = await SharedPreferences.getInstance();
+    final parsed = <String, bool>{};
+    for (final key in prefs.getKeys()) {
+      if (key.startsWith('mastery_done:')) {
+        parsed[key.substring('mastery_done:'.length)] = prefs.getBool(key) ?? false;
+      }
+    }
+    if (mounted) setState(() => _masteryDoneMap = parsed);
+  }
+
+  bool _matchesMasteryDone(String itemKey) {
+    if (_selectedMasteryCompletionFilters.isEmpty) return true;
+    final done = _masteryDoneMap[itemKey] == true;
+    return (done && _selectedMasteryCompletionFilters.contains('done')) ||
+        (!done && _selectedMasteryCompletionFilters.contains('not_done'));
+  }
+
   Widget _buildAchievementStars(String itemKey) {
     final selected = _achievementStarFor(itemKey);
 
@@ -2931,18 +3282,21 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (index) {
         final star = index + 1;
-        final active = selected == star;
+        final active = selected >= star;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _setAchievementStar(itemKey, star),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1.5, vertical: 5),
-            child: Icon(
-              active ? Icons.star_rounded : Icons.star_border_rounded,
-              size: 20,
-              color: active
-                  ? const Color(0xFFFFB84D)
-                  : const Color(0xFFD6DEE8),
+          child: SizedBox(
+            width: 20,
+            height: 28,
+            child: Center(
+              child: Icon(
+                active ? Icons.star_rounded : Icons.star_border_rounded,
+                size: 23,
+                color: active
+                    ? const Color(0xFFFFB84D)
+                    : const Color(0xFFD6DEE8),
+              ),
             ),
           ),
         );
@@ -3242,6 +3596,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
   bool _hasActiveFilterSortSheetSettings() {
     return _selectedLevelFilters.isNotEmpty ||
         _selectedAchievementStarFilters.isNotEmpty ||
+        _selectedMasteryCompletionFilters.isNotEmpty ||
         _selectedSort != '레벨순';
   }
 
@@ -3351,6 +3706,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     final tempLevels = Set<int>.from(_selectedLevelFilters);
     final tempAchievementStars = Set<int>.from(_selectedAchievementStarFilters);
+    final tempMasteryCompletionFilters = Set<String>.from(_selectedMasteryCompletionFilters);
     String tempSort = _selectedSort;
     final levelOptions = _currentLevelOptions();
     const sortOptions = ['레벨순', '이름순', '가격순', '좋아요순'];
@@ -3416,7 +3772,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                       ),
                       const SizedBox(height: 8),
                       sectionTitle('정렬'),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 0),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -3430,7 +3786,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                       ),
                       const SizedBox(height: 22),
                       sectionTitle('레벨'),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 0),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -3459,7 +3815,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                       ),
                       const SizedBox(height: 22),
                       sectionTitle('달성 성급'),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 0),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -3472,7 +3828,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                           ...List.generate(5, (index) {
                             final star = index + 1;
                             return _buildSheetChoiceChip(
-                              label: '$star성 달성',
+                              label: '$star성',
                               isSelected: tempAchievementStars.contains(star),
                               onTap: () {
                                 setSheetState(() {
@@ -3487,7 +3843,48 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                           }),
                         ],
                       ),
+
                       const SizedBox(height: 22),
+                      sectionTitle('명인 달성'),
+                      const SizedBox(height: 0),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildSheetChoiceChip(
+                            label: '전체',
+                            isSelected: tempMasteryCompletionFilters.isEmpty,
+                            onTap: () => setSheetState(tempMasteryCompletionFilters.clear),
+                          ),
+                          _buildSheetChoiceChip(
+                            label: '완료',
+                            isSelected: tempMasteryCompletionFilters.contains('done'),
+                            onTap: () {
+                              setSheetState(() {
+                                if (tempMasteryCompletionFilters.contains('done')) {
+                                  tempMasteryCompletionFilters.remove('done');
+                                } else {
+                                  tempMasteryCompletionFilters.add('done');
+                                }
+                              });
+                            },
+                          ),
+                          _buildSheetChoiceChip(
+                            label: '미완료',
+                            isSelected: tempMasteryCompletionFilters.contains('not_done'),
+                            onTap: () {
+                              setSheetState(() {
+                                if (tempMasteryCompletionFilters.contains('not_done')) {
+                                  tempMasteryCompletionFilters.remove('not_done');
+                                } else {
+                                  tempMasteryCompletionFilters.add('not_done');
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 0),
                       Row(
                         children: [
                           Expanded(
@@ -3496,6 +3893,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                                 setSheetState(() {
                                   tempLevels.clear();
                                   tempAchievementStars.clear();
+                                  tempMasteryCompletionFilters.clear();
                                   tempSort = '레벨순';
                                 });
                               },
@@ -3524,6 +3922,9 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                                   _selectedAchievementStarFilters
                                     ..clear()
                                     ..addAll(tempAchievementStars);
+                                  _selectedMasteryCompletionFilters
+                                    ..clear()
+                                    ..addAll(tempMasteryCompletionFilters);
                                   _selectedSort = tempSort;
                                 });
                                 _applyFilters();
@@ -3760,6 +4161,107 @@ class CookingRecipeDetailPage extends StatelessWidget {
     required this.onMaterialOpenDetail,
   });
 
+  List<String> _parseEnergyBuffValues(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return const [];
+
+    final parts = text
+        .split(RegExp(r'[,/|·•\n]+'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    if (parts.length >= 5) {
+      return parts.take(5).toList();
+    }
+
+    final numberMatches =
+    RegExp(r'[-+]?\d+(?:\.\d+)?%?').allMatches(text).toList();
+
+    if (numberMatches.length >= 5) {
+      return numberMatches.take(5).map((m) => m.group(0) ?? '').toList();
+    }
+
+    if (parts.isNotEmpty) return parts;
+
+    return [text];
+  }
+
+  Widget _energyBuffRow(List<String> values) {
+    final items = List<String>.generate(5, (index) {
+      if (index < values.length && values[index].trim().isNotEmpty) {
+        return values[index].trim();
+      }
+      return '-';
+    });
+
+    return Row(
+      children: List.generate(5, (index) {
+        final star = index + 1;
+        final value = items[index];
+
+        return Expanded(
+          child: Container(
+            margin: EdgeInsets.only(right: index == 4 ? 0 : 6),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFBBF7D0),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$star성',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF166534),
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 7),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF15803D),
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+
+
+  bool _isWeirdRecipe(Gourmet item) {
+    final normalized = item.nameKo.replaceAll(' ', '').trim();
+    return normalized == '괴상한음식' || normalized == '괴상한음료';
+  }
+
   String _formatPrice(int? price) {
     if (price == null) return '';
     return price.toString().replaceAllMapped(
@@ -3800,8 +4302,8 @@ class CookingRecipeDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _priceTile(int star, int price) {
-    final priceText = price > 0 ? '${_formatPrice(price)}원' : '-';
+  Widget _priceTile(int star, int price, {String suffix = '원'}) {
+    final priceText = price > 0 ? '${_formatPrice(price)}$suffix' : '-';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -3853,6 +4355,96 @@ class CookingRecipeDetailPage extends StatelessWidget {
     );
   }
 
+
+  Color _masteryStageColor(String label) {
+    if (label.contains('초보자')) return const Color(0xFF94A3B8); // 은색
+    if (label.contains('입문자')) return const Color(0xFF60A5FA); // 파란색
+    if (label.contains('숙련자')) return const Color(0xFFFBBF24); // 노란색
+    if (label.contains('명인')) return const Color(0xFFA855F7); // 보라색
+    return const Color(0xFFFF8E7C);
+  }
+
+  Color _detailInfoColor(String label) {
+    if (label == '기력') return const Color(0xFF22C55E);
+    return _masteryStageColor(label);
+  }
+
+  Color _detailLabelColor(String label) {
+    if (label == '기력') return const Color(0xFF16A34A);
+    if (label.contains('초보자') ||
+        label.contains('입문자') ||
+        label.contains('숙련자') ||
+        label.contains('명인')) {
+      return const Color(0xFFFF7A65);
+    }
+    return const Color(0xFF94A3B8);
+  }
+
+  Widget _detailInfoTile({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    final display = value.trim().isEmpty ? '-' : value.trim();
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: const Color(0xFFFFE2DB),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.022),
+            blurRadius: 9,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: _detailInfoColor(label),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              color: _detailLabelColor(label),
+              height: 1.0,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            display,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11.2,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2D3436),
+              height: 1.12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -3879,6 +4471,28 @@ class CookingRecipeDetailPage extends StatelessWidget {
       },
     );
     final bool hasEventTokenPrice = recipe.eventTokenPrices.any((price) => price > 0);
+    final bool hasRecipeMastery = !_isWeirdRecipe(recipe) &&
+        (recipe.masteryCount > 0 ||
+            recipe.masteryEntryCount > 0 ||
+            recipe.masterySkilledCount > 0 ||
+            recipe.masteryMasterCount > 0);
+    final recipeMasteryInfo = <Map<String, Object>>[
+      if (hasRecipeMastery)
+        ..._buildMasteryStageInfo(
+          '요리',
+          recipe.masteryCount,
+          entryCount: recipe.masteryEntryCount,
+          skilledCount: recipe.masterySkilledCount,
+          exactMasterCount: recipe.masteryMasterCount,
+          unit: '회',
+        ).map((stage) => {
+          'icon': Icons.restaurant_menu_rounded,
+          'label': stage['label'] ?? '요리',
+          'value': stage['value'] ?? '-',
+        }),
+    ];
+
+    final recipeEnergyValues = _parseEnergyBuffValues(recipe.energyBuffs);
 
     return Scaffold(
       appBar: AppBar(
@@ -3963,6 +4577,104 @@ class CookingRecipeDetailPage extends StatelessWidget {
               ],
             ),
           ),
+          if (recipeMasteryInfo.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _sectionTitle('명인 달성 기준'),
+            const SizedBox(height: 10),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: recipeMasteryInfo.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 7,
+                mainAxisSpacing: 7,
+                childAspectRatio: 2.35,
+              ),
+              itemBuilder: (context, index) {
+                final info = recipeMasteryInfo[index];
+                return _detailInfoTile(
+                  icon: info['icon'] as IconData,
+                  label: info['label'] as String,
+                  value: info['value'] as String,
+                );
+              },
+            ),
+          ],
+
+          if (recipeEnergyValues.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const Row(
+              children: [
+                Icon(
+                  Icons.bolt_rounded,
+                  size: 18,
+                  color: Color(0xFF16A34A),
+                ),
+                SizedBox(width: 6),
+                Text(
+                  '기력',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF16A34A),
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _energyBuffRow(recipeEnergyValues),
+          ],
+
+          if (hasRecipeMastery) ...[
+            const SizedBox(height: 12),
+            FutureBuilder<bool>(
+              future: _loadMasteryDoneValue('recipe:${recipe.id}'),
+              builder: (context, snapshot) {
+                bool checked = snapshot.data ?? false;
+                return StatefulBuilder(
+                  builder: (context, setInnerState) {
+                    return GestureDetector(
+                      onTap: () async {
+                        checked = !checked;
+                        setInnerState(() {});
+                        await _saveMasteryDoneValue('recipe:${recipe.id}', checked);
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                        decoration: BoxDecoration(
+                          color: checked ? const Color(0xFFFFF3EE) : Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFFFE2DB)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                              color: checked ? const Color(0xFFFF8E7C) : const Color(0xFFCBD5E1),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '요리 명인 달성',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF2D3436),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ],
           const SizedBox(height: 18),
           const Text(
             '필요 재료',
@@ -3972,7 +4684,7 @@ class CookingRecipeDetailPage extends StatelessWidget {
               color: Color(0xFF2D3436),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 0),
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -4011,7 +4723,7 @@ class CookingRecipeDetailPage extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                       SizedBox(
                         height: 34,
                         child: Center(
@@ -4092,9 +4804,10 @@ class CookingRecipeDetailPage extends StatelessWidget {
                 return _priceTile(item['star']!, item['price']!);
               },
             ),
+
           if (hasEventTokenPrice) ...[
             const SizedBox(height: 22),
-            _sectionTitle('이벤트 토큰 판매가'),
+            _sectionTitle('이벤트 코인 판매가'),
             const SizedBox(height: 10),
             GridView.builder(
               shrinkWrap: true,
@@ -4108,7 +4821,7 @@ class CookingRecipeDetailPage extends StatelessWidget {
               ),
               itemBuilder: (context, index) {
                 final item = visibleEventTokenPrices[index];
-                return _priceTile(item['star']!, item['price']!);
+                return _priceTile(item['star']!, item['price']!, suffix: '코인');
               },
             ),
           ],
@@ -4166,11 +4879,202 @@ class CookingMaterialDetailPage extends StatelessWidget {
     return 0;
   }
 
+  String _formatPrice(int price) {
+    return price.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},',
+    );
+  }
+
+  Color _starBadgeColor(int star) {
+    switch (star) {
+      case 1:
+        return const Color(0xFFE5E7EB);
+      case 2:
+        return const Color(0xFFFFE4E6);
+      case 3:
+        return const Color(0xFFFFEDD5);
+      case 4:
+        return const Color(0xFFFEF3C7);
+      case 5:
+        return const Color(0xFFDCFCE7);
+      default:
+        return const Color(0xFFF3F4F6);
+    }
+  }
+
+  Widget _priceTile(int star, int price, {String suffix = '원'}) {
+    final priceText = price > 0 ? '${_formatPrice(price)}$suffix' : '-';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFE2DB)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: _starBadgeColor(star),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$star성',
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF3F3F46),
+                height: 1.0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              priceText,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2D3436),
+                height: 1.0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+  Color _masteryStageColor(String label) {
+    if (label.contains('초보자')) return const Color(0xFF94A3B8); // 은색
+    if (label.contains('입문자')) return const Color(0xFF60A5FA); // 파란색
+    if (label.contains('숙련자')) return const Color(0xFFFBBF24); // 노란색
+    if (label.contains('명인')) return const Color(0xFFA855F7); // 보라색
+    return const Color(0xFFFF8E7C);
+  }
+
+  Color _detailInfoColor(String label) {
+    if (label == '기력') return const Color(0xFF22C55E);
+    return _masteryStageColor(label);
+  }
+
+  Color _detailLabelColor(String label) {
+    if (label == '기력') return const Color(0xFF16A34A);
+    if (label.contains('초보자') ||
+        label.contains('입문자') ||
+        label.contains('숙련자') ||
+        label.contains('명인')) {
+      return const Color(0xFFFF7A65);
+    }
+    return const Color(0xFF94A3B8);
+  }
+
+  Widget _detailInfoTile({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    final display = value.trim().isEmpty ? '-' : value.trim();
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: const Color(0xFFFFE2DB),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.022),
+            blurRadius: 9,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: _detailInfoColor(label),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              color: _detailLabelColor(label),
+              height: 1.0,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            display,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11.2,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2D3436),
+              height: 1.12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final int purchasePrice = _shopPurchasePrice(material.prices);
     final String purchasePriceText =
     purchasePrice > 0 ? '${purchasePrice}원' : '-';
+    final visibleEventTokenPrices = List<Map<String, int>>.generate(
+      5,
+          (index) => {
+        'star': index + 1,
+        'price': index < material.eventTokenPrices.length ? material.eventTokenPrices[index] : 0,
+      },
+    );
+    final bool hasEventTokenPrice = material.eventTokenPrices.any((price) => price > 0);
+    final bool hasMaterialMastery = material.isCultivable &&
+        (material.masteryCount > 0 ||
+            material.masteryEntryCount > 0 ||
+            material.masterySkilledCount > 0 ||
+            material.masteryMasterCount > 0);
+    final materialExtraInfo = <Map<String, Object>>[
+      if (hasMaterialMastery)
+        ..._buildMasteryStageInfo(
+          '농사',
+          material.masteryCount,
+          entryCount: material.masteryEntryCount,
+          skilledCount: material.masterySkilledCount,
+          exactMasterCount: material.masteryMasterCount,
+          unit: '회',
+        ).map((stage) => {
+          'icon': Icons.agriculture_rounded,
+          'label': stage['label'] ?? '농사',
+          'value': stage['value'] ?? '-',
+        }),
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -4359,6 +5263,114 @@ class CookingMaterialDetailPage extends StatelessWidget {
               ],
             ),
           ),
+          if (materialExtraInfo.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const Text(
+              '명인 달성 기준',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2D3436),
+                height: 1.0,
+              ),
+            ),
+            const SizedBox(height: 10),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: materialExtraInfo.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 7,
+                mainAxisSpacing: 7,
+                childAspectRatio: 2.35,
+              ),
+              itemBuilder: (context, index) {
+                final info = materialExtraInfo[index];
+                return _detailInfoTile(
+                  icon: info['icon'] as IconData,
+                  label: info['label'] as String,
+                  value: info['value'] as String,
+                );
+              },
+            ),
+          ],
+
+          if (hasMaterialMastery) ...[
+            const SizedBox(height: 8),
+            FutureBuilder<bool>(
+              future: _loadMasteryDoneValue('material:${material.id}'),
+              builder: (context, snapshot) {
+                bool checked = snapshot.data ?? false;
+                return StatefulBuilder(
+                  builder: (context, setInnerState) {
+                    return GestureDetector(
+                      onTap: () async {
+                        checked = !checked;
+                        setInnerState(() {});
+                        await _saveMasteryDoneValue('material:${material.id}', checked);
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                        decoration: BoxDecoration(
+                          color: checked ? const Color(0xFFFFF3EE) : Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFFFE2DB)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                              color: checked ? const Color(0xFFFF8E7C) : const Color(0xFFCBD5E1),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '농사 명인 달성',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF2D3436),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+          if (hasEventTokenPrice) ...[
+            const SizedBox(height: 18),
+            const Text(
+              '이벤트 코인 판매가',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2D3436),
+              ),
+            ),
+            const SizedBox(height: 10),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: visibleEventTokenPrices.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                crossAxisSpacing: 6,
+                mainAxisSpacing: 6,
+                childAspectRatio: 0.82,
+              ),
+              itemBuilder: (context, index) {
+                final item = visibleEventTokenPrices[index];
+                return _priceTile(item['star']!, item['price']!, suffix: '코인');
+              },
+            ),
+          ],
           const SizedBox(height: 18),
           const Text(
             '이 재료로 만들 수 있는 요리',
