@@ -3615,7 +3615,10 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           .map((e) => RelatedRecipe.fromJson(e))
           .toList();
 
-      final String? mapFilterKey = _mapFilterKeyForMaterial(detail.nameKo);
+      final String? mapFilterKey = detail.isCultivable
+          ? null
+          : _mapFilterKeyForMaterial(detail.nameKo);
+
       final bool isMapGatherable = mapFilterKey != null;
 
       if (!mounted) return;

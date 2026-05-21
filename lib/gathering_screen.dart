@@ -205,14 +205,20 @@ String _inferPastSeasonLabelFromText(Iterable<String?> values) {
   final compact = _compactSeasonSourceText(values);
   if (compact.isEmpty) return '';
 
-  // 빙설 시즌: 얼음 결정/겨울/슈가파우더/무/얼음컵 계열
+  // 빙설 시즌: 얼음 결정/겨울/슈가파우더/무/얼음컵/히말라야 양귀비 계열
   if (compact.contains('빙설') ||
       compact.contains('winter') ||
       compact.contains('frost') ||
+      compact.contains('snow') ||
+      compact.contains('ice') ||
       compact.contains('frostspore') ||
       compact.contains('whiteradish') ||
       compact.contains('icedcup') ||
       compact.contains('aurora') ||
+      compact.contains('himalayanpoppy') ||
+      compact.contains('himalayan') ||
+      compact.contains('히말라야양귀비') ||
+      compact.contains('히말라야') ||
       compact.contains('얼음결정') ||
       compact.contains('얼음컵') ||
       compact.contains('슈가파우더') ||
@@ -250,7 +256,9 @@ String _inferPastSeasonLabelFromText(Iterable<String?> values) {
       compact.contains('산우엉') ||
       compact.contains('산겨자') ||
       compact.contains('산마늘') ||
-      compact.contains('고사리')) {
+      compact.contains('고사리') ||
+      compact.contains('dandelion') ||
+      compact.contains('민들레')) {
     return '꿈의 명암';
   }
 
@@ -281,6 +289,10 @@ bool _looksLikeEventOrPastSeasonText(Iterable<String?> values) {
       compact.contains('빙설') ||
       compact.contains('snow') ||
       compact.contains('ice') ||
+      compact.contains('himalayanpoppy') ||
+      compact.contains('himalayan') ||
+      compact.contains('히말라야양귀비') ||
+      compact.contains('히말라야') ||
       compact.contains('꿈의명암') ||
       compact.contains('명암') ||
       compact.contains('dream') ||
