@@ -15,6 +15,132 @@ import 'models/global_search_item.dart';
 import 'models/pet_model.dart';
 import 'setting_screen.dart';
 
+PreferredSizeWidget _keepersDetailGlassAppBar(
+    BuildContext context, {
+      required String title,
+      String subtitle = '',
+    }) {
+  final topPadding = MediaQuery.of(context).padding.top;
+
+  return PreferredSize(
+    preferredSize: Size.fromHeight(topPadding + 66),
+    child: ClipRRect(
+      borderRadius: const BorderRadius.vertical(
+        bottom: Radius.circular(26),
+      ),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(14, topPadding + 8, 14, 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.78),
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(26),
+            ),
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.white.withOpacity(0.76),
+                width: 1,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.035),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              _keepersDetailRoundButton(
+                icon: Icons.arrow_back_ios_new_rounded,
+                onTap: () => Navigator.maybePop(context),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2D3436),
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    if (subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF9AA4B2),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              const SizedBox(width: 42, height: 42),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _keepersDetailRoundButton({
+  required IconData icon,
+  required VoidCallback onTap,
+}) {
+  return Material(
+    color: Colors.white.withOpacity(0.92),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        width: 42,
+        height: 42,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFFFE2DA),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.025),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(
+          icon,
+          size: 19,
+          color: const Color(0xFF2D3436),
+        ),
+      ),
+    ),
+  );
+}
+
+
 class PetCatalogVariant {
   final String id;
   final bool isCat;
@@ -7029,58 +7155,15 @@ class _PetBreedDetailScreenState extends State<PetBreedDetailScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBFA),
+      appBar: _keepersDetailGlassAppBar(
+        context,
+        title: widget.breed,
+        subtitle: widget.catalogLabel,
+      ),
       body: SafeArea(
+        top: false,
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 2),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.92),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFFFE2DA),
-                          width: 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          size: 18,
-                          color: Color(0xFF2D3436),
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      widget.breed,
-                      style: const TextStyle(
-                        fontSize: 16.8,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF2D3436),
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                    const Spacer(),
-                    const SizedBox(width: 40),
-                  ],
-                ),
-              ),
-            ),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),

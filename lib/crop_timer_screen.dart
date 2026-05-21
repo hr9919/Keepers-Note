@@ -2,13 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
-import 'services/crop_timer_widget_service.dart';
+
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'services/crop_timer_live_activity_service.dart';
 import 'services/crop_timer_notification_service.dart';
+import 'services/crop_timer_widget_service.dart';
 
 const Map<String, int> _cropMinutesById = {
   'tomato': 15,
@@ -41,18 +43,18 @@ const Map<String, int> _cropMinutesByName = {
 };
 
 const Map<String, int> _cropSortOrder = {
-  'tomato': 1,       // 토마토 15분
-  'pineapple': 2,    // 파인애플 30분
-  'tea-tree': 3,     // 찻잎 45분
-  'potato': 4,       // 감자 60분
-  'carrot': 5,       // 당근 120분
-  'wheat': 6,        // 밀 240분
-  'cocoa-tree': 7,   // 카카오 300분
-  'strawberry': 8,   // 딸기 360분
-  'eggplant': 9,     // 가지 420분
-  'lettuce': 10,     // 상추 480분
-  'grape': 11,       // 포도 600분
-  'corn': 12,        // 옥수수 720분
+  'tomato': 1, // 토마토 15분
+  'pineapple': 2, // 파인애플 30분
+  'tea-tree': 3, // 찻잎 45분
+  'potato': 4, // 감자 60분
+  'carrot': 5, // 당근 120분
+  'wheat': 6, // 밀 240분
+  'cocoa-tree': 7, // 카카오 300분
+  'strawberry': 8, // 딸기 360분
+  'eggplant': 9, // 가지 420분
+  'lettuce': 10, // 상추 480분
+  'grape': 11, // 포도 600분
+  'corn': 12, // 옥수수 720분
 };
 
 class CropTimerScreen extends StatefulWidget {
@@ -69,6 +71,8 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
   static const String _materialApiUrl =
       'https://api.keepers-note.o-r.kr/api/cooking/materials';
 
+  static const String _weedAlertSettingKey = 'crop_timer_weed_alert_enabled';
+
   final ScrollController _scrollController = ScrollController();
 
   Timer? _ticker;
@@ -79,6 +83,7 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
 
   List<CropTimerItem> _items = [];
 
+  bool _weedAlertEnabled = false;
   bool _isCropLoading = true;
   bool _isStartingTimer = false;
   bool _showTopButton = false;
@@ -90,6 +95,7 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
 
     _loadItems();
     _fetchCrops();
+    _loadWeedAlertEnabled();
 
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -178,6 +184,37 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
     }
   }
 
+  Future<void> _loadWeedAlertEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final localValue = prefs.getBool(_weedAlertSettingKey);
+    final widgetValue = await CropTimerWidgetService.loadWeedAlertEnabled();
+
+    final enabled = widgetValue ?? localValue ?? false;
+
+    if (!mounted) return;
+
+    setState(() {
+      _weedAlertEnabled = enabled;
+    });
+
+    await prefs.setBool(_weedAlertSettingKey, enabled);
+    await CropTimerWidgetService.saveWeedAlertEnabled(enabled);
+  }
+
+  Future<void> _setWeedAlertEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (!mounted) return;
+
+    setState(() {
+      _weedAlertEnabled = value;
+    });
+
+    await prefs.setBool(_weedAlertSettingKey, value);
+    await CropTimerWidgetService.saveWeedAlertEnabled(value);
+  }
+
   static bool _shouldIncludeAsCrop(Map<String, dynamic> json) {
     final isCultivable = _parseIsCultivable(json);
     final minutes = _parseGrowMinutes(json);
@@ -213,9 +250,8 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
 
     final next = activeItems.first;
 
-    final summaryText = activeItems.length <= 1
-        ? ''
-        : '작물 ${activeItems.length}개 진행 중';
+    final summaryText =
+    activeItems.length <= 1 ? '' : '작물 ${activeItems.length}개 진행 중';
 
     await CropTimerLiveActivityService.instance.startCropTimer(
       timerId: next.id.toString(),
@@ -412,6 +448,7 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
         plantedAt: now,
         harvestAt: harvestAt,
         doneNotified: false,
+        weedAlertEnabled: _weedAlertEnabled,
       );
 
       setState(() {
@@ -428,10 +465,22 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
         harvestAt: harvestAt,
       );
 
+      if (_weedAlertEnabled) {
+        await CropTimerNotificationService.instance.scheduleCropWeedNotifications(
+          timerId: id,
+          plantedAt: now,
+          harvestAt: harvestAt,
+        );
+      }
+
       await _syncProgressNotification();
       await _syncLiveActivity();
 
-      _showSnackBar('${crop.name} 수확 알림을 예약했어요.');
+      _showSnackBar(
+        _weedAlertEnabled
+            ? '${crop.name} 수확/잡초 알림을 예약했어요.'
+            : '${crop.name} 수확 알림을 예약했어요.',
+      );
     } catch (e) {
       debugPrint('작물 타이머 시작 실패: $e');
       _showSnackBar('타이머 시작에 실패했어요.');
@@ -449,7 +498,12 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
     });
 
     await _saveItems();
+
     await CropTimerNotificationService.instance.cancelCropTimer(item.id);
+    await CropTimerNotificationService.instance.cancelCropWeedNotifications(
+      timerId: item.id,
+    );
+
     await _syncProgressNotification();
     await _syncLiveActivity();
   }
@@ -885,6 +939,8 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
               ),
               const SizedBox(height: 16),
               _buildSelectedCropCard(),
+              const SizedBox(height: 12),
+              _buildWeedAlertToggle(),
               const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
@@ -1011,6 +1067,75 @@ class _CropTimerScreenState extends State<CropTimerScreen> {
                   Icons.keyboard_arrow_down_rounded,
                   color: Color(0xFF94A3B8),
                   size: 22,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeedAlertToggle() {
+    return Material(
+      color: Colors.white.withOpacity(0.68),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _setWeedAlertEnabled(!_weedAlertEnabled),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _weedAlertEnabled
+                  ? const Color(0xFFFFB4A6)
+                  : const Color(0xFFEFE6E2),
+            ),
+          ),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: _weedAlertEnabled
+                      ? const Color(0xFFFF8E7C)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _weedAlertEnabled
+                        ? const Color(0xFFFF8E7C)
+                        : const Color(0xFFD8DEE8),
+                    width: 1.4,
+                  ),
+                ),
+                child: _weedAlertEnabled
+                    ? const Icon(
+                  Icons.check_rounded,
+                  size: 18,
+                  color: Colors.white,
+                )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  '잡초 알림 받기',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ),
+              const Text(
+                '5성작용',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFFFF8E7C),
                 ),
               ),
             ],
@@ -1597,6 +1722,7 @@ class CropTimerItem {
   final DateTime plantedAt;
   final DateTime harvestAt;
   final bool doneNotified;
+  final bool weedAlertEnabled;
 
   CropTimerItem({
     required this.id,
@@ -1606,6 +1732,7 @@ class CropTimerItem {
     required this.plantedAt,
     required this.harvestAt,
     this.doneNotified = false,
+    this.weedAlertEnabled = false,
   });
 
   factory CropTimerItem.fromJson(Map<String, dynamic> json) {
@@ -1619,11 +1746,13 @@ class CropTimerItem {
       harvestAt: DateTime.tryParse(json['harvestAt']?.toString() ?? '') ??
           DateTime.now(),
       doneNotified: json['doneNotified'] == true,
+      weedAlertEnabled: json['weedAlertEnabled'] == true,
     );
   }
 
   CropTimerItem copyWith({
     bool? doneNotified,
+    bool? weedAlertEnabled,
   }) {
     return CropTimerItem(
       id: id,
@@ -1633,6 +1762,7 @@ class CropTimerItem {
       plantedAt: plantedAt,
       harvestAt: harvestAt,
       doneNotified: doneNotified ?? this.doneNotified,
+      weedAlertEnabled: weedAlertEnabled ?? this.weedAlertEnabled,
     );
   }
 
@@ -1645,6 +1775,7 @@ class CropTimerItem {
       'plantedAt': plantedAt.toIso8601String(),
       'harvestAt': harvestAt.toIso8601String(),
       'doneNotified': doneNotified,
+      'weedAlertEnabled': weedAlertEnabled,
     };
   }
 }

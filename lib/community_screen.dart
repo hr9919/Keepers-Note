@@ -87,6 +87,7 @@ class CommunityScreen extends StatefulWidget {
   final int? initialCommentId;
   final int refreshSignal;
   final int openMyProfileSignal;
+  final int openSearchSignal;
   final VoidCallback? onInitialPostConsumed;
 
   static const double _kHeaderHorizontalPadding = 16;
@@ -133,6 +134,7 @@ class CommunityScreen extends StatefulWidget {
     this.initialCommentId,
     this.refreshSignal = 0,
     this.openMyProfileSignal = 0,
+    this.openSearchSignal = 0,
     this.onInitialPostConsumed,
   });
 
@@ -141,6 +143,8 @@ class CommunityScreen extends StatefulWidget {
 }
 
 enum CommunitySortType { latest, popular, comment }
+
+enum CommunityFeedViewType { grid, card, board }
 
 class CommunityPost {
   final int id;
@@ -441,6 +445,65 @@ class CommunityFollowUserSummary {
   }
 }
 
+
+class CommunityUserSearchResult {
+  final int? userId;
+  final String nickname;
+  final String uid;
+  final String profileImageUrl;
+  final bool followingByMe;
+
+  const CommunityUserSearchResult({
+    this.userId,
+    required this.nickname,
+    required this.uid,
+    required this.profileImageUrl,
+    this.followingByMe = false,
+  });
+
+  factory CommunityUserSearchResult.fromJson(Map<String, dynamic> json) {
+    int? readNullableInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    String readString(List<String> keys, {String fallback = ''}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value == null) continue;
+        final text = value.toString().trim();
+        if (text.isNotEmpty && text.toLowerCase() != 'null') return text;
+      }
+      return fallback;
+    }
+
+    bool readBool(List<String> keys, {bool fallback = false}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is bool) return value;
+        if (value is num) return value != 0;
+        if (value is String) {
+          final lower = value.toLowerCase();
+          if (lower == 'true' || lower == '1' || lower == 'y') return true;
+          if (lower == 'false' || lower == '0' || lower == 'n') return false;
+        }
+      }
+      return fallback;
+    }
+
+    return CommunityUserSearchResult(
+      userId: readNullableInt(json['userId'] ?? json['id'] ?? json['authorUserId']),
+      nickname: readString(const ['nickname', 'authorName', 'name'], fallback: '사용자'),
+      uid: readString(const ['gameUid', 'uid', 'authorUid'], fallback: 'UID'),
+      profileImageUrl: readString(const ['profileImageUrl', 'authorProfileImageUrl']),
+      followingByMe: readBool(const ['followingByMe', 'isFollowing', 'following']),
+    );
+  }
+}
+
 class _TagChipStyle {
   final Color selectedBackground;
   final Color selectedBorder;
@@ -455,7 +518,6 @@ class _TagChipStyle {
 
 class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingObserver {
   static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
-  static const String _swipeHintShownKey = 'community_swipe_hint_shown';
 
   late TaggingTextController _commentController;
   final FocusNode _commentFocusNode = FocusNode();
@@ -478,13 +540,17 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   String? _openingInitialTargetKey;
 
   bool _showTopButton = false;
-  bool _showSwipeGestureHint = false;
   bool _isGridView = true;
+  CommunityFeedViewType _feedViewType = CommunityFeedViewType.grid;
   bool _isFilterPanelOpen = false;
   bool _showLikedOnly = false;
   bool _showFollowingOnly = false;
   bool _isLoading = false;
   String? _errorMessage;
+
+  String _communitySearchType = 'CONTENT';
+  String _communitySearchKeyword = '';
+  List<CommunityUserSearchResult> _authorSearchResults = <CommunityUserSearchResult>[];
 
   final Set<String> _selectedTags = <String>{'전체'};
   CommunitySortType _sortType = CommunitySortType.latest;
@@ -496,6 +562,11 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   @override
   void initState() {
     super.initState();
+    // iOS 시뮬레이터/핫 리로드 중 바텀시트가 닫히는 순간
+    // InkWell 포커스 하이라이트가 dispose된 context를 다시 조회하며
+    // "Looking up a deactivated widget's ancestor is unsafe"를 내는 경우가 있어요.
+    // 터치 앱에서는 포커스 하이라이트 전환이 필요하지 않으므로 touch 모드로 고정합니다.
+    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTouch;
     _KeepersNetworkImageCache.configure();
     _commentController = TaggingTextController();
     WidgetsBinding.instance.addObserver(this);
@@ -511,27 +582,6 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tryOpenInitialPost();
-      _checkSwipeGestureHint();
-    });
-  }
-
-  Future<void> _checkSwipeGestureHint() async {
-    final prefs = await SharedPreferences.getInstance();
-    final alreadyShown = prefs.getBool(_swipeHintShownKey) ?? false;
-
-    if (alreadyShown || !mounted) return;
-
-    setState(() {
-      _showSwipeGestureHint = true;
-    });
-
-    await prefs.setBool(_swipeHintShownKey, true);
-
-    Future.delayed(const Duration(seconds: 6), () {
-      if (!mounted) return;
-      setState(() {
-        _showSwipeGestureHint = false;
-      });
     });
   }
 
@@ -590,6 +640,13 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         await _openMyProfileFromCommunity();
+      });
+    }
+
+    if (widget.openSearchSignal != oldWidget.openSearchSignal) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _openCommunitySearchSheet();
       });
     }
   }
@@ -1104,6 +1161,43 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     }
   }
 
+
+  Future<List<CommunityUserSearchResult>> _fetchApprovedCommunityUsers(String keyword) async {
+    final query = keyword.trim();
+    if (query.isEmpty) return const <CommunityUserSearchResult>[];
+
+    final uri = Uri.parse('$_baseUrl/api/community/users/search').replace(
+      queryParameters: <String, String>{
+        'keyword': query,
+        if ((widget.userId ?? '').isNotEmpty) 'userId': widget.userId!,
+      },
+    );
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('작성자 검색 실패 (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    final List<dynamic> rawList;
+
+    if (decoded is List) {
+      rawList = decoded;
+    } else if (decoded is Map<String, dynamic>) {
+      final candidate = decoded['items'] ?? decoded['data'] ?? decoded['users'] ?? decoded['content'];
+      rawList = candidate is List ? candidate : const <dynamic>[];
+    } else {
+      rawList = const <dynamic>[];
+    }
+
+    return rawList
+        .whereType<Map>()
+        .map((item) => CommunityUserSearchResult.fromJson(Map<String, dynamic>.from(item)))
+        .where((item) => (item.uid.trim().isNotEmpty && item.uid.trim() != 'UID') || item.userId != null)
+        .toList();
+  }
+
   Future<void> _fetchPosts() async {
     if (!mounted) return;
 
@@ -1113,6 +1207,18 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     });
 
     try {
+      if (_isAuthorSearchMode) {
+        final users = await _fetchApprovedCommunityUsers(_communitySearchKeyword);
+        if (!mounted) return;
+        setState(() {
+          _authorSearchResults = users;
+          _posts = <CommunityPost>[];
+        });
+        return;
+      }
+
+      _authorSearchResults = <CommunityUserSearchResult>[];
+
       final uri = Uri.parse('$_baseUrl/api/community/posts').replace(
         queryParameters: <String, String>{
           'sort': _sortType == CommunitySortType.popular
@@ -1124,6 +1230,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
             'tag': _selectedTags.join(','),
           if (_showLikedOnly) 'likedOnly': 'true',
           if (_showFollowingOnly) 'followingOnly': 'true',
+          if (_communitySearchKeyword.trim().isNotEmpty)
+            'searchType': _communitySearchType,
+          if (_communitySearchKeyword.trim().isNotEmpty)
+            'keyword': _communitySearchKeyword.trim(),
           if ((widget.userId ?? '').isNotEmpty) 'userId': widget.userId!,
         },
       );
@@ -1310,6 +1420,317 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     );
   }
 
+  Future<void> _openCommunitySearchSheet() async {
+    final TextEditingController controller =
+    TextEditingController(text: _communitySearchKeyword);
+
+    String tempSearchType = _communitySearchType;
+
+    await showModalBottomSheet<void>(
+      context: Navigator.of(context, rootNavigator: true).context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.16),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(14, 0, 14, 14 + bottomInset),
+              child: SafeArea(
+                top: false,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: const Color(0xFFF0E3DC)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.10),
+                        blurRadius: 26,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE9DDD6),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3F0),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0xFFFFE2DB),
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.search_rounded,
+                              color: Color(0xFFFF8E7C),
+                              size: 21,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '커뮤니티 검색',
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF3E332F),
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  '글 내용 또는 작성자로 검색해요',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF9A8F8A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildSearchTypeChip(
+                              label: '글 내용',
+                              icon: Icons.article_outlined,
+                              selected: tempSearchType == 'CONTENT',
+                              onTap: () {
+                                setSheetState(() {
+                                  tempSearchType = 'CONTENT';
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildSearchTypeChip(
+                              label: '작성자',
+                              icon: Icons.person_search_rounded,
+                              selected: tempSearchType == 'AUTHOR',
+                              onTap: () {
+                                setSheetState(() {
+                                  tempSearchType = 'AUTHOR';
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: controller,
+                        autofocus: true,
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (_) async {
+                          final keyword = controller.text.trim();
+
+                          if (!mounted) return;
+                          setState(() {
+                            _communitySearchType = tempSearchType;
+                            _communitySearchKeyword = keyword;
+                          });
+
+                          Navigator.pop(sheetContext);
+                          await _fetchPosts();
+                        },
+                        decoration: InputDecoration(
+                          hintText: tempSearchType == 'AUTHOR'
+                              ? '작성자 이름 또는 UID를 입력하세요'
+                              : '검색할 글 내용을 입력하세요',
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            color: Color(0xFFFF8E7C),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFFFF8F5),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 14,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFF0E3DC),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFF0E3DC),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFFF8E7C),
+                              width: 1.3,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                controller.clear();
+
+                                if (!mounted) return;
+                                setState(() {
+                                  _communitySearchKeyword = '';
+                                  _communitySearchType = 'CONTENT';
+                                });
+
+                                Navigator.pop(sheetContext);
+                                await _fetchPosts();
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF8A7B71),
+                                side: const BorderSide(
+                                  color: Color(0xFFE8DDD7),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                '검색 초기화',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                final keyword = controller.text.trim();
+
+                                if (!mounted) return;
+                                setState(() {
+                                  _communitySearchType = tempSearchType;
+                                  _communitySearchKeyword = keyword;
+                                });
+
+                                Navigator.pop(sheetContext);
+                                await _fetchPosts();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF8E7C),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                '검색',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    // showModalBottomSheet가 닫히는 프레임과 TextField 정리가 겹치면
+    // iOS hot reload/restart 중 disposed controller 참조가 날 수 있어
+    // 로컬 컨트롤러는 직접 dispose하지 않습니다.
+  }
+
+  Widget _buildSearchTypeChip({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFFFFF0EA)
+                : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFFFFCFC4)
+                  : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: selected
+                    ? const Color(0xFFFF8E7C)
+                    : const Color(0xFF8A94A6),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w900,
+                  color: selected
+                      ? const Color(0xFFFF8E7C)
+                      : const Color(0xFF8A94A6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<CommunityPost?> _fetchPostDetail(int postId) async {
     try {
       final uri = Uri.parse('$_baseUrl/api/community/posts/$postId').replace(
@@ -1438,7 +1859,15 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     });
   }
 
-  Future<void> _onRefresh() => _fetchPosts();
+  Future<void> _onRefresh() async {
+    if (_isSearchActive) {
+      setState(() {
+        _communitySearchType = 'CONTENT';
+        _communitySearchKeyword = '';
+      });
+    }
+    await _fetchPosts();
+  }
 
   void _handleScroll() {
     if (!_scrollController.hasClients || _scrollController.positions.length != 1) {
@@ -2016,11 +2445,24 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   }
 
   void _toggleViewMode() {
-    final nextIsGrid = !_isGridView;
+    _setFeedViewType(
+      _feedViewType == CommunityFeedViewType.grid
+          ? CommunityFeedViewType.card
+          : CommunityFeedViewType.grid,
+    );
+  }
+
+  void _setFeedViewType(
+      CommunityFeedViewType type, {
+        bool closePanel = true,
+      }) {
     setState(() {
-      _isGridView = nextIsGrid;
+      _feedViewType = type;
+      _isGridView = type == CommunityFeedViewType.grid;
     });
-    _moveToFeedMode(nextIsGrid);
+    if (closePanel) {
+      _closeFilterPanel();
+    }
   }
 
   void _toggleFilterPanel() {
@@ -2190,6 +2632,112 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
   List<CommunityPost> _filteredPosts() => List<CommunityPost>.from(_posts);
 
 
+  bool get _isSearchActive => _communitySearchKeyword.trim().isNotEmpty;
+
+  bool get _isAuthorSearchMode =>
+      _isSearchActive && _communitySearchType.toUpperCase() == 'AUTHOR';
+
+  String get _searchResultLabel {
+    final keyword = _communitySearchKeyword.trim();
+    if (keyword.isEmpty) return '';
+    return "'$keyword'에 대한 검색 결과입니다.";
+  }
+
+  Widget _buildSearchResultHeader() {
+    if (!_isSearchActive) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.86),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFFFE1DA)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.035),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF1ED),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFFDDD5)),
+                  ),
+                  child: Icon(
+                    _isAuthorSearchMode
+                        ? Icons.person_search_rounded
+                        : Icons.search_rounded,
+                    size: 17,
+                    color: const Color(0xFFFF8E7C),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _searchResultLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13.2,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF4A3D38),
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Material(
+                  color: const Color(0xFFFFF8F5),
+                  borderRadius: BorderRadius.circular(999),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: _clearCommunitySearch,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      child: Text(
+                        '초기화',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFFF8E7C),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _clearCommunitySearch({bool fetch = true}) {
+    setState(() {
+      _communitySearchType = 'CONTENT';
+      _communitySearchKeyword = '';
+    });
+    if (fetch) {
+      _fetchPosts();
+    }
+  }
+
+
   void _openCommunityNoticeScreen() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -2327,34 +2875,19 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
             ),
             Positioned.fill(
               top: appBarTotalHeight,
-              child: PageView.builder(
-                controller: _feedModePageController,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentFeedPage = index;
-                    _isGridView = _pageToMode(index) == 1;
-                  });
-                },
-                itemBuilder: (_, index) {
-                  final bool showGrid = _pageToMode(index) == 1;
-                  return showGrid
-                      ? RefreshIndicator(
-                    color: const Color(0xFFFF8E7C),
-                    backgroundColor: Colors.white,
-                    edgeOffset: 6,
-                    displacement: 24,
-                    onRefresh: _onRefresh,
-                    child: _buildPinterestFeed(posts),
-                  )
-                      : RefreshIndicator(
-                    color: const Color(0xFFFF8E7C),
-                    backgroundColor: Colors.white,
-                    edgeOffset: 6,
-                    displacement: 24,
-                    onRefresh: _onRefresh,
-                    child: _buildListFeed(posts),
-                  );
-                },
+              child: RefreshIndicator(
+                color: const Color(0xFFFF8E7C),
+                backgroundColor: Colors.white,
+                edgeOffset: 6,
+                displacement: 24,
+                onRefresh: _onRefresh,
+                child: _isAuthorSearchMode
+                    ? _buildAuthorSearchFeed(posts)
+                    : _feedViewType == CommunityFeedViewType.grid
+                    ? _buildPinterestFeed(posts)
+                    : _feedViewType == CommunityFeedViewType.board
+                    ? _buildBoardFeed(posts)
+                    : _buildListFeed(posts),
               ),
             ),
             Positioned(
@@ -2385,120 +2918,6 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                   child: Center(
                     child: CircularProgressIndicator(
                       color: Color(0xFFFF8E7C),
-                    ),
-                  ),
-                ),
-              ),
-
-            if (_showSwipeGestureHint)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: media.padding.bottom + 130,
-                child: IgnorePointer(
-                  child: Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                        child: Container(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.72),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.78),
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 18,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 92,
-                                height: 28,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    // 👉 트랙 (iOS 느낌 핵심)
-                                    Container(
-                                      width: 78,
-                                      height: 2,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(999),
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Colors.transparent,
-                                            const Color(0xFFB8B0AA).withOpacity(0.45),
-                                            const Color(0xFFB8B0AA).withOpacity(0.45),
-                                            Colors.transparent,
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-
-                                    // 👉 움직이는 highlight (진짜 iOS 느낌)
-                                    TweenAnimationBuilder<double>(
-                                      tween: Tween(begin: -28, end: 28),
-                                      duration: const Duration(milliseconds: 1400),
-                                      curve: Curves.easeInOutCubic,
-                                      builder: (context, value, child) {
-                                        return Transform.translate(
-                                          offset: Offset(value, 0),
-                                          child: Container(
-                                            width: 22,
-                                            height: 2,
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(999),
-                                              color: const Color(0xFFFF8E7C).withOpacity(0.8),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-
-                                    // 👉 손가락
-                                    TweenAnimationBuilder<double>(
-                                      tween: Tween(begin: -28, end: 28),
-                                      duration: const Duration(milliseconds: 1400),
-                                      curve: Curves.easeInOutCubic,
-                                      builder: (context, value, child) {
-                                        return Transform.translate(
-                                          offset: Offset(value, 7),
-                                          child: child,
-                                        );
-                                      },
-                                      child: const Icon(
-                                        Icons.touch_app_rounded,
-                                        size: 20,
-                                        color: Color(0xFFFF8E7C),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                '좌우로 밀어 보기 전환',
-                                style: TextStyle(
-                                  fontSize: 12.4,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF6F625C),
-                                  letterSpacing: -0.25,
-                                  height: 1.0,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ),
                   ),
                 ),
@@ -2611,29 +3030,33 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
 
                     const SizedBox(height: 8),
 
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Row(
                       children: <Widget>[
-                        _buildViewModeChip(
-                          label: '그리드뷰',
-                          icon: Icons.grid_view_rounded,
-                          selected: _isGridView,
-                          onTap: () {
-                            if (!_isGridView) {
-                              _toggleViewMode();
-                            }
-                          },
+                        Expanded(
+                          child: _buildViewModeChip(
+                            label: '그리드',
+                            icon: Icons.grid_view_rounded,
+                            selected: _feedViewType == CommunityFeedViewType.grid,
+                            onTap: () => _setFeedViewType(CommunityFeedViewType.grid),
+                          ),
                         ),
-                        _buildViewModeChip(
-                          label: '리스트뷰',
-                          icon: Icons.view_stream_rounded,
-                          selected: !_isGridView,
-                          onTap: () {
-                            if (_isGridView) {
-                              _toggleViewMode();
-                            }
-                          },
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _buildViewModeChip(
+                            label: '카드',
+                            icon: Icons.view_stream_rounded,
+                            selected: _feedViewType == CommunityFeedViewType.card,
+                            onTap: () => _setFeedViewType(CommunityFeedViewType.card),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _buildViewModeChip(
+                            label: '게시글형',
+                            icon: Icons.article_outlined,
+                            selected: _feedViewType == CommunityFeedViewType.board,
+                            onTap: () => _setFeedViewType(CommunityFeedViewType.board),
+                          ),
                         ),
                       ],
                     ),
@@ -2722,6 +3145,10 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                                   ..add('전체');
                                 _showLikedOnly = false;
                                 _showFollowingOnly = false;
+                                _communitySearchType = 'CONTENT';
+                                _communitySearchKeyword = '';
+                                _feedViewType = CommunityFeedViewType.grid;
+                                _isGridView = true;
                               });
                               _fetchPosts();
                             },
@@ -2798,7 +3225,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(999),
@@ -2814,11 +3241,12 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                 : null,
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.max,
             children: [
               Container(
-                width: 20,
-                height: 20,
+                width: 18,
+                height: 18,
                 decoration: BoxDecoration(
                   color: iconBg,
                   shape: BoxShape.circle,
@@ -2826,15 +3254,15 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                 alignment: Alignment.center,
                 child: Icon(
                   icon,
-                  size: 12.5,
+                  size: 11.5,
                   color: text,
                 ),
               ),
-              const SizedBox(width: 7),
+              const SizedBox(width: 4),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 12.8,
+                  fontSize: 11.6,
                   fontWeight: FontWeight.w800,
                   color: text,
                   letterSpacing: -0.1,
@@ -3163,7 +3591,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                     child: Row(
                       children: [
                         _buildIconAppBarButton(
-                          iconAsset: 'assets/icons/ic_menu.svg',
+                          icon: Icons.tune_rounded,
                           onTap: _toggleFilterPanel,
                           isAccent: false,
                           isActive: true,
@@ -3208,8 +3636,9 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     bool isActive = false,
   }) {
     final bool isMenu =
-        (iconAsset != null && iconAsset.contains('menu')) ||
-            icon == Icons.menu_rounded;
+        icon == Icons.tune_rounded ||
+            icon == Icons.menu_rounded ||
+            (iconAsset != null && iconAsset.contains('menu'));
 
     final Color backgroundColor = isMenu
         ? const Color(0xFFFFF3F0)
@@ -3899,6 +4328,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 132),
         children: <Widget>[
           _buildCommunityNoticeHeader(),
+          _buildSearchResultHeader(),
           _buildErrorState(),
         ],
       );
@@ -3912,6 +4342,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 132),
       children: <Widget>[
         _buildCommunityNoticeHeader(),
+        _buildSearchResultHeader(),
         if (posts.isEmpty)
           _buildEmptyState() // 위에서 만든 height가 지정된 위젯이 들어감
         else
@@ -3927,12 +4358,19 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 132),
         children: <Widget>[
           _buildCommunityNoticeHeader(),
+          _buildSearchResultHeader(),
           _buildErrorState(),
         ],
       );
     }
 
-    if (posts.isEmpty) {
+    // 그리드뷰는 사진 중심 보기라서 사진이 없는 글은 표시하지 않습니다.
+    // 사진 없는 글은 카드뷰/게시글형에서 계속 볼 수 있어요.
+    final List<CommunityPost> gridPosts = posts
+        .where((post) => post.imageUrls.any((url) => url.trim().isNotEmpty))
+        .toList();
+
+    if (gridPosts.isEmpty) {
       return ListView(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(
@@ -3941,7 +4379,20 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 132),
         children: <Widget>[
           _buildCommunityNoticeHeader(),
-          _buildEmptyState(),
+          _buildSearchResultHeader(),
+          const SizedBox(height: 44),
+          const Center(
+            child: Text(
+              '사진이 있는 글이 없어요.\n카드뷰나 게시글형에서 전체 글을 볼 수 있어요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF9EA6B2),
+                height: 1.45,
+              ),
+            ),
+          ),
         ],
       );
     }
@@ -3951,8 +4402,8 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     double leftScore = 0;
     double rightScore = 0;
 
-    for (int i = 0; i < posts.length; i++) {
-      final post = posts[i];
+    for (int i = 0; i < gridPosts.length; i++) {
+      final post = gridPosts[i];
       final double score = _gridMasonryScore(post, i);
 
       final bool forceLeftHeavy = i % 7 == 0 || i % 7 == 1;
@@ -4000,6 +4451,7 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
       child: Column(
         children: <Widget>[
           _buildCommunityNoticeHeader(),
+          _buildSearchResultHeader(),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -4035,6 +4487,473 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildBoardFeed(List<CommunityPost> posts) {
+    if (_errorMessage != null) {
+      return ListView(
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 132),
+        children: <Widget>[
+          _buildCommunityNoticeHeader(),
+          _buildSearchResultHeader(),
+          _buildErrorState(),
+        ],
+      );
+    }
+
+    return ListView(
+      controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 132),
+      children: <Widget>[
+        _buildCommunityNoticeHeader(),
+        _buildSearchResultHeader(),
+        if (posts.isEmpty)
+          _buildEmptyState()
+        else
+          ...posts.map<Widget>(_buildBoardPostTile),
+      ],
+    );
+  }
+
+  Widget _buildAuthorSearchFeed(List<CommunityPost> posts) {
+    if (_errorMessage != null) {
+      return ListView(
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 132),
+        children: <Widget>[
+          _buildCommunityNoticeHeader(),
+          _buildSearchResultHeader(),
+          _buildErrorState(),
+        ],
+      );
+    }
+
+    final users = _authorSearchResults;
+
+    return ListView(
+      controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 132),
+      children: <Widget>[
+        _buildCommunityNoticeHeader(),
+        _buildSearchResultHeader(),
+        if (users.isEmpty)
+          _buildAuthorEmptyState()
+        else
+          ...users.map<Widget>(_buildAuthorSearchTile),
+      ],
+    );
+  }
+
+  List<CommunityPost> _uniqueAuthorSearchResults(List<CommunityPost> posts) {
+    final Map<String, CommunityPost> result = <String, CommunityPost>{};
+
+    for (final post in posts) {
+      final String key = post.authorUserId?.toString() ??
+          '${post.author.trim()}|${post.uid.trim()}';
+      if (key.trim().isEmpty) continue;
+      result.putIfAbsent(key, () => post);
+    }
+
+    return result.values.toList();
+  }
+
+  Widget _buildAuthorEmptyState() {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.52,
+      alignment: Alignment.center,
+      child: const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.person_search_rounded,
+            size: 36,
+            color: Color(0xFFE3B0A5),
+          ),
+          SizedBox(height: 12),
+          Text(
+            '검색된 작성자가 없어요.',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF9EA6B2),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAuthorSearchTile(CommunityUserSearchResult user) {
+    final String nickname = user.nickname.trim().isNotEmpty ? user.nickname.trim() : '사용자';
+    final String uid = user.uid.trim().isNotEmpty ? user.uid.trim() : 'UID';
+    final String profileUrl = _resolveProfileImagePath(user.profileImageUrl);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () => _openUserSearchProfile(user),
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.94),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFF0E3DC)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.025),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFFF3F0),
+                    border: Border.all(color: const Color(0xFFFFE1D9)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: profileUrl.isNotEmpty
+                      ? Image.network(
+                    profileUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.person_rounded,
+                      color: Color(0xFFFF8E7C),
+                    ),
+                  )
+                      : const Icon(
+                    Icons.person_rounded,
+                    color: Color(0xFFFF8E7C),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              nickname,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14.8,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF3F3531),
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                          ),
+                          if (user.followingByMe) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF8D8),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: const Color(0xFFFFE9A8)),
+                              ),
+                              child: const Text(
+                                '팔로잉',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFFE0A900),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'UID · $uid',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF9AA4B2),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8F5),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFFFE1D9)),
+                  ),
+                  child: const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 21,
+                    color: Color(0xFFFF8E7C),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openUserSearchProfile(CommunityUserSearchResult user) async {
+    final int? myUserId = widget.userId == null ? null : int.tryParse(widget.userId!);
+    final bool isMine = user.userId != null && myUserId != null && user.userId == myUserId;
+
+    final result = await Navigator.of(context).push<CommunityUserProfileResult>(
+      MaterialPageRoute(
+        builder: (_) => CommunityUserProfileScreen(
+          baseUrl: _baseUrl,
+          currentUserId: widget.userId,
+          authorUserId: user.userId,
+          authorName: user.nickname.trim().isNotEmpty ? user.nickname.trim() : '사용자',
+          authorUid: user.uid.trim().isNotEmpty ? user.uid.trim() : 'UID',
+          profileImageUrl: _resolveProfileImagePath(user.profileImageUrl),
+          headerImageUrl: '',
+          isMine: isMine,
+          isInitiallyFollowing: user.followingByMe,
+          recentSeeds: user.userId == null
+              ? const <CommunityProfilePostSeed>[]
+              : _recentSeedsForAuthorUserId(user.userId!),
+        ),
+      ),
+    );
+
+    await _handleProfileResult(result);
+  }
+
+  List<CommunityProfilePostSeed> _recentSeedsForAuthorUserId(int authorUserId) {
+    final CommunityPost seedPost = CommunityPost(
+      id: 0,
+      authorUserId: authorUserId,
+      author: '',
+      uid: '',
+      title: '',
+      body: '',
+      imageUrls: const <String>[],
+      tags: const <String>[],
+      likeCount: 0,
+      commentCount: 0,
+      createdLabel: '',
+      profileImageUrl: '',
+    );
+
+    return _recentSeedsForAuthor(seedPost);
+  }
+
+  Widget _buildBoardPostTile(CommunityPost post) {
+    final String imageUrl = post.imageUrls.isNotEmpty
+        ? _resolveImagePath(post.imageUrls.first)
+        : '';
+    final bool hasImage = imageUrl.isNotEmpty;
+    final String title = post.title.trim().isNotEmpty
+        ? post.title.trim()
+        : post.body.trim().isNotEmpty
+        ? post.body.trim()
+        : '제목 없는 게시글';
+    final String timeLabel = _formatMetaCreatedLabel(post.createdLabel);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () => _openPostDetailSheet(post),
+          child: Ink(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.94),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: _postBorderColor(post), width: 1.05),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.025),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (hasImage) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        width: 72,
+                        height: 72,
+                        child: imageUrl.startsWith('assets/')
+                            ? Image.asset(imageUrl, fit: BoxFit.cover)
+                            : _KeepersCachedNetworkImage(
+                          url: imageUrl,
+                          fit: BoxFit.cover,
+                          errorWidget: const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (post.tags.isNotEmpty) ...[
+                              Flexible(
+                                child: _buildContentTagChip(
+                                  post.tags.first,
+                                  compact: true,
+                                  tiny: true,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                            ],
+                            if (_shouldShowAdminPickStyle(post))
+                              _buildVerifiedBadge(),
+                          ],
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14.2,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF3F3531),
+                            height: 1.22,
+                            letterSpacing: -0.25,
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                post.author.isNotEmpty ? post.author : '사용자',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11.8,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF7E7068),
+                                ),
+                              ),
+                            ),
+                            if (timeLabel.isNotEmpty) ...[
+                              const SizedBox(width: 5),
+                              const Text(
+                                '·',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFFC0B4AE),
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                timeLabel,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF9AA4B2),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 94,
+                    child: Align(
+                      alignment: Alignment.bottomRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildBoardCountItem(
+                            icon: Icons.favorite_rounded,
+                            count: post.likeCount,
+                            active: post.likedByMe,
+                          ),
+                          const SizedBox(width: 8),
+                          _buildBoardCountItem(
+                            icon: Icons.mode_comment_outlined,
+                            count: post.commentCount,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardCountItem({
+    required IconData icon,
+    required int count,
+    bool active = false,
+  }) {
+    final color = active ? const Color(0xFFFF8E7C) : const Color(0xFF9A8F8A);
+
+    return SizedBox(
+      width: 42,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Icon(icon, size: 13.5, color: color),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              count > 999 ? '999+' : count.toString(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 11.2,
+                fontWeight: FontWeight.w900,
+                color: color,
+                height: 1.0,
+              ),
+            ),
           ),
         ],
       ),
@@ -4188,21 +5107,22 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                     ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _PostImageCarousel(
-                      post: post,
-                      baseUrl: _baseUrl,
-                      showLeadingTag: false,
-                      useIntrinsicAspectRatio: true,
-                      onTapImage: (_) {
-                        _openPostDetailSheet(post);
-                      },
+                if (post.imageUrls.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _PostImageCarousel(
+                        post: post,
+                        baseUrl: _baseUrl,
+                        showLeadingTag: false,
+                        useIntrinsicAspectRatio: true,
+                        onTapImage: (_) {
+                          _openPostDetailSheet(post);
+                        },
+                      ),
                     ),
                   ),
-                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 11, 14, 14),
                   child: Column(
@@ -4956,6 +5876,18 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     );
   }
 
+  Widget _buildImagePlaceholder() {
+    return Container(
+      color: const Color(0xFFFFF6F2),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.image_outlined,
+        size: 28,
+        color: Color(0xFFE1B3A8),
+      ),
+    );
+  }
+
   Widget _buildGridCard(
       CommunityPost post,
       int index, {
@@ -5036,61 +5968,55 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: imageHeight,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: <Widget>[
-                              AbsorbPointer(
-                                child: _PostImageCarousel(
-                                  post: post,
-                                  baseUrl: _baseUrl,
-                                  fixedAspectRatio: null,
-                                  showLeadingTag: false,
-                                  useIntrinsicAspectRatio: false,
-                                  onTapImage: (_) {},
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: openDetail,
+                    if (post.imageUrls.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: imageHeight,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: <Widget>[
+                                AbsorbPointer(
+                                  child: _PostImageCarousel(
+                                    post: post,
+                                    baseUrl: _baseUrl,
+                                    fixedAspectRatio: null,
+                                    showLeadingTag: false,
+                                    useIntrinsicAspectRatio: false,
+                                    onTapImage: (_) {},
                                   ),
                                 ),
-                              ),
-                              Positioned(
-                                top: 7,
-                                left: 8,
-                                child: _buildGridMoreButton(
-                                  onTap: () => _openPostMoreSheet(post),
+                                Positioned.fill(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: openDetail,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              Positioned(
-                                top: 10,
-                                right: 10,
-                                child: _buildGridLikeButton(
-                                  liked: liked,
-                                  onTap: () => _toggleLike(post.id),
+                                Positioned(
+                                  top: 8,
+                                  left: 8,
+                                  child: IgnorePointer(
+                                    child: _buildGridCountOverlay(post),
+                                  ),
                                 ),
-                              ),
-                              Positioned(
-                                right: 7,
-                                bottom: 7,
-                                child: IgnorePointer(
-                                  child: _buildGridCountOverlay(post),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: _buildGridLikeButton(
+                                    liked: liked,
+                                    onTap: () => _toggleLike(post.id),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(10, 2, 10, 9),
                       child: Row(
@@ -7081,17 +8007,55 @@ class _CommunityScreenState extends State<CommunityScreen> with WidgetsBindingOb
     required bool liked,
     required VoidCallback onTap,
   }) {
-    return _AnimatedCommunityLikeButton(
-      liked: liked,
-      onTap: onTap,
-      size: 30,
-      iconSize: 18,
-      backgroundColor: Colors.white.withOpacity(0.94),
-      borderColor: const Color(0xFFFFE5DE),
-      likedColor: const Color(0xFFFF8E7C),
-      idleColor: const Color(0xFFD0A49A),
-      iconTopOffset: 0.0,
-      circular: true,
+    final Color iconColor = liked
+        ? const Color(0xFFFF7F72)
+        : const Color(0xFF7B6D64);
+
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: 18,
+          sigmaY: 18,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.58),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.58),
+                  width: 0.75,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.18),
+                    blurRadius: 3,
+                    offset: const Offset(-1, -1),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Icon(
+                liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                size: 15,
+                color: iconColor.withOpacity(0.95),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -7559,6 +8523,10 @@ class _PostImageCarouselState extends State<_PostImageCarousel> {
   @override
   Widget build(BuildContext context) {
     final images = widget.post.imageUrls;
+
+    if (images.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {

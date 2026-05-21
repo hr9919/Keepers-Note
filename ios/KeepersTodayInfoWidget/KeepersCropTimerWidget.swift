@@ -14,12 +14,14 @@ struct KeepersCropTimerItem: Codable, Identifiable, Hashable {
     let plantedAt: String
     let harvestAt: String
     let doneNotified: Bool
+    let weedAlertEnabled: Bool?
 }
 
 struct KeepersCropTimerEntry: TimelineEntry {
     let date: Date
     let items: [KeepersCropTimerItem]
     let updatedAt: String
+    let weedAlertEnabled: Bool
 }
 
 struct QuickCrop: Identifiable, Hashable {
@@ -45,6 +47,7 @@ private let quickCrops: [QuickCrop] = [
 enum KeepersCropTimerStore {
     private static let itemsKey = "crop_timer_widget_items"
     private static let updatedAtKey = "crop_timer_widget_updated_at"
+    private static let weedAlertKey = "crop_timer_widget_weed_alert_enabled"
 
     static func loadItems() -> [KeepersCropTimerItem] {
         guard
@@ -69,6 +72,21 @@ enum KeepersCropTimerStore {
         defaults.set(nowLabel(), forKey: updatedAtKey)
     }
 
+    static func isWeedAlertEnabled() -> Bool {
+        let defaults = UserDefaults(suiteName: cropTimerAppGroupId)
+        return defaults?.bool(forKey: weedAlertKey) ?? false
+    }
+
+    static func setWeedAlertEnabled(_ enabled: Bool) {
+        UserDefaults(suiteName: cropTimerAppGroupId)?.set(enabled, forKey: weedAlertKey)
+    }
+
+    static func toggleWeedAlertEnabled() -> Bool {
+        let next = !isWeedAlertEnabled()
+        setWeedAlertEnabled(next)
+        return next
+    }
+
     static func startTimer(
         cropId: String,
         cropName: String,
@@ -79,6 +97,7 @@ enum KeepersCropTimerStore {
         let now = Date()
         let harvestAt = now.addingTimeInterval(TimeInterval(minutes * 60))
         let id = Int(now.timeIntervalSince1970 * 1000) % 2147483647
+        let weedEnabled = isWeedAlertEnabled()
 
         let item = KeepersCropTimerItem(
             id: id,
@@ -87,7 +106,8 @@ enum KeepersCropTimerStore {
             asset: "",
             plantedAt: isoString(now),
             harvestAt: isoString(harvestAt),
-            doneNotified: false
+            doneNotified: false,
+            weedAlertEnabled: weedEnabled
         )
 
         items.append(item)
@@ -151,6 +171,13 @@ struct StartCropTimerIntent: AppIntent {
             minutes: minutes
         )
 
+        if item.weedAlertEnabled == true {
+            await scheduleWeedNotifications(
+                notificationId: item.id,
+                minutes: minutes
+            )
+        }
+
         WidgetCenter.shared.reloadTimelines(ofKind: cropTimerWidgetKind)
 
         return .result()
@@ -186,6 +213,72 @@ struct StartCropTimerIntent: AppIntent {
             // 위젯 액션에서는 알림 예약 실패가 UI를 막지 않게 함
         }
     }
+
+    private func weedNotificationId(_ timerId: Int, _ stage: Int) -> Int {
+        return ((timerId % 200000000) * 10) + stage
+    }
+
+    private func scheduleWeedNotifications(
+        notificationId: Int,
+        minutes: Int
+    ) async {
+        let totalSeconds = max(1, minutes * 60)
+
+        let intervals = [
+            max(1, totalSeconds / 3),
+            max(1, (totalSeconds * 2) / 3),
+            max(1, totalSeconds - 60),
+            max(1, totalSeconds + 60)
+        ]
+
+        for index in 0..<intervals.count {
+            await scheduleWeedNotification(
+                notificationId: weedNotificationId(notificationId, index + 1),
+                seconds: intervals[index]
+            )
+        }
+    }
+
+    private func scheduleWeedNotification(
+        notificationId: Int,
+        seconds: Int
+    ) async {
+        let content = UNMutableNotificationContent()
+        content.title = "잡초 확인 시간이에요"
+        content.sound = .default
+        content.userInfo = [
+            "target": "crop_timer"
+        ]
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: TimeInterval(max(1, seconds)),
+            repeats: false
+        )
+
+        let request = UNNotificationRequest(
+            identifier: "\(notificationId)",
+            content: content,
+            trigger: trigger
+        )
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+        } catch {
+            // 위젯 액션에서는 알림 예약 실패가 UI를 막지 않게 함
+        }
+    }
+}
+
+struct ToggleCropWeedAlertIntent: AppIntent {
+    static var title: LocalizedStringResource = "잡초 알림 받기"
+
+    init() {}
+
+    func perform() async throws -> some IntentResult {
+        _ = KeepersCropTimerStore.toggleWeedAlertEnabled()
+        WidgetCenter.shared.reloadTimelines(ofKind: cropTimerWidgetKind)
+        return .result()
+    }
 }
 
 struct KeepersCropTimerProvider: TimelineProvider {
@@ -200,7 +293,8 @@ struct KeepersCropTimerProvider: TimelineProvider {
                     asset: "",
                     plantedAt: KeepersCropTimerStore.isoString(Date()),
                     harvestAt: KeepersCropTimerStore.isoString(Date().addingTimeInterval(900)),
-                    doneNotified: false
+                    doneNotified: false,
+                    weedAlertEnabled: true
                 ),
                 KeepersCropTimerItem(
                     id: 2,
@@ -209,10 +303,12 @@ struct KeepersCropTimerProvider: TimelineProvider {
                     asset: "",
                     plantedAt: KeepersCropTimerStore.isoString(Date()),
                     harvestAt: KeepersCropTimerStore.isoString(Date().addingTimeInterval(3600)),
-                    doneNotified: false
+                    doneNotified: false,
+                    weedAlertEnabled: false
                 )
             ],
-            updatedAt: "방금"
+            updatedAt: "방금",
+            weedAlertEnabled: true
         )
     }
 
@@ -241,7 +337,8 @@ struct KeepersCropTimerProvider: TimelineProvider {
         return KeepersCropTimerEntry(
             date: Date(),
             items: items,
-            updatedAt: KeepersCropTimerStore.updatedAt()
+            updatedAt: KeepersCropTimerStore.updatedAt(),
+            weedAlertEnabled: KeepersCropTimerStore.isWeedAlertEnabled()
         )
     }
 }
@@ -347,7 +444,34 @@ struct KeepersCropTimerWidgetEntryView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            weedAlertToggle
         }
+    }
+
+    private var weedAlertToggle: some View {
+        Button(intent: ToggleCropWeedAlertIntent()) {
+            HStack(spacing: 7) {
+                Image(systemName: entry.weedAlertEnabled ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color(hex: "#FF8E7C"))
+
+                Text("잡초 알림 받기")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color(hex: "#475569"))
+
+                Spacer(minLength: 0)
+
+                Text("5성작용")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color(hex: "#FF8E7C"))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color.white.opacity(0.58))
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var timerList: some View {
@@ -386,6 +510,14 @@ struct KeepersCropTimerWidgetEntryView: View {
                         Text("수확 가능")
                             .font(.system(size: 8.5, weight: .bold))
                             .foregroundStyle(Color(hex: "#FF6F61"))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "#FFF1EC"))
+                            .clipShape(Capsule())
+                    } else if item.weedAlertEnabled == true {
+                        Text("잡초")
+                            .font(.system(size: 8.5, weight: .bold))
+                            .foregroundStyle(Color(hex: "#FF8E7C"))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(Color(hex: "#FFF1EC"))
@@ -642,7 +774,7 @@ private func cropImageNameByKoreanName(_ cropName: String) -> String {
         return "ic_crop_potato"
     case "밀":
         return "ic_crop_wheat"
-    case "상추":
+    case "상추", "양상추":
         return "ic_crop_lettuce"
     case "파인애플":
         return "ic_crop_pineapple"
@@ -656,6 +788,10 @@ private func cropImageNameByKoreanName(_ cropName: String) -> String {
         return "ic_crop_grape"
     case "가지":
         return "ic_crop_eggplant"
+    case "찻잎":
+        return "ic_crop_tea_tree"
+    case "카카오":
+        return "ic_crop_cocoa_tree"
     default:
         return "ic_crop_tomato"
     }

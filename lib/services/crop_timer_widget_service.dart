@@ -5,6 +5,7 @@ import 'package:home_widget/home_widget.dart';
 class CropTimerWidgetService {
   static const String _iOSAppGroupId = 'group.com.townhelpers.keepersnote';
   static const String _iOSWidgetName = 'KeepersCropTimerWidget';
+  static const String _weedAlertKey = 'crop_timer_widget_weed_alert_enabled';
 
   static Future<void> _ensureInitialized() async {
     if (Platform.isIOS) {
@@ -30,6 +31,29 @@ class CropTimerWidgetService {
     await HomeWidget.updateWidget(
       name: _iOSWidgetName,
       iOSName: _iOSWidgetName,
+    );
+  }
+
+  static Future<void> saveWeedAlertEnabled(bool enabled) async {
+    await _ensureInitialized();
+
+    await HomeWidget.saveWidgetData<bool>(
+      _weedAlertKey,
+      enabled,
+    );
+
+    await HomeWidget.updateWidget(
+      name: _iOSWidgetName,
+      iOSName: _iOSWidgetName,
+    );
+  }
+
+  static Future<bool?> loadWeedAlertEnabled() async {
+    await _ensureInitialized();
+
+    return HomeWidget.getWidgetData<bool>(
+      _weedAlertKey,
+      defaultValue: null,
     );
   }
 

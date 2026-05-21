@@ -7,8 +7,135 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'setting_screen.dart';
+import 'services/collection_progress_service.dart';
 
 import 'models/global_search_item.dart';
+
+PreferredSizeWidget _keepersDetailGlassAppBar(
+    BuildContext context, {
+      required String title,
+      String subtitle = '',
+    }) {
+  final topPadding = MediaQuery.of(context).padding.top;
+
+  return PreferredSize(
+    preferredSize: Size.fromHeight(topPadding + 66),
+    child: ClipRRect(
+      borderRadius: const BorderRadius.vertical(
+        bottom: Radius.circular(26),
+      ),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(14, topPadding + 8, 14, 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.78),
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(26),
+            ),
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.white.withOpacity(0.76),
+                width: 1,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.035),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              _keepersDetailRoundButton(
+                icon: Icons.arrow_back_ios_new_rounded,
+                onTap: () => Navigator.maybePop(context),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2D3436),
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    if (subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF9AA4B2),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              const SizedBox(width: 42, height: 42),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _keepersDetailRoundButton({
+  required IconData icon,
+  required VoidCallback onTap,
+}) {
+  return Material(
+    color: Colors.white.withOpacity(0.92),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        width: 42,
+        height: 42,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFFFE2DA),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.025),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(
+          icon,
+          size: 19,
+          color: const Color(0xFF2D3436),
+        ),
+      ),
+    ),
+  );
+}
+
 
 int _parseIntFlexible(dynamic value, {int fallback = 0}) {
   if (value == null) return fallback;
@@ -29,6 +156,79 @@ String _parseTextFlexible(Map<String, dynamic> json, List<String> keys) {
   return '';
 }
 
+String _normalizeSeasonLabel(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty || value == '-' || value.toLowerCase() == 'null') return '';
+
+  final compact = value.replaceAll(' ', '').replaceAll('_', '').replaceAll('-', '').toLowerCase();
+
+  if (compact.contains('빙설') || compact.contains('snow') || compact.contains('ice')) {
+    return '빙설 시즌';
+  }
+  if (compact.contains('꿈의명암') || compact.contains('명암') || compact.contains('dream')) {
+    return '꿈의 명암';
+  }
+
+  return value;
+}
+
+String _parseSeasonTag(Map<String, dynamic> json) {
+  return _normalizeSeasonLabel(
+    _parseTextFlexible(json, const [
+      'seasonTag',
+      'season_tag',
+      'pastSeason',
+      'past_season',
+      'seasonName',
+      'season_name',
+      'eventSeason',
+      'event_season',
+      'season',
+    ]),
+  );
+}
+
+bool _hasEventTokenPrice(List<int> prices) {
+  return prices.any((price) => price > 0);
+}
+
+bool _looksLikeEventOrPastSeasonText(Iterable<String?> values) {
+  final compact = values
+      .where((value) => value != null)
+      .map((value) => value!.trim())
+      .where((value) => value.isNotEmpty)
+      .join(' ')
+      .replaceAll(' ', '')
+      .replaceAll('_', '')
+      .replaceAll('-', '')
+      .toLowerCase();
+
+  if (compact.isEmpty) return false;
+
+  return compact.contains('이벤트') ||
+      compact.contains('사건') ||
+      compact.contains('brick') ||
+      compact.contains('브릭') ||
+      compact.contains('빙설') ||
+      compact.contains('snow') ||
+      compact.contains('ice') ||
+      compact.contains('꿈의명암') ||
+      compact.contains('명암') ||
+      compact.contains('dream') ||
+      compact.contains('부활절') ||
+      compact.contains('이스터');
+}
+
+bool _isEventOrPastSeasonItem({
+  required List<int> eventTokenPrices,
+  String seasonTag = '',
+  Iterable<String?> textValues = const [],
+}) {
+  return _hasEventTokenPrice(eventTokenPrices) ||
+      seasonTag.trim().isNotEmpty ||
+      _looksLikeEventOrPastSeasonText(textValues);
+}
+
 List<int> _parseEventTokenPrices(Map<String, dynamic> json) {
   return [
     _parseIntFlexible(json['eventTokenPrice1'] ?? json['event_token_price_1']),
@@ -37,6 +237,116 @@ List<int> _parseEventTokenPrices(Map<String, dynamic> json) {
     _parseIntFlexible(json['eventTokenPrice4'] ?? json['event_token_price_4']),
     _parseIntFlexible(json['eventTokenPrice5'] ?? json['event_token_price_5']),
   ];
+}
+
+
+String _formatOccurrenceSubInfo(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty || value == '-') return '-';
+
+  final weatherPatterns = <String>[
+    '맑음/무지개',
+    '해/무지개',
+    '비/무지개',
+    '눈/무지개',
+    '흐림/무지개',
+    '무지개',
+    '맑음',
+    '해',
+    '비',
+    '눈',
+    '흐림',
+    'rainy_rainbow',
+    'sunny_rainbow',
+    'rainbow',
+    'rainy',
+    'sunny',
+  ];
+
+  String weatherText = '';
+  String timeText = value;
+
+  for (final pattern in weatherPatterns) {
+    if (timeText.toLowerCase().contains(pattern.toLowerCase())) {
+      weatherText = _normalizeOccurrenceWeather(pattern);
+      timeText = timeText.replaceAll(RegExp(RegExp.escape(pattern), caseSensitive: false), '').trim();
+      break;
+    }
+  }
+
+  timeText = timeText
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll(RegExp(r'^[·,/\-\s]+'), '')
+      .replaceAll(RegExp(r'[·,/\-\s]+$'), '')
+      .trim();
+
+  final lines = <String>[];
+  if (timeText.isNotEmpty) {
+    lines.add('시간 : ${_formatOccurrenceTimeText(timeText)}');
+  }
+  if (weatherText.isNotEmpty) {
+    lines.add('날씨 : $weatherText');
+  }
+
+  if (lines.isEmpty) return value;
+  return lines.join('\n');
+}
+
+String _normalizeOccurrenceWeather(String raw) {
+  final value = raw.trim().toLowerCase();
+  if (value.contains('rainy_rainbow') || value.contains('비/무지개')) return '비/무지개';
+  if (value.contains('sunny_rainbow') || value.contains('해/무지개') || value.contains('맑음/무지개')) return '맑음/무지개';
+  if (value.contains('rainbow') || value.contains('무지개')) return '무지개';
+  if (value.contains('rainy') || value == '비') return '비';
+  if (value.contains('sunny') || value == '해' || value == '맑음') return '맑음';
+  if (value == '눈') return '눈';
+  if (value == '흐림') return '흐림';
+  return raw.trim();
+}
+
+String _formatOccurrenceTimeText(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty) return '';
+  final compact = value.replaceAll(' ', '').toLowerCase();
+
+  if (compact == 'all' || compact == 'any' || compact == 'allday' || compact == '0~24' || compact == '0-24' || compact == '상시') {
+    return '상시';
+  }
+
+  final replaced = value
+      .replaceAll('／', '/')
+      .replaceAll('，', ',')
+      .replaceAll(RegExp(r'\s*/\s*'), ' / ')
+      .replaceAll(RegExp(r'\s*,\s*'), ', ');
+
+  return replaced.replaceAllMapped(
+    RegExp(r'(\d{1,2})\s*[~-]\s*(\d{1,2})(?!\s*시)'),
+        (m) => '${m.group(1)}~${m.group(2)}시',
+  );
+}
+
+String _normalizeShadowSizeLabel(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty || value == '-') return '';
+  final compact = value.toLowerCase().replaceAll(' ', '').replaceAll('_', '-');
+
+  if (compact == 'xs' || compact == 'tiny' || compact == 'very-small' || compact == 'verysmall' || compact == 'blue' || value.contains('매우작') || value.contains('매우 작')) {
+    return '매우 작음';
+  }
+  if (compact == 's' || compact == 'small' || value == '작음' || value == '작다') {
+    return '작음';
+  }
+  if (compact == 'm' || compact == 'medium' || value == '중간') {
+    return '중간';
+  }
+  if (compact == 'l' || compact == 'big' || compact == 'large' || value == '큼' || value == '크다') {
+    return '큼';
+  }
+  if (compact == 'xl' || compact == 'xxl' || compact == 'gold' || compact == 'huge' || compact == 'giant' || value.contains('매우큼') || value.contains('매우 큼')) {
+    return '매우 큼';
+  }
+
+  return value;
 }
 
 
@@ -71,13 +381,130 @@ List<Map<String, String>> _buildMasteryStageExtraInfo(
 String _masteryDoneStorageKey(String itemKey) => 'mastery_done:$itemKey';
 
 Future<bool> _loadMasteryDoneValue(String itemKey) async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getBool(_masteryDoneStorageKey(itemKey)) ?? false;
+  return CollectionProgressService.loadMasteryDone(itemKey);
 }
 
 Future<void> _saveMasteryDoneValue(String itemKey, bool value) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool(_masteryDoneStorageKey(itemKey), value);
+  await CollectionProgressService.saveMasteryDone(itemKey, value);
+}
+
+
+Future<int> _loadDetailAchievementStarValue(String itemKey) async {
+  return CollectionProgressService.loadAchievementStar(
+    itemKey,
+    localStorageKey: 'gathering_achievement_stars',
+  );
+}
+
+Future<void> _saveDetailAchievementStarValue(String itemKey, int star) async {
+  await CollectionProgressService.saveAchievementStarLocal(
+    itemKey,
+    star,
+    localStorageKey: 'gathering_achievement_stars',
+  );
+}
+
+Widget _buildDetailAchievementStars({
+  required String itemKey,
+}) {
+  return FutureBuilder<int>(
+    future: _loadDetailAchievementStarValue(itemKey),
+    builder: (context, snapshot) {
+      int selected = snapshot.data ?? 0;
+
+      return StatefulBuilder(
+        builder: (context, setInnerState) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(5, (index) {
+              final star = index + 1;
+              final active = selected >= star;
+
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () async {
+                  final next = selected == star ? 0 : star;
+                  setInnerState(() => selected = next);
+                  await _saveDetailAchievementStarValue(itemKey, next);
+                },
+                child: SizedBox(
+                  width: 28,
+                  height: 34,
+                  child: Center(
+                    child: Icon(
+                      active ? Icons.star_rounded : Icons.star_border_rounded,
+                      size: 29,
+                      color: active
+                          ? const Color(0xFFFFB84D)
+                          : const Color(0xFFD6DEE8),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          );
+        },
+      );
+    },
+  );
+}
+
+Widget _buildDetailMasteryDoneButton({
+  required String itemKey,
+}) {
+  return FutureBuilder<bool>(
+    future: _loadMasteryDoneValue(itemKey),
+    builder: (context, snapshot) {
+      bool checked = snapshot.data ?? false;
+
+      return StatefulBuilder(
+        builder: (context, setInnerState) {
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () async {
+              final next = !checked;
+              setInnerState(() => checked = next);
+              await _saveMasteryDoneValue(itemKey, next);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: checked
+                    ? const Color(0xFFFFF4CF)
+                    : const Color(0xFFFCF9FF),
+                border: Border.all(
+                  color: checked
+                      ? const Color(0xFFD8B4FE)
+                      : const Color(0xFFF0E4FF),
+                  width: 1.15,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: (checked ? const Color(0xFFFBBF24) : const Color(0xFFD8B4FE))
+                        .withOpacity(checked ? 0.16 : 0.05),
+                    blurRadius: checked ? 8 : 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(
+                checked
+                    ? Icons.workspace_premium_rounded
+                    : Icons.workspace_premium_outlined,
+                size: 19,
+                color: checked
+                    ? const Color(0xFFF59E0B)
+                    : const Color(0xFFD8B4FE),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
 }
 
 class GatheringSearchController extends ChangeNotifier {
@@ -161,6 +588,7 @@ class FlowerDetail {
   final int masterySkilledCount;
   final int masteryMasterCount;
   final List<int> eventTokenPrices;
+  final String seasonTag;
   final List<FlowerColorDetail> flowerColors;
   final List<FlowerBreedingRule> breedingRules;
 
@@ -178,6 +606,7 @@ class FlowerDetail {
     required this.masterySkilledCount,
     required this.masteryMasterCount,
     required this.eventTokenPrices,
+    required this.seasonTag,
     required this.flowerColors,
     required this.breedingRules,
   });
@@ -208,6 +637,7 @@ class FlowerDetail {
       masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
       masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
       eventTokenPrices: _parseEventTokenPrices(json),
+      seasonTag: _parseSeasonTag(json),
       flowerColors: colorsJson
           .map((e) => FlowerColorDetail.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -237,6 +667,7 @@ class BirdItem {
   final String whistle;
   final List<int> prices;
   final List<int> eventTokenPrices;
+  final String seasonTag;
 
   BirdItem({
     required this.id,
@@ -257,6 +688,7 @@ class BirdItem {
     required this.whistle,
     required this.prices,
     required this.eventTokenPrices,
+    required this.seasonTag,
   });
 
   factory BirdItem.fromJson(Map<String, dynamic> json) {
@@ -284,9 +716,9 @@ class BirdItem {
       masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
       masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
       masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
-      captureDistance: _parseTextFlexible(json, ['captureDistance', 'capture_distance']),
-      wingSpread: _parseTextFlexible(json, ['wingSpread', 'wing_spread']),
-      whistle: _parseTextFlexible(json, ['whistle', 'whistleRequired', 'whistle_required']),
+      captureDistance: _parseTextFlexible(json, ['captureDistance', 'capture_distance', 'catchDistance', 'catch_distance', 'photoDistance', 'photo_distance']),
+      wingSpread: _parseTextFlexible(json, ['wingSpread', 'wing_spread', 'wingSpreadTime', 'wing_spread_time', 'wingOpenTime', 'wing_open_time', 'wingOpeningTime', 'wing_opening_time']),
+      whistle: _parseTextFlexible(json, ['whistle', 'whistleTime', 'whistle_time', 'whistleRequired', 'whistle_required', 'callTime', 'call_time']),
       prices: [
         parsePrice(json['price1'], json['price_1']),
         parsePrice(json['price2'], json['price_2']),
@@ -295,6 +727,7 @@ class BirdItem {
         parsePrice(json['price5'], json['price_5']),
       ],
       eventTokenPrices: _parseEventTokenPrices(json),
+      seasonTag: _parseSeasonTag(json),
     );
   }
 }
@@ -332,6 +765,7 @@ class PlantItem {
   final int masteryMasterCount;
   final List<int> prices;
   final List<int> eventTokenPrices;
+  final String seasonTag;
   final List<FlowerColorSummary> flowerColorSummaries;
 
   PlantItem({
@@ -350,6 +784,7 @@ class PlantItem {
     required this.masteryMasterCount,
     required this.prices,
     required this.eventTokenPrices,
+    required this.seasonTag,
     required this.flowerColorSummaries,
   });
 
@@ -384,6 +819,7 @@ class PlantItem {
         parsePrice(json['price5'], json['price_5']),
       ],
       eventTokenPrices: _parseEventTokenPrices(json),
+      seasonTag: _parseSeasonTag(json),
       flowerColorSummaries: summariesJson
           .whereType<Map<String, dynamic>>()
           .map((e) => FlowerColorSummary.fromJson(e))
@@ -407,6 +843,7 @@ class InsectItem {
   final int masteryMasterCount;
   final List<int> prices;
   final List<int> eventTokenPrices;
+  final String seasonTag;
 
   InsectItem({
     required this.id,
@@ -423,6 +860,7 @@ class InsectItem {
     required this.masteryMasterCount,
     required this.prices,
     required this.eventTokenPrices,
+    required this.seasonTag,
   });
 
   factory InsectItem.fromJson(Map<String, dynamic> json) {
@@ -452,6 +890,7 @@ class InsectItem {
         parsePrice(json['price5'], json['price_5']),
       ],
       eventTokenPrices: _parseEventTokenPrices(json),
+      seasonTag: _parseSeasonTag(json),
     );
   }
 }
@@ -477,6 +916,7 @@ class FishItem {
   final int masteryMasterCount;
   final String shadowSize;
   final List<int> eventTokenPrices;
+  final String seasonTag;
 
   FishItem({
     required this.id,
@@ -499,6 +939,7 @@ class FishItem {
     required this.masteryMasterCount,
     required this.shadowSize,
     required this.eventTokenPrices,
+    required this.seasonTag,
   });
 
   factory FishItem.fromJson(Map<String, dynamic> json) {
@@ -532,8 +973,9 @@ class FishItem {
       masteryEntryCount: _parseIntFlexible(json['masteryEntryCount'] ?? json['mastery_entry_count']),
       masterySkilledCount: _parseIntFlexible(json['masterySkilledCount'] ?? json['mastery_skilled_count']),
       masteryMasterCount: _parseIntFlexible(json['masteryMasterCount'] ?? json['mastery_master_count'] ?? json['masteryCount'] ?? json['mastery_count']),
-      shadowSize: _parseTextFlexible(json, ['shadowSize', 'shadow_size']),
+      shadowSize: _parseTextFlexible(json, ['shadowSize', 'shadow_size', 'shadow', 'fishShadow', 'fish_shadow', 'shadowSizeLabel', 'shadow_size_label']),
       eventTokenPrices: _parseEventTokenPrices(json),
+      seasonTag: _parseSeasonTag(json),
     );
   }
 }
@@ -571,6 +1013,7 @@ class _GatheringScreenState extends State<GatheringScreen>
   final Set<String> _selectedWeatherFilters = {};
   final Set<String> _selectedFishShadowFilters = {};
   final Set<String> _selectedMasteryCompletionFilters = {};
+  final Set<String> _selectedPastSeasonFilters = <String>{'제외'};
   int _lastTabIndex = 0;
 
   bool _showTopBtn = false;
@@ -1514,6 +1957,10 @@ class _GatheringScreenState extends State<GatheringScreen>
       _selectedAchievementStarFilters.clear();
       _selectedWeatherFilters.clear();
       _selectedFishShadowFilters.clear();
+      _selectedMasteryCompletionFilters.clear();
+      _selectedPastSeasonFilters
+        ..clear()
+        ..add('제외');
     });
 
     _applyFilters();
@@ -1739,6 +2186,16 @@ class _GatheringScreenState extends State<GatheringScreen>
         'eventTokenPrice5': json['eventTokenPrice5'] ??
             json['event_token_price_5'] ??
             (plant.eventTokenPrices.length > 4 ? plant.eventTokenPrices[4] : 0),
+        'seasonTag': json['seasonTag'] ??
+            json['season_tag'] ??
+            json['pastSeason'] ??
+            json['past_season'] ??
+            json['seasonName'] ??
+            json['season_name'] ??
+            json['eventSeason'] ??
+            json['event_season'] ??
+            json['season'] ??
+            plant.seasonTag,
       });
 
       if (!mounted) return;
@@ -1751,6 +2208,7 @@ class _GatheringScreenState extends State<GatheringScreen>
       );
 
       await _loadMasteryDoneMap();
+      await _loadAchievementStars();
       _applyFilters();
     } catch (e) {
       debugPrint('꽃 상세 로드 실패: $e');
@@ -1758,6 +2216,11 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   Future<void> _openFishDetail(FishItem fish) async {
+    final bool hideMastery = _isEventOrPastSeasonItem(
+      eventTokenPrices: fish.eventTokenPrices,
+      seasonTag: fish.seasonTag,
+      textValues: [fish.id, fish.name, fish.nameKo, fish.image, fish.location],
+    );
     final fishPrices = [
       fish.price1 ?? 0,
       fish.price2 ?? 0,
@@ -1777,17 +2240,22 @@ class _GatheringScreenState extends State<GatheringScreen>
           fallbackIcon: Icons.set_meal_rounded,
           prices: fishPrices,
           eventTokenPrices: fish.eventTokenPrices,
-          masteryDoneKey: 'fish:${fish.id}',
+          masteryDoneKey: hideMastery ? null : 'fish:${fish.id}',
+          achievementStarKey: 'fish:${fish.id}',
           masteryDoneLabel: '낚시 명인 달성',
           timeText: _formatDetailAvailableTime(fish.availableTime),
           locationText: fish.location.trim().isEmpty ? '-' : fish.location.trim(),
           weatherText: _formatDetailWeather(fish.weather),
-          extraInfo: [
+          appearanceInfo: [
             if (fish.shadowSize.trim().isNotEmpty)
               {
                 'label': '그림자 크기',
                 'value': _normalizeShadowSize(fish.shadowSize),
               },
+          ],
+          extraInfo: hideMastery
+              ? const []
+              : [
             ..._buildMasteryStageExtraInfo(
               '낚시',
               fish.masteryMasterCount > 0 ? fish.masteryMasterCount : fish.masteryCount,
@@ -1801,10 +2269,16 @@ class _GatheringScreenState extends State<GatheringScreen>
       ),
     );
     await _loadMasteryDoneMap();
+    await _loadAchievementStars();
     _applyFilters();
   }
 
   Future<void> _openBirdDetail(BirdItem bird) async {
+    final bool hideMastery = _isEventOrPastSeasonItem(
+      eventTokenPrices: bird.eventTokenPrices,
+      seasonTag: bird.seasonTag,
+      textValues: [bird.id, bird.name, bird.nameKo, bird.image, bird.location],
+    );
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -1816,7 +2290,8 @@ class _GatheringScreenState extends State<GatheringScreen>
           fallbackIcon: Icons.flutter_dash_rounded,
           prices: bird.prices,
           eventTokenPrices: bird.eventTokenPrices,
-          masteryDoneKey: 'bird:${bird.id}',
+          masteryDoneKey: hideMastery ? null : 'bird:${bird.id}',
+          achievementStarKey: 'bird:${bird.id}',
           masteryDoneLabel: '촬영 명인 달성',
           timeText: _formatDetailAvailableTime(
             bird.timeKey.isNotEmpty ? bird.timeKey : bird.availableTime,
@@ -1825,23 +2300,33 @@ class _GatheringScreenState extends State<GatheringScreen>
               ? '-'
               : bird.location.trim(),
           weatherText: _formatDetailWeather(bird.weather),
-          extraInfo: [
+          appearanceInfo: [
             if (bird.captureDistance.trim().isNotEmpty)
               {'label': '포착 거리', 'value': bird.captureDistance.trim()},
             if (bird.wingSpread.trim().isNotEmpty)
-              {'label': '날개 펴기', 'value': bird.wingSpread.trim()},
+              {'label': '날개 펴기', 'value': _formatOccurrenceSubInfo(bird.wingSpread)},
             if (bird.whistle.trim().isNotEmpty)
-              {'label': '호루라기', 'value': bird.whistle.trim()},
+              {'label': '호루라기', 'value': _formatOccurrenceSubInfo(bird.whistle)},
+          ],
+          extraInfo: hideMastery
+              ? const []
+              : [
             ..._buildMasteryStageExtraInfo('촬영', bird.masteryCount, entryCount: bird.masteryEntryCount, skilledCount: bird.masterySkilledCount, exactMasterCount: bird.masteryMasterCount, unit: '회'),
           ],
         ),
       ),
     );
     await _loadMasteryDoneMap();
+    await _loadAchievementStars();
     _applyFilters();
   }
 
   Future<void> _openInsectDetail(InsectItem insect) async {
+    final bool hideMastery = _isEventOrPastSeasonItem(
+      eventTokenPrices: insect.eventTokenPrices,
+      seasonTag: insect.seasonTag,
+      textValues: [insect.id, insect.name, insect.nameKo, insect.image, insect.location],
+    );
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -1853,20 +2338,24 @@ class _GatheringScreenState extends State<GatheringScreen>
           fallbackIcon: Icons.bug_report,
           prices: insect.prices,
           eventTokenPrices: insect.eventTokenPrices,
-          masteryDoneKey: 'insect:${insect.id}',
+          masteryDoneKey: hideMastery ? null : 'insect:${insect.id}',
+          achievementStarKey: 'insect:${insect.id}',
           masteryDoneLabel: '곤충 채집 명인 달성',
           timeText: _formatDetailAvailableTime(insect.availableTime),
           locationText: insect.location.trim().isEmpty
               ? '-'
               : insect.location.trim(),
           weatherText: _formatDetailWeather(insect.weather),
-          extraInfo: [
+          extraInfo: hideMastery
+              ? const []
+              : [
             ..._buildMasteryStageExtraInfo('곤충 채집', insect.masteryCount, entryCount: insect.masteryEntryCount, skilledCount: insect.masterySkilledCount, exactMasterCount: insect.masteryMasterCount, unit: '마리'),
           ],
         ),
       ),
     );
     await _loadMasteryDoneMap();
+    await _loadAchievementStars();
     _applyFilters();
   }
 
@@ -1893,13 +2382,18 @@ class _GatheringScreenState extends State<GatheringScreen>
 
 
   Future<void> _loadFavorites() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-
-    final stored = prefs.getStringList(_favoritesKey) ?? [];
-    setState(() {
-      _favoriteIds = stored.toSet();
-    });
+    await CollectionProgressService.mergeRemoteIntoLocal(
+      favoritesKey: _favoritesKey,
+      achievementStarsKey: _achievementStarsKey,
+      onLoaded: (favorites, stars, mastery) {
+        if (!mounted) return;
+        setState(() {
+          _favoriteIds = favorites;
+          _achievementStars = stars;
+          _masteryDoneMap = mastery;
+        });
+      },
+    );
   }
 
   Future<void> _saveFavorites() async {
@@ -1909,23 +2403,18 @@ class _GatheringScreenState extends State<GatheringScreen>
 
 
   Future<void> _loadAchievementStars() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_achievementStarsKey);
-    if (raw == null || raw.isEmpty) return;
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is Map) {
-        final parsed = <String, int>{};
-        decoded.forEach((key, value) {
-          final star = _parseIntFlexible(value);
-          if (star >= 1 && star <= 5) {
-            parsed[key.toString()] = star;
-          }
+    await CollectionProgressService.mergeRemoteIntoLocal(
+      favoritesKey: _favoritesKey,
+      achievementStarsKey: _achievementStarsKey,
+      onLoaded: (favorites, stars, mastery) {
+        if (!mounted) return;
+        setState(() {
+          _favoriteIds = favorites;
+          _achievementStars = stars;
+          _masteryDoneMap = mastery;
         });
-        if (mounted) setState(() => _achievementStars = parsed);
-      }
-    } catch (_) {}
+      },
+    );
   }
 
   Future<void> _saveAchievementStars() async {
@@ -1934,14 +2423,18 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   Future<void> _setAchievementStar(String itemKey, int star) async {
+    int nextStar = 0;
     setState(() {
       if (_achievementStars[itemKey] == star) {
         _achievementStars.remove(itemKey);
+        nextStar = 0;
       } else {
         _achievementStars[itemKey] = star;
+        nextStar = star;
       }
     });
     await _saveAchievementStars();
+    await CollectionProgressService.saveAchievementStar(itemKey, nextStar);
     _applyFilters();
   }
 
@@ -1954,15 +2447,18 @@ class _GatheringScreenState extends State<GatheringScreen>
 
 
   Future<void> _loadMasteryDoneMap() async {
-    final prefs = await SharedPreferences.getInstance();
-    final allKeys = prefs.getKeys();
-    final parsed = <String, bool>{};
-    for (final key in allKeys) {
-      if (key.startsWith('mastery_done:')) {
-        parsed[key.substring('mastery_done:'.length)] = prefs.getBool(key) ?? false;
-      }
-    }
-    if (mounted) setState(() => _masteryDoneMap = parsed);
+    await CollectionProgressService.mergeRemoteIntoLocal(
+      favoritesKey: _favoritesKey,
+      achievementStarsKey: _achievementStarsKey,
+      onLoaded: (favorites, stars, mastery) {
+        if (!mounted) return;
+        setState(() {
+          _favoriteIds = favorites;
+          _achievementStars = stars;
+          _masteryDoneMap = mastery;
+        });
+      },
+    );
   }
 
   bool _matchesMasteryDone(String itemKey) {
@@ -1975,22 +2471,30 @@ class _GatheringScreenState extends State<GatheringScreen>
   bool _matchesSelectedWeather(String rawWeather) {
     if (_selectedWeatherFilters.isEmpty) return true;
     final labels = _normalizeWeatherLabel(rawWeather);
-    if (labels.isEmpty) {
-      return _selectedWeatherFilters.contains('모든 날씨');
-    }
+    if (labels.isEmpty) return false;
     return labels.any(_selectedWeatherFilters.contains);
   }
 
+  bool _matchesSelectedPastSeason(String rawSeasonTag) {
+    final label = _normalizeSeasonLabel(rawSeasonTag);
+
+    // 기본값은 '제외': 지난 시즌 아이템은 목록에서 숨깁니다.
+    if (_selectedPastSeasonFilters.isEmpty ||
+        _selectedPastSeasonFilters.contains('제외')) {
+      return label.isEmpty;
+    }
+
+    // 전체: 현재 시즌 + 지난 시즌 아이템을 모두 보여줍니다.
+    if (_selectedPastSeasonFilters.contains('전체')) {
+      return true;
+    }
+
+    if (label.isEmpty) return false;
+    return _selectedPastSeasonFilters.contains(label);
+  }
+
   String _normalizeShadowSize(String raw) {
-    final value = raw.trim();
-    if (value.isEmpty) return '';
-    final lower = value.toLowerCase();
-    if (lower.contains('tiny') || value.contains('매우 작')) return '매우 작음';
-    if (lower.contains('small') || value.contains('작')) return '작음';
-    if (lower.contains('medium') || value.contains('중')) return '중간';
-    if (lower.contains('large') || value.contains('큼') || value.contains('크')) return '큼';
-    if (lower.contains('huge') || lower.contains('giant') || value.contains('매우 큼')) return '매우 큼';
-    return value;
+    return _normalizeShadowSizeLabel(raw);
   }
 
   bool _matchesSelectedShadowSize(FishItem fish) {
@@ -2028,15 +2532,19 @@ class _GatheringScreenState extends State<GatheringScreen>
   }
 
   Future<void> _toggleFavorite(String itemId) async {
+    bool nextLiked = false;
     setState(() {
       if (_favoriteIds.contains(itemId)) {
         _favoriteIds.remove(itemId);
+        nextLiked = false;
       } else {
         _favoriteIds.add(itemId);
+        nextLiked = true;
       }
     });
 
     await _saveFavorites();
+    await CollectionProgressService.saveFavorite(itemId, nextLiked);
     if (!mounted) return;
 
     _applyFilters();
@@ -2503,6 +3011,13 @@ class _GatheringScreenState extends State<GatheringScreen>
       _highlightedId = null;
       _selectedFilter = '전체';
       _selectedLevelFilters.clear();
+      _selectedAchievementStarFilters.clear();
+      _selectedWeatherFilters.clear();
+      _selectedFishShadowFilters.clear();
+      _selectedMasteryCompletionFilters.clear();
+      _selectedPastSeasonFilters
+        ..clear()
+        ..add('제외');
     });
 
     _applyFilters();
@@ -2557,6 +3072,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         .where((item) => _matchesMasteryDone('fish:${item.id}'))
         .where(_matchesSelectedShadowSize)
         .where((item) => _matchesSelectedWeather(item.weather))
+        .where((item) => _matchesSelectedPastSeason(item.seasonTag))
         .toList();
     _sortFish(filteredFish);
 
@@ -2583,6 +3099,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         .where((item) => _matchesAchievementStar('bird:${item.id}'))
         .where((item) => _matchesMasteryDone('bird:${item.id}'))
         .where((item) => _matchesSelectedWeather(item.weather))
+        .where((item) => _matchesSelectedPastSeason(item.seasonTag))
         .toList();
     _sortBirds(filteredBirds);
 
@@ -2609,6 +3126,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         .where((item) => _matchesAchievementStar('insect:${item.id}'))
         .where((item) => _matchesMasteryDone('insect:${item.id}'))
         .where((item) => _matchesSelectedWeather(item.weather))
+        .where((item) => _matchesSelectedPastSeason(item.seasonTag))
         .toList();
     _sortInsects(filteredInsects);
 
@@ -2635,6 +3153,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         .where((item) => _matchesAchievementStar('plant:${item.id}'))
         .where((item) => _matchesMasteryDone('plant:${item.id}'))
         .where((item) => _matchesSelectedWeather(item.weather))
+        .where((item) => _matchesSelectedPastSeason(item.seasonTag))
         .toList();
     _sortPlants(filteredPlants);
 
@@ -3006,6 +3525,8 @@ class _GatheringScreenState extends State<GatheringScreen>
         _selectedWeatherFilters.isNotEmpty ||
         _selectedFishShadowFilters.isNotEmpty ||
         _selectedMasteryCompletionFilters.isNotEmpty ||
+        (_selectedPastSeasonFilters.isNotEmpty &&
+            !_selectedPastSeasonFilters.contains('제외')) ||
         _selectedSort != '레벨순';
   }
 
@@ -3118,11 +3639,16 @@ class _GatheringScreenState extends State<GatheringScreen>
     final tempWeatherFilters = Set<String>.from(_selectedWeatherFilters);
     final tempShadowFilters = Set<String>.from(_selectedFishShadowFilters);
     final tempMasteryCompletionFilters = Set<String>.from(_selectedMasteryCompletionFilters);
+    final tempPastSeasonFilters = Set<String>.from(_selectedPastSeasonFilters);
+    if (tempPastSeasonFilters.isEmpty) {
+      tempPastSeasonFilters.add('제외');
+    }
     String tempSort = _selectedSort;
     final levelOptions = _currentLevelOptions();
     const sortOptions = ['레벨순', '이름순', '가격순', '좋아요순'];
-    const weatherOptions = ['모든 날씨', '맑음', '흐림', '비', '눈', '무지개'];
+    const weatherOptions = ['맑음', '흐림', '비', '눈', '무지개'];
     const shadowOptions = ['매우 작음', '작음', '중간', '큼', '매우 큼'];
+    const pastSeasonOptions = ['제외', '전체', '빙설 시즌', '꿈의 명암'];
 
     showModalBottomSheet(
       context: context,
@@ -3132,20 +3658,35 @@ class _GatheringScreenState extends State<GatheringScreen>
         return StatefulBuilder(
           builder: (context, setSheetState) {
             Widget sectionTitle(String title) {
-              return Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF64748B),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF64748B),
+                  ),
                 ),
               );
             }
 
+            Widget chipWrap(List<Widget> children) {
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: children,
+              );
+            }
+
             return SafeArea(
+              top: false,
               child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.78,
+                ),
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
@@ -3157,279 +3698,285 @@ class _GatheringScreenState extends State<GatheringScreen>
                     ),
                   ],
                 ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            '필터 / 정렬',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF2D3436),
-                            ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          '필터 / 정렬',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF2D3436),
                           ),
-                          const Spacer(),
-                          IconButton(
-                            splashRadius: 20,
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(
-                              Icons.close_rounded,
-                              color: Color(0xFF94A3B8),
-                            ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          splashRadius: 20,
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Color(0xFF94A3B8),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      sectionTitle('정렬'),
-                      const SizedBox(height: 0),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: sortOptions.map((sort) {
-                          return _buildSheetChoiceChip(
-                            label: sort,
-                            isSelected: tempSort == sort,
-                            onTap: () => setSheetState(() => tempSort = sort),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 22),
-                      sectionTitle('레벨'),
-                      const SizedBox(height: 0),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildSheetChoiceChip(
-                            label: '전체',
-                            isSelected: tempLevels.isEmpty,
-                            onTap: () => setSheetState(tempLevels.clear),
-                          ),
-                          ...levelOptions.map((level) {
-                            return _buildSheetChoiceChip(
-                              label: '$level레벨',
-                              isSelected: tempLevels.contains(level),
-                              onTap: () {
-                                setSheetState(() {
-                                  if (tempLevels.contains(level)) {
-                                    tempLevels.remove(level);
-                                  } else {
-                                    tempLevels.add(level);
-                                  }
-                                });
-                              },
-                            );
-                          }),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      sectionTitle('달성 성급'),
-                      const SizedBox(height: 0),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildSheetChoiceChip(
-                            label: '전체',
-                            isSelected: tempAchievementStars.isEmpty,
-                            onTap: () => setSheetState(tempAchievementStars.clear),
-                          ),
-                          ...List.generate(5, (index) {
-                            final star = index + 1;
-                            return _buildSheetChoiceChip(
-                              label: '$star성',
-                              isSelected: tempAchievementStars.contains(star),
-                              onTap: () {
-                                setSheetState(() {
-                                  if (tempAchievementStars.contains(star)) {
-                                    tempAchievementStars.remove(star);
-                                  } else {
-                                    tempAchievementStars.add(star);
-                                  }
-                                });
-                              },
-                            );
-                          }),
-                        ],
-                      ),
-
-                      const SizedBox(height: 22),
-                      sectionTitle('명인 달성'),
-                      const SizedBox(height: 0),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildSheetChoiceChip(
-                            label: '전체',
-                            isSelected: tempMasteryCompletionFilters.isEmpty,
-                            onTap: () => setSheetState(tempMasteryCompletionFilters.clear),
-                          ),
-                          _buildSheetChoiceChip(
-                            label: '완료',
-                            isSelected: tempMasteryCompletionFilters.contains('done'),
-                            onTap: () {
-                              setSheetState(() {
-                                if (tempMasteryCompletionFilters.contains('done')) {
-                                  tempMasteryCompletionFilters.remove('done');
-                                } else {
-                                  tempMasteryCompletionFilters.add('done');
-                                }
-                              });
-                            },
-                          ),
-                          _buildSheetChoiceChip(
-                            label: '미완료',
-                            isSelected: tempMasteryCompletionFilters.contains('not_done'),
-                            onTap: () {
-                              setSheetState(() {
-                                if (tempMasteryCompletionFilters.contains('not_done')) {
-                                  tempMasteryCompletionFilters.remove('not_done');
-                                } else {
-                                  tempMasteryCompletionFilters.add('not_done');
-                                }
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      sectionTitle('등장 날씨'),
-                      const SizedBox(height: 0),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildSheetChoiceChip(
-                            label: '전체',
-                            isSelected: tempWeatherFilters.isEmpty,
-                            onTap: () => setSheetState(tempWeatherFilters.clear),
-                          ),
-                          ...weatherOptions.map((weather) {
-                            return _buildSheetChoiceChip(
-                              label: weather,
-                              isSelected: tempWeatherFilters.contains(weather),
-                              onTap: () {
-                                setSheetState(() {
-                                  if (tempWeatherFilters.contains(weather)) {
-                                    tempWeatherFilters.remove(weather);
-                                  } else {
-                                    tempWeatherFilters.add(weather);
-                                  }
-                                });
-                              },
-                            );
-                          }),
-                        ],
-                      ),
-                      if (_tabController.index == 0) ...[
-                        const SizedBox(height: 22),
-                        sectionTitle('그림자 크기'),
-                        const SizedBox(height: 0),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSheetChoiceChip(
-                              label: '전체',
-                              isSelected: tempShadowFilters.isEmpty,
-                              onTap: () => setSheetState(tempShadowFilters.clear),
-                            ),
-                            ...shadowOptions.map((shadow) {
+                            sectionTitle('정렬'),
+                            chipWrap(sortOptions.map((sort) {
                               return _buildSheetChoiceChip(
-                                label: shadow,
-                                isSelected: tempShadowFilters.contains(shadow),
+                                label: sort,
+                                isSelected: tempSort == sort,
+                                onTap: () => setSheetState(() => tempSort = sort),
+                              );
+                            }).toList()),
+                            const SizedBox(height: 18),
+                            sectionTitle('레벨'),
+                            chipWrap([
+                              _buildSheetChoiceChip(
+                                label: '전체',
+                                isSelected: tempLevels.isEmpty,
+                                onTap: () => setSheetState(tempLevels.clear),
+                              ),
+                              ...levelOptions.map((level) {
+                                return _buildSheetChoiceChip(
+                                  label: '$level레벨',
+                                  isSelected: tempLevels.contains(level),
+                                  onTap: () {
+                                    setSheetState(() {
+                                      if (tempLevels.contains(level)) {
+                                        tempLevels.remove(level);
+                                      } else {
+                                        tempLevels.add(level);
+                                      }
+                                    });
+                                  },
+                                );
+                              }),
+                            ]),
+                            const SizedBox(height: 18),
+                            sectionTitle('달성 성급'),
+                            chipWrap([
+                              _buildSheetChoiceChip(
+                                label: '전체',
+                                isSelected: tempAchievementStars.isEmpty,
+                                onTap: () => setSheetState(tempAchievementStars.clear),
+                              ),
+                              ...List.generate(5, (index) {
+                                final star = index + 1;
+                                return _buildSheetChoiceChip(
+                                  label: '$star성',
+                                  isSelected: tempAchievementStars.contains(star),
+                                  onTap: () {
+                                    setSheetState(() {
+                                      if (tempAchievementStars.contains(star)) {
+                                        tempAchievementStars.remove(star);
+                                      } else {
+                                        tempAchievementStars.add(star);
+                                      }
+                                    });
+                                  },
+                                );
+                              }),
+                            ]),
+                            const SizedBox(height: 18),
+                            sectionTitle('명인 달성'),
+                            chipWrap([
+                              _buildSheetChoiceChip(
+                                label: '전체',
+                                isSelected: tempMasteryCompletionFilters.isEmpty,
+                                onTap: () => setSheetState(tempMasteryCompletionFilters.clear),
+                              ),
+                              _buildSheetChoiceChip(
+                                label: '완료',
+                                isSelected: tempMasteryCompletionFilters.contains('done'),
                                 onTap: () {
                                   setSheetState(() {
-                                    if (tempShadowFilters.contains(shadow)) {
-                                      tempShadowFilters.remove(shadow);
+                                    if (tempMasteryCompletionFilters.contains('done')) {
+                                      tempMasteryCompletionFilters.remove('done');
                                     } else {
-                                      tempShadowFilters.add(shadow);
+                                      tempMasteryCompletionFilters.add('done');
                                     }
                                   });
                                 },
-                              );
-                            }),
+                              ),
+                              _buildSheetChoiceChip(
+                                label: '미완료',
+                                isSelected: tempMasteryCompletionFilters.contains('not_done'),
+                                onTap: () {
+                                  setSheetState(() {
+                                    if (tempMasteryCompletionFilters.contains('not_done')) {
+                                      tempMasteryCompletionFilters.remove('not_done');
+                                    } else {
+                                      tempMasteryCompletionFilters.add('not_done');
+                                    }
+                                  });
+                                },
+                              ),
+                            ]),
+                            const SizedBox(height: 18),
+                            sectionTitle('등장 날씨'),
+                            chipWrap([
+                              _buildSheetChoiceChip(
+                                label: '전체',
+                                isSelected: tempWeatherFilters.isEmpty,
+                                onTap: () => setSheetState(tempWeatherFilters.clear),
+                              ),
+                              ...weatherOptions.map((weather) {
+                                return _buildSheetChoiceChip(
+                                  label: weather,
+                                  isSelected: tempWeatherFilters.contains(weather),
+                                  onTap: () {
+                                    setSheetState(() {
+                                      if (tempWeatherFilters.contains(weather)) {
+                                        tempWeatherFilters.remove(weather);
+                                      } else {
+                                        tempWeatherFilters.add(weather);
+                                      }
+                                    });
+                                  },
+                                );
+                              }),
+                            ]),
+                            if (_tabController.index == 0) ...[
+                              const SizedBox(height: 18),
+                              sectionTitle('그림자 크기'),
+                              chipWrap([
+                                _buildSheetChoiceChip(
+                                  label: '전체',
+                                  isSelected: tempShadowFilters.isEmpty,
+                                  onTap: () => setSheetState(tempShadowFilters.clear),
+                                ),
+                                ...shadowOptions.map((shadow) {
+                                  return _buildSheetChoiceChip(
+                                    label: shadow,
+                                    isSelected: tempShadowFilters.contains(shadow),
+                                    onTap: () {
+                                      setSheetState(() {
+                                        if (tempShadowFilters.contains(shadow)) {
+                                          tempShadowFilters.remove(shadow);
+                                        } else {
+                                          tempShadowFilters.add(shadow);
+                                        }
+                                      });
+                                    },
+                                  );
+                                }),
+                              ]),
+                            ],
+                            const SizedBox(height: 18),
+                            sectionTitle('지난 시즌 보기'),
+                            chipWrap([
+                              ...pastSeasonOptions.map((season) {
+                                return _buildSheetChoiceChip(
+                                  label: season,
+                                  isSelected: season == '제외'
+                                      ? tempPastSeasonFilters.isEmpty ||
+                                      tempPastSeasonFilters.contains('제외')
+                                      : tempPastSeasonFilters.contains(season),
+                                  onTap: () {
+                                    setSheetState(() {
+                                      tempPastSeasonFilters
+                                        ..clear()
+                                        ..add(season);
+                                    });
+                                  },
+                                );
+                              }),
+                            ]),
+                            const SizedBox(height: 18),
                           ],
                         ),
-                      ],
-                      const SizedBox(height: 0),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {
-                                setSheetState(() {
-                                  tempLevels.clear();
-                                  tempAchievementStars.clear();
-                                  tempWeatherFilters.clear();
-                                  tempShadowFilters.clear();
-                                  tempMasteryCompletionFilters.clear();
-                                  tempSort = '레벨순';
-                                });
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF94A3B8),
-                                side: const BorderSide(color: Color(0xFFE5E7EB)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                padding: const EdgeInsets.symmetric(vertical: 13),
-                              ),
-                              child: const Text(
-                                '초기화',
-                                style: TextStyle(fontWeight: FontWeight.w800),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                setState(() {
-                                  _selectedLevelFilters
-                                    ..clear()
-                                    ..addAll(tempLevels);
-                                  _selectedAchievementStarFilters
-                                    ..clear()
-                                    ..addAll(tempAchievementStars);
-                                  _selectedWeatherFilters
-                                    ..clear()
-                                    ..addAll(tempWeatherFilters);
-                                  _selectedFishShadowFilters
-                                    ..clear()
-                                    ..addAll(tempShadowFilters);
-                                  _selectedMasteryCompletionFilters
-                                    ..clear()
-                                    ..addAll(tempMasteryCompletionFilters);
-                                  _selectedSort = tempSort;
-                                });
-                                _applyFilters();
-                                Navigator.pop(context);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFFF8E7C),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                padding: const EdgeInsets.symmetric(vertical: 13),
-                              ),
-                              child: const Text(
-                                '적용',
-                                style: TextStyle(fontWeight: FontWeight.w900),
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              setSheetState(() {
+                                tempLevels.clear();
+                                tempAchievementStars.clear();
+                                tempWeatherFilters.clear();
+                                tempShadowFilters.clear();
+                                tempMasteryCompletionFilters.clear();
+                                tempPastSeasonFilters
+                                  ..clear()
+                                  ..add('제외');
+                                tempSort = '레벨순';
+                              });
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF94A3B8),
+                              side: const BorderSide(color: Color(0xFFE5E7EB)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                            ),
+                            child: const Text(
+                              '초기화',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              if (tempPastSeasonFilters.isEmpty) {
+                                tempPastSeasonFilters.add('제외');
+                              }
+                              setState(() {
+                                _selectedLevelFilters
+                                  ..clear()
+                                  ..addAll(tempLevels);
+                                _selectedAchievementStarFilters
+                                  ..clear()
+                                  ..addAll(tempAchievementStars);
+                                _selectedWeatherFilters
+                                  ..clear()
+                                  ..addAll(tempWeatherFilters);
+                                _selectedFishShadowFilters
+                                  ..clear()
+                                  ..addAll(tempShadowFilters);
+                                _selectedMasteryCompletionFilters
+                                  ..clear()
+                                  ..addAll(tempMasteryCompletionFilters);
+                                _selectedPastSeasonFilters
+                                  ..clear()
+                                  ..addAll(tempPastSeasonFilters);
+                                _selectedSort = tempSort;
+                              });
+                              _applyFilters();
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFF8E7C),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                            ),
+                            child: const Text(
+                              '적용',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             );
@@ -3970,6 +4517,11 @@ class _GatheringScreenState extends State<GatheringScreen>
     final locationChip = insect.location.trim();
     final levelColors = _levelChipColors(insect.level);
     final timeColors = _timeChipColors(timeChip);
+    final bool showMastery = !_isEventOrPastSeasonItem(
+      eventTokenPrices: insect.eventTokenPrices,
+      seasonTag: insect.seasonTag,
+      textValues: [insect.id, insect.name, insect.nameKo, insect.image, insect.location],
+    );
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -4022,11 +4574,13 @@ class _GatheringScreenState extends State<GatheringScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: _buildCardMasteryDoneButton('insect:${insect.id}'),
-                            ),
+                            if (showMastery) ...[
+                              const SizedBox(width: 8),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: _buildCardMasteryDoneButton('insect:${insect.id}'),
+                              ),
+                            ],
                           ],
                         ),
                       ],
@@ -4073,6 +4627,11 @@ class _GatheringScreenState extends State<GatheringScreen>
   Widget _buildPlantCard(PlantItem plant) {
     final bool isHighlighted = _highlightedId == plant.id;
     final levelColors = _levelChipColors(plant.level);
+    final bool showMastery = !_isEventOrPastSeasonItem(
+      eventTokenPrices: plant.eventTokenPrices,
+      seasonTag: plant.seasonTag,
+      textValues: [plant.id, plant.name, plant.nameKo, plant.image, plant.location],
+    );
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -4147,11 +4706,13 @@ class _GatheringScreenState extends State<GatheringScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: _buildCardMasteryDoneButton('plant:${plant.id}'),
-                            ),
+                            if (showMastery) ...[
+                              const SizedBox(width: 8),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: _buildCardMasteryDoneButton('plant:${plant.id}'),
+                              ),
+                            ],
                           ],
                         ),
                         if (plant.flowerColorSummaries.isNotEmpty) ...[
@@ -4223,6 +4784,11 @@ class _GatheringScreenState extends State<GatheringScreen>
     final weatherLabels = _normalizeWeatherLabel(fish.weather);
     final locationChip = fish.location.trim();
     final timeColors = _timeChipColors(timeChip);
+    final bool showMastery = !_isEventOrPastSeasonItem(
+      eventTokenPrices: fish.eventTokenPrices,
+      seasonTag: fish.seasonTag,
+      textValues: [fish.id, fish.name, fish.nameKo, fish.image, fish.location],
+    );
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -4316,11 +4882,13 @@ class _GatheringScreenState extends State<GatheringScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: _buildCardMasteryDoneButton('fish:${fish.id}'),
-                            ),
+                            if (showMastery) ...[
+                              const SizedBox(width: 8),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: _buildCardMasteryDoneButton('fish:${fish.id}'),
+                              ),
+                            ],
                           ],
                         ),
                       ],
@@ -4419,6 +4987,11 @@ class _GatheringScreenState extends State<GatheringScreen>
     final locationChip = bird.location.trim();
     final weatherLabels = _normalizeWeatherLabel(bird.weather);
     final timeColors = _timeChipColors(timeChip);
+    final bool showMastery = !_isEventOrPastSeasonItem(
+      eventTokenPrices: bird.eventTokenPrices,
+      seasonTag: bird.seasonTag,
+      textValues: [bird.id, bird.name, bird.nameKo, bird.image, bird.location],
+    );
 
     return _buildGatheringCardShell(
       isHighlighted: isHighlighted,
@@ -4504,11 +5077,13 @@ class _GatheringScreenState extends State<GatheringScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: _buildCardMasteryDoneButton('bird:${bird.id}'),
-                            ),
+                            if (showMastery) ...[
+                              const SizedBox(width: 8),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: _buildCardMasteryDoneButton('bird:${bird.id}'),
+                              ),
+                            ],
                           ],
                         ),
                       ],
@@ -5675,9 +6250,11 @@ class GatheringSimpleDetailPage extends StatelessWidget {
   final String timeText;
   final String locationText;
   final String weatherText;
+  final List<Map<String, String>> appearanceInfo;
   final List<Map<String, String>> extraInfo;
   final List<int> eventTokenPrices;
   final String? masteryDoneKey;
+  final String? achievementStarKey;
   final String masteryDoneLabel;
 
   const GatheringSimpleDetailPage({
@@ -5691,9 +6268,11 @@ class GatheringSimpleDetailPage extends StatelessWidget {
     required this.timeText,
     required this.locationText,
     required this.weatherText,
+    this.appearanceInfo = const [],
     this.extraInfo = const [],
     this.eventTokenPrices = const [],
     this.masteryDoneKey,
+    this.achievementStarKey,
     this.masteryDoneLabel = '명인 달성',
   });
 
@@ -5755,7 +6334,7 @@ class GatheringSimpleDetailPage extends StatelessWidget {
     if (label.contains('낚시')) return Icons.set_meal_rounded;
     if (label.contains('촬영')) return Icons.camera_alt_rounded;
     if (label.contains('곤충 채집')) return Icons.bug_report_rounded;
-    if (label.contains('원예') || label.contains('재배')) return Icons.agriculture_rounded;
+    if (label.contains('농사') || label.contains('원예') || label.contains('재배')) return Icons.agriculture_rounded;
     switch (label) {
       case '출현 시간':
         return Icons.schedule_rounded;
@@ -5777,8 +6356,10 @@ class GatheringSimpleDetailPage extends StatelessWidget {
       case '포착 거리':
         return Icons.social_distance_rounded;
       case '날개 펴기':
+      case '날개 펴기 시간':
         return Icons.open_in_full_rounded;
       case '호루라기':
+      case '호루라기 시간':
         return Icons.volume_up_rounded;
       default:
         return Icons.info_rounded;
@@ -5933,31 +6514,21 @@ class GatheringSimpleDetailPage extends StatelessWidget {
       },
     );
     final bool hasEventTokenPrice = eventTokenPrices.any((price) => price > 0);
+    final occurrenceInfo = <Map<String, String>>[
+      {'label': '출현 시간', 'value': timeText},
+      {'label': '날씨', 'value': weatherText},
+      {'label': '출현 장소', 'value': locationText},
+      if (appearanceInfo.length == 1) appearanceInfo.first,
+    ];
+    final blockAppearanceInfo =
+    appearanceInfo.length == 1 ? const <Map<String, String>>[] : appearanceInfo;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBFA),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFBFA),
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: Color(0xFF2D3436),
-            size: 19,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w900,
-            color: Color(0xFF2D3436),
-          ),
-        ),
+      appBar: _keepersDetailGlassAppBar(
+        context,
+        title: title,
+        subtitle: '$categoryLabel · $levelLabel',
       ),
       body: SafeArea(
         top: false,
@@ -5982,78 +6553,123 @@ class GatheringSimpleDetailPage extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                child: Stack(
+                  alignment: Alignment.topCenter,
                   children: [
-                    Container(
-                      width: 190,
-                      height: 190,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFFAF8),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                    if (masteryDoneKey != null)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: _buildDetailMasteryDoneButton(
+                          itemKey: masteryDoneKey!,
                         ),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(18),
-                        child: Image.asset(
-                          imagePath,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => Icon(
-                            fallbackIcon,
-                            size: 72,
-                            color: Colors.grey,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 190,
+                          height: 190,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFAF8),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Image.asset(
+                              imagePath,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Icon(
+                                fallbackIcon,
+                                size: 72,
+                                color: Colors.grey,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF2D3436),
-                        height: 1.15,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF3EE),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '$categoryLabel · $levelLabel',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFFFF7A65),
-                          height: 1.0,
+                        if (achievementStarKey != null) ...[
+                          const SizedBox(height: 10),
+                          _buildDetailAchievementStars(
+                            itemKey: achievementStarKey!,
+                          ),
+                        ],
+                        const SizedBox(height: 15),
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 23,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF2D3436),
+                            height: 1.15,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 7),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF3EE),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '$categoryLabel · $levelLabel',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFFFF7A65),
+                              height: 1.0,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
               _sectionTitle('출현 정보'),
-              const SizedBox(height: 0),
-              Row(
-                children: [
-                  Expanded(child: _infoTile('출현 시간', timeText)),
-                  const SizedBox(width: 7),
-                  Expanded(child: _infoTile('날씨', weatherText)),
-                  const SizedBox(width: 7),
-                  Expanded(child: _infoTile('출현 장소', locationText)),
-                ],
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 76,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (int index = 0; index < occurrenceInfo.length; index++) ...[
+                      if (index > 0) const SizedBox(width: 7),
+                      Expanded(
+                        child: _infoTile(
+                          occurrenceInfo[index]['label'] ?? '-',
+                          occurrenceInfo[index]['value'] ?? '-',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
+              if (blockAppearanceInfo.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: blockAppearanceInfo.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 7,
+                    mainAxisSpacing: 7,
+                    childAspectRatio: 2.35,
+                  ),
+                  itemBuilder: (context, index) {
+                    final info = blockAppearanceInfo[index];
+                    return _infoTile(info['label'] ?? '-', info['value'] ?? '-');
+                  },
+                ),
+              ],
               if (extraInfo.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 _sectionTitle('명인 달성 기준'),
@@ -6075,54 +6691,6 @@ class GatheringSimpleDetailPage extends StatelessWidget {
                 ),
               ],
 
-              if (masteryDoneKey != null) ...[
-                const SizedBox(height: 20),
-                FutureBuilder<bool>(
-                  future: _loadMasteryDoneValue(masteryDoneKey!),
-                  builder: (context, snapshot) {
-                    bool checked = snapshot.data ?? false;
-                    return StatefulBuilder(
-                      builder: (context, setInnerState) {
-                        return GestureDetector(
-                          onTap: () async {
-                            checked = !checked;
-                            setInnerState(() {});
-                            await _saveMasteryDoneValue(masteryDoneKey!, checked);
-                          },
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                            decoration: BoxDecoration(
-                              color: checked ? const Color(0xFFFFF3EE) : Colors.white,
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: const Color(0xFFFFE2DB)),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                                  color: checked ? const Color(0xFFFF8E7C) : const Color(0xFFCBD5E1),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    masteryDoneLabel,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w900,
-                                      color: Color(0xFF2D3436),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ],
               const SizedBox(height: 20),
               _sectionTitle('성급별 판매가'),
               const SizedBox(height: 10),
@@ -6314,381 +6882,348 @@ class FlowerDetailPage extends StatelessWidget {
       },
     );
     final bool hasEventTokenPrice = detail.eventTokenPrices.any((price) => price > 0);
+    final bool hasFlowerMastery = !_isEventOrPastSeasonItem(
+      eventTokenPrices: detail.eventTokenPrices,
+      seasonTag: detail.seasonTag,
+      textValues: [detail.id, detail.nameKo, detail.image, detail.growthTime],
+    ) &&
+        (detail.masteryCount > 0 ||
+            detail.masteryEntryCount > 0 ||
+            detail.masterySkilledCount > 0 ||
+            detail.masteryMasterCount > 0);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFAF8),
+      appBar: _keepersDetailGlassAppBar(
+        context,
+        title: detail.nameKo,
+        subtitle: '꽃 · 원예 ${detail.level}레벨',
+      ),
       body: SafeArea(
-        child: Column(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+          physics: const BouncingScrollPhysics(),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-              child: Row(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.92), // ✅ 카드 배경 통일
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFFF8E7C).withOpacity(0.12), // ✅ 테두리 통일
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.topCenter,
                 children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                  if (hasFlowerMastery)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: _buildDetailMasteryDoneButton(
+                        itemKey: 'plant:${detail.id}',
+                      ),
+                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 190,
+                        height: 190,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFAF8),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: const Color(0xFFFF8E7C).withOpacity(0.15),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Image.asset(
+                            imagePath,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.local_florist_rounded,
+                              size: 72,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _buildDetailAchievementStars(
+                        itemKey: 'plant:${detail.id}',
+                      ),
+                      const SizedBox(height: 15),
+                      Text(
+                        detail.nameKo,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 23,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2D3436),
+                          height: 1.15,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        '꽃 · 원예 ${detail.level}레벨',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF7B8794),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          if (detail.growthTime.isNotEmpty)
+                            _detailMetaChip(
+                              detail.growthTime,
+                              bg: _growthTimeChipColor(detail.growthTime),
+                              fg: _growthTimeChipTextColor(detail.growthTime),
+                            ),
+                          _detailMetaChip(
+                            '씨앗 ${_formatPrice(detail.seedCost)}원',
+                            bg: const Color(0xFFFFF3F0),
+                            fg: const Color(0xFFFF7A65),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 30),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.92), // ✅ 카드 배경 통일
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: const Color(0xFFFF8E7C).withOpacity(0.12), // ✅ 테두리 통일
+            if (hasFlowerMastery) ...[
+              const SizedBox(height: 20),
+              const Text(
+                '재배 단계',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF2D3436),
+                ),
+              ),
+              const SizedBox(height: 10),
+              ..._buildMasteryStageExtraInfo('재배', detail.masteryCount, entryCount: detail.masteryEntryCount, skilledCount: detail.masterySkilledCount, exactMasterCount: detail.masteryMasterCount, unit: '회').map((stage) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFFFE2DB)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.workspace_premium_rounded,
+                        size: 18,
+                        color: _masteryStageIconColor(stage['label'] ?? ''),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 118,
-                          height: 118,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFFAF8), // ✅ 이미지 박스 통일
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: const Color(0xFFFF8E7C).withOpacity(0.15),
-                            ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          stage['label'] ?? '재배',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFFF7A65),
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: Image.asset(
-                              imagePath,
+                        ),
+                      ),
+                      Text(
+                        stage['value'] ?? '-',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF2D3436),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+            if (hasEventTokenPrice) ...[
+              const SizedBox(height: 20),
+              const Text(
+                '이벤트 코인 판매가',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF2D3436),
+                ),
+              ),
+              const SizedBox(height: 10),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: visibleEventTokenPrices.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 5,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                  childAspectRatio: 0.82,
+                ),
+                itemBuilder: (context, index) {
+                  final item = visibleEventTokenPrices[index];
+                  return _priceTile(item['star']!, item['price']!, suffix: '코인');
+                },
+              ),
+            ],
+            const SizedBox(height: 20),
+            const Text(
+              '꽃 색 종류',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2D3436),
+              ),
+            ),
+            const SizedBox(height: 10),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: detail.flowerColors.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 0.72,
+              ),
+              itemBuilder: (context, index) {
+                final color = detail.flowerColors[index];
+                final colorPath = color.image.isNotEmpty
+                    ? (color.image.startsWith('assets/')
+                    ? color.image
+                    : 'assets/${color.image}')
+                    : '';
+
+                return Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF4C7),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFFE08A)),
+                  ),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.82),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: colorPath.isNotEmpty
+                                ? Image.asset(
+                              colorPath,
                               fit: BoxFit.contain,
                               errorBuilder: (_, __, ___) => const Icon(
                                 Icons.local_florist_rounded,
-                                size: 44,
+                                size: 18,
                                 color: Colors.grey,
                               ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                detail.nameKo,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF2D3436),
-                                  height: 1.15,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '꽃 · 원예 ${detail.level}레벨',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF7B8794),
-                                ),
-                              ),
-                              const SizedBox(height: 0),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: [
-                                  if (detail.growthTime.isNotEmpty)
-                                    _detailMetaChip(
-                                      detail.growthTime,
-                                      bg: _growthTimeChipColor(detail.growthTime),
-                                      fg: _growthTimeChipTextColor(detail.growthTime),
-                                    ),
-                                  _detailMetaChip(
-                                    '씨앗 ${_formatPrice(detail.seedCost)}원',
-                                    bg: const Color(0xFFFFF3F0),
-                                    fg: const Color(0xFFFF7A65),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (detail.masteryCount > 0 || detail.masteryEntryCount > 0 || detail.masterySkilledCount > 0 || detail.masteryMasterCount > 0) ...[
-                    const SizedBox(height: 20),
-                    const Text(
-                      '재배 단계',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF2D3436),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    ..._buildMasteryStageExtraInfo('재배', detail.masteryCount, entryCount: detail.masteryEntryCount, skilledCount: detail.masterySkilledCount, exactMasterCount: detail.masteryMasterCount, unit: '회').map((stage) {
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: const Color(0xFFFFE2DB)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.workspace_premium_rounded,
+                            )
+                                : const Icon(
+                              Icons.local_florist_rounded,
                               size: 18,
-                              color: _masteryStageIconColor(stage['label'] ?? ''),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                stage['label'] ?? '재배',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFFFF7A65),
-                                ),
-                              ),
-                            ),
-                            Text(
-                              stage['value'] ?? '-',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF2D3436),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    FutureBuilder<bool>(
-                      future: _loadMasteryDoneValue('plant:${detail.id}'),
-                      builder: (context, snapshot) {
-                        bool checked = snapshot.data ?? false;
-                        return StatefulBuilder(
-                          builder: (context, setInnerState) {
-                            return GestureDetector(
-                              onTap: () async {
-                                checked = !checked;
-                                setInnerState(() {});
-                                await _saveMasteryDoneValue('plant:${detail.id}', checked);
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                                decoration: BoxDecoration(
-                                  color: checked ? const Color(0xFFFFF3EE) : Colors.white,
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(color: const Color(0xFFFFE2DB)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                                      color: checked ? const Color(0xFFFF8E7C) : const Color(0xFFCBD5E1),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    const Expanded(
-                                      child: Text(
-                                        '재배 명인 달성',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w900,
-                                          color: Color(0xFF2D3436),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                  if (hasEventTokenPrice) ...[
-                    const SizedBox(height: 20),
-                    const Text(
-                      '이벤트 코인 판매가',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF2D3436),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: visibleEventTokenPrices.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 5,
-                        crossAxisSpacing: 6,
-                        mainAxisSpacing: 6,
-                        childAspectRatio: 0.82,
-                      ),
-                      itemBuilder: (context, index) {
-                        final item = visibleEventTokenPrices[index];
-                        return _priceTile(item['star']!, item['price']!, suffix: '코인');
-                      },
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  const Text(
-                    '꽃 색 종류',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF2D3436),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: detail.flowerColors.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 0.72,
-                    ),
-                    itemBuilder: (context, index) {
-                      final color = detail.flowerColors[index];
-                      final colorPath = color.image.isNotEmpty
-                          ? (color.image.startsWith('assets/')
-                          ? color.image
-                          : 'assets/${color.image}')
-                          : '';
-
-                      return Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF4C7),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFFFE08A)),
-                        ),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.82),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(6),
-                                  child: colorPath.isNotEmpty
-                                      ? Image.asset(
-                                    colorPath,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (_, __, ___) => const Icon(
-                                      Icons.local_florist_rounded,
-                                      size: 18,
-                                      color: Colors.grey,
-                                    ),
-                                  )
-                                      : const Icon(
-                                    Icons.local_florist_rounded,
-                                    size: 18,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              color.colorNameKo,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF4B5563),
-                                height: 1.15,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    '배합식',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF2D3436),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  ...detail.breedingRules.map((rule) {
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0xFFFFE2DB)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${rule.parentColorAKo} + ${rule.parentColorBKo} = ${rule.resultColorKo}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF2D3436),
+                              color: Colors.grey,
                             ),
                           ),
-                          if (rule.isCatalogOnly || rule.isFinalStep) ...[
-                            const SizedBox(height: 0),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                if (rule.isCatalogOnly)
-                                  _detailMetaChip(
-                                    '도감작',
-                                    bg: const Color(0xFFFFF3F0),
-                                    fg: const Color(0xFFFF7A65),
-                                  ),
-                                if (rule.isFinalStep)
-                                  _detailMetaChip(
-                                    '종결 배합',
-                                    bg: const Color(0xFFEFF6FF),
-                                    fg: const Color(0xFF3B82F6),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
-                    );
-                  }),
-                ],
+                      const SizedBox(height: 1),
+                      Text(
+                        color.colorNameKo,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF4B5563),
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              '배합식',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2D3436),
               ),
             ),
+            const SizedBox(height: 10),
+            ...detail.breedingRules.map((rule) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFFFE2DB)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${rule.parentColorAKo} + ${rule.parentColorBKo} = ${rule.resultColorKo}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF2D3436),
+                      ),
+                    ),
+                    if (rule.isCatalogOnly || rule.isFinalStep) ...[
+                      const SizedBox(height: 0),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          if (rule.isCatalogOnly)
+                            _detailMetaChip(
+                              '도감작',
+                              bg: const Color(0xFFFFF3F0),
+                              fg: const Color(0xFFFF7A65),
+                            ),
+                          if (rule.isFinalStep)
+                            _detailMetaChip(
+                              '종결 배합',
+                              bg: const Color(0xFFEFF6FF),
+                              fg: const Color(0xFF3B82F6),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
           ],
         ),
       ),

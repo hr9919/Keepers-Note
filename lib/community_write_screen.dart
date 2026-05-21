@@ -432,11 +432,6 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       return;
     }
 
-    if (_draftImages.isEmpty) {
-      _showMessage('사진을 1장 이상 선택해주세요.');
-      return;
-    }
-
     if (_selectedTags.isEmpty) {
       _showMessage('태그를 선택해주세요.');
       return;

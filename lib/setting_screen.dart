@@ -10,9 +10,7 @@ import 'dart:io';
 import 'main.dart';
 import 'package:path_provider/path_provider.dart';
 import 'image_adjust_screen.dart';
-import 'services/push_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -27,16 +25,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final Color snackBg = const Color(0xFFFFF9F8);
   final Color snackCard = Colors.white;
 
-  final PushService _pushService = PushService();
 
   static const String _baseUrl = 'https://api.keepers-note.o-r.kr';
-  static const String _pushEnabledKey = 'push_enabled';
+  static const String _commentNotificationKey = 'comment_notification_enabled';
+  static const String _likeNotificationKey = 'like_notification_enabled';
+  static const String _redeemCodeNotificationKey = 'redeem_code_notification_enabled';
 
   String _serverUserId = "";
 
   bool _uidLocked = false;
 
-  bool _isPushEnabled = true;
+  bool _commentNotificationEnabled = true;
+  bool _likeNotificationEnabled = true;
+  bool _redeemCodeNotificationEnabled = true;
   bool _isLoading = false; // 이미지 업로드 등 액션 시 로딩
   bool _isDataStable = false; // 데이터 준비 완료 여부 (애니메이션 트리거)
   bool _didUserInfoChange = false;
@@ -78,14 +79,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadPushPreference() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final enabled = prefs.getBool(_pushEnabledKey);
+
+      final comment = prefs.getBool(_commentNotificationKey) ?? true;
+      final like = prefs.getBool(_likeNotificationKey) ?? true;
+      final redeem = prefs.getBool(_redeemCodeNotificationKey) ?? true;
 
       if (!mounted) return;
       setState(() {
-        _isPushEnabled = enabled ?? true;
+        _commentNotificationEnabled = comment;
+        _likeNotificationEnabled = like;
+        _redeemCodeNotificationEnabled = redeem;
       });
     } catch (e) {
-      debugPrint('push preference load error: $e');
+      debugPrint('notification preference load error: $e');
     }
   }
 
@@ -164,6 +170,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           headerResolved.isNotEmpty ? '$headerResolved?t=$ts' : null;
           _isDataStable = true;
         });
+
+        await _loadNotificationPreferencesFromServer(userId);
       } else {
         if (!mounted) return;
         setState(() => _isDataStable = true);
@@ -175,46 +183,104 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setPushEnabled(bool enabled) async {
-    final previous = _isPushEnabled;
+  Future<void> _loadNotificationPreferencesFromServer(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/user/$userId/notification-preferences'),
+      );
+
+      if (response.statusCode != 200) return;
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+
+      final comment = data['commentNotificationEnabled'] == true;
+      final like = data['likeNotificationEnabled'] == true;
+      final redeem = data['redeemCodeNotificationEnabled'] == true;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_commentNotificationKey, comment);
+      await prefs.setBool(_likeNotificationKey, like);
+      await prefs.setBool(_redeemCodeNotificationKey, redeem);
+
+      if (!mounted) return;
+      setState(() {
+        _commentNotificationEnabled = comment;
+        _likeNotificationEnabled = like;
+        _redeemCodeNotificationEnabled = redeem;
+      });
+    } catch (e) {
+      debugPrint('notification preference server load error: $e');
+    }
+  }
+
+  Future<void> _setNotificationPreference({
+    required String key,
+    required bool enabled,
+  }) async {
+    final previousComment = _commentNotificationEnabled;
+    final previousLike = _likeNotificationEnabled;
+    final previousRedeem = _redeemCodeNotificationEnabled;
 
     if (!mounted) return;
+
     setState(() {
-      _isPushEnabled = enabled;
+      if (key == _commentNotificationKey) {
+        _commentNotificationEnabled = enabled;
+      } else if (key == _likeNotificationKey) {
+        _likeNotificationEnabled = enabled;
+      } else if (key == _redeemCodeNotificationKey) {
+        _redeemCodeNotificationEnabled = enabled;
+      }
     });
 
     try {
       if (_serverUserId.isEmpty) {
         _showSnackBar('사용자 정보를 불러온 뒤 다시 시도해주세요.');
+        if (!mounted) return;
         setState(() {
-          _isPushEnabled = previous;
+          _commentNotificationEnabled = previousComment;
+          _likeNotificationEnabled = previousLike;
+          _redeemCodeNotificationEnabled = previousRedeem;
         });
         return;
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_pushEnabledKey, enabled);
+      await prefs.setBool(_commentNotificationKey, _commentNotificationEnabled);
+      await prefs.setBool(_likeNotificationKey, _likeNotificationEnabled);
+      await prefs.setBool(_redeemCodeNotificationKey, _redeemCodeNotificationEnabled);
 
-      await _pushService.setPushEnabled(
-        enabled: enabled,
-        userId: _serverUserId,
+      final response = await http.put(
+        Uri.parse('$_baseUrl/api/user/$_serverUserId/notification-preferences'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'commentNotificationEnabled': _commentNotificationEnabled,
+          'likeNotificationEnabled': _likeNotificationEnabled,
+          'redeemCodeNotificationEnabled': _redeemCodeNotificationEnabled,
+        }),
       );
 
-      _showSnackBar(
-        enabled ? '푸시 알림이 켜졌어요.' : '푸시 알림이 꺼졌어요.',
-      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('notification preference update failed: ${response.statusCode}');
+      }
+
+      _showSnackBar(enabled ? '알림이 켜졌어요.' : '알림이 꺼졌어요.');
     } catch (e) {
-      debugPrint('push toggle error: $e');
+      debugPrint('notification toggle error: $e');
 
       if (!mounted) return;
       setState(() {
-        _isPushEnabled = previous;
+        _commentNotificationEnabled = previousComment;
+        _likeNotificationEnabled = previousLike;
+        _redeemCodeNotificationEnabled = previousRedeem;
       });
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_pushEnabledKey, previous);
+      await prefs.setBool(_commentNotificationKey, previousComment);
+      await prefs.setBool(_likeNotificationKey, previousLike);
+      await prefs.setBool(_redeemCodeNotificationKey, previousRedeem);
 
-      _showSnackBar('푸시 알림 설정 변경에 실패했어요.');
+      _showSnackBar('알림 설정 변경에 실패했어요.');
     }
   }
 
@@ -358,7 +424,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ]),
                               const SizedBox(height: 20),
                               _buildSnackSection('이용 안내', [
-                                _buildSnackRowItem('앱 버전', trailingText: '1.0.2'),
+                                _buildSnackRowItem('앱 버전', trailingText: '1.1.1'),
                                 _buildSnackRowItem(
                                   '버그 리포트 보내기',
                                   isLink: true,
@@ -500,33 +566,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          const Text(
-                            '푸시 알림 설정',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF2D3436),
-                            ),
-                          ),
-                          const Spacer(),
-                          _buildCustomSwitch(
-                            _isPushEnabled,
-                            onChanged: _setPushEnabled,
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 2), // 👈 간격 최소화
-
                       const Text(
-                        '좋아요 · 댓글 알림',
+                        '알림 설정',
                         style: TextStyle(
-                          fontSize: 11.5,
-                          color: Color(0xFFB8C0CC),
-                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF2D3436),
                         ),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildNotificationToggleRow(
+                        title: '댓글 알림',
+                        subtitle: '내 글에 댓글이나 답글이 달렸을 때',
+                        icon: Icons.mode_comment_rounded,
+                        value: _commentNotificationEnabled,
+                        onChanged: (value) {
+                          _setNotificationPreference(
+                            key: _commentNotificationKey,
+                            enabled: value,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildNotificationToggleRow(
+                        title: '좋아요 알림',
+                        subtitle: '내 글에 좋아요가 눌렸을 때',
+                        icon: Icons.favorite_rounded,
+                        value: _likeNotificationEnabled,
+                        onChanged: (value) {
+                          _setNotificationPreference(
+                            key: _likeNotificationKey,
+                            enabled: value,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildNotificationToggleRow(
+                        title: '리딤 코드 알림',
+                        subtitle: '새로운 보상 코드가 등록되었을 때',
+                        icon: Icons.card_giftcard_rounded,
+                        value: _redeemCodeNotificationEnabled,
+                        onChanged: (value) {
+                          _setNotificationPreference(
+                            key: _redeemCodeNotificationKey,
+                            enabled: value,
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -795,6 +880,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
       centerTitle: true,
+    );
+  }
+
+  Widget _buildNotificationToggleRow({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: snackAccent.withOpacity(0.09),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            icon,
+            size: 19,
+            color: snackAccent,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF2D3436),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11.2,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFB8C0CC),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        _buildCustomSwitch(
+          value,
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 

@@ -31,6 +31,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'services/push_service.dart';
 import 'crop_timer_screen.dart';
 import 'services/todo_widget_service.dart';
+import 'redeem_code_screen.dart';
 
 class MainWrapper extends StatefulWidget {
   final Uri? initialDeepLink;
@@ -72,6 +73,7 @@ class _MainWrapperState extends State<MainWrapper> {
   DateTime? _lastOpenedCommunityTargetAt;
 
   int _communityOpenMyProfileSignal = 0;
+  int _communityOpenSearchSignal = 0;
 
   bool _isScrimPressed = false;
   bool _isDrawerOpen = false;
@@ -389,6 +391,40 @@ class _MainWrapperState extends State<MainWrapper> {
           context,
           MaterialPageRoute(
             builder: (_) => const CropTimerScreen(),
+          ),
+        );
+      });
+
+      return;
+    }
+
+    final bool isRedeemCodeLink =
+        target == 'redeem_code' ||
+            uri.host == 'redeem-code' ||
+            uri.path == '/redeem-code' ||
+            uri.pathSegments.contains('redeem-code');
+
+    if (isRedeemCodeLink) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+
+        if (_isDrawerOpen) {
+          await _closeDrawerSmooth();
+        }
+
+        if (_isEndDrawerOpen) {
+          await _closeEndDrawerSmooth();
+        }
+
+        if (!mounted) return;
+
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RedeemCodeScreen(
+              isAdmin: _isAdmin,
+              userId: _serverUserId,
+            ),
           ),
         );
       });
@@ -903,6 +939,14 @@ class _MainWrapperState extends State<MainWrapper> {
         'target': 'event',
         'eventId': eventId,
       });
+    }
+
+    if (target == 'redeem_code') {
+      return Uri(
+        scheme: 'keepersnote',
+        host: 'redeem-code',
+        queryParameters: {'target': 'redeem_code'},
+      );
     }
 
     if (target == 'uid_request' ||
@@ -1533,6 +1577,7 @@ class _MainWrapperState extends State<MainWrapper> {
         initialCommentId: _selectedIndex == 2 ? _initialCommunityCommentId : null,
         refreshSignal: _communityRefreshSignal,
         openMyProfileSignal: _communityOpenMyProfileSignal,
+        openSearchSignal: _communityOpenSearchSignal,
         onInitialPostConsumed: _consumeCommunityInitialTarget,
       ),
       CookingScreen(
@@ -2335,6 +2380,30 @@ class _MainWrapperState extends State<MainWrapper> {
                           },
                         ),
                         _buildDrawerItem(
+                          icon: Icons.card_giftcard_rounded,
+                          title: '리딤 코드',
+                          subtitle: '리딤 코드 확인',
+                          isSelected: false,
+                          accentColor: const Color(0xFFFF8E7C),
+                          onTap: () async {
+                            await Future.delayed(const Duration(milliseconds: 110));
+                            if (!mounted) return;
+
+                            await _closeDrawerSmooth();
+                            if (!mounted) return;
+
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => RedeemCodeScreen(
+                                  isAdmin: _isAdmin,
+                                  userId: _serverUserId,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildDrawerItem(
                           icon: Icons.mail_outline_rounded,
                           title: '피드백 보내기',
                           subtitle: '아이디어를 보내주세요',
@@ -3118,6 +3187,14 @@ class _MainWrapperState extends State<MainWrapper> {
                         ),
                         const SizedBox(height: 12),
                         _buildCommunityMenuBubble(
+                          icon: Icons.search_rounded,
+                          label: '커뮤니티 검색',
+                          onTap: () {
+                            _closeCommunityMenuAndRun('search');
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildCommunityMenuBubble(
                           icon: Icons.person_rounded,
                           label: '내 프로필 보기',
                           onTap: () {
@@ -3169,6 +3246,15 @@ class _MainWrapperState extends State<MainWrapper> {
 
       if (action == 'write') {
         await _openCommunityWrite();
+      } else if (action == 'search') {
+        if (!mounted) return;
+        setState(() {
+          _selectedIndex = 2;
+          _isCommunityMenuOpen = false;
+          _pendingSearchItem = null;
+          _searchResetSignal++;
+          _communityOpenSearchSignal++;
+        });
       } else if (action == 'my_profile') {
         if (!mounted) return;
         setState(() {
@@ -3206,6 +3292,13 @@ class _MainWrapperState extends State<MainWrapper> {
 
     if (pending == 'write') {
       await _openCommunityWrite();
+    } else if (pending == 'search') {
+      setState(() {
+        _selectedIndex = 2;
+        _pendingSearchItem = null;
+        _searchResetSignal++;
+        _communityOpenSearchSignal++;
+      });
     } else if (pending == 'my_profile') {
       setState(() {
         _selectedIndex = 2;

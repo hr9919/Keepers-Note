@@ -177,6 +177,126 @@ class CropTimerNotificationService {
     );
   }
 
+  static int weedNotificationId(int timerId, int stage) {
+    return ((timerId % 200000000) * 10) + stage;
+  }
+
+  DateTime _weedAt({
+    required DateTime plantedAt,
+    required DateTime harvestAt,
+    required int stage,
+  }) {
+    final totalSeconds = harvestAt.difference(plantedAt).inSeconds;
+
+    if (stage == 1) {
+      return plantedAt.add(Duration(seconds: totalSeconds ~/ 3));
+    }
+
+    if (stage == 2) {
+      return plantedAt.add(Duration(seconds: (totalSeconds * 2) ~/ 3));
+    }
+
+    if (stage == 3) {
+      return harvestAt.subtract(const Duration(minutes: 1));
+    }
+
+    return harvestAt.add(const Duration(minutes: 1));
+  }
+
+  Future<void> scheduleCropWeedNotifications({
+    required int timerId,
+    required DateTime plantedAt,
+    required DateTime harvestAt,
+  }) async {
+    await init();
+
+    for (int stage = 1; stage <= 4; stage++) {
+      final weedAt = _weedAt(
+        plantedAt: plantedAt,
+        harvestAt: harvestAt,
+        stage: stage,
+      );
+
+      await scheduleCropWeedNotification(
+        notificationId: weedNotificationId(timerId, stage),
+        weedAt: weedAt,
+      );
+    }
+  }
+
+  Future<void> scheduleCropWeedNotification({
+    required int notificationId,
+    required DateTime weedAt,
+  }) async {
+    await init();
+
+    final tz.TZDateTime scheduledAt = tz.TZDateTime.from(weedAt, tz.local);
+
+    if (scheduledAt.isBefore(tz.TZDateTime.now(tz.local))) {
+      return;
+    }
+
+    const AndroidNotificationDetails androidDetails =
+    AndroidNotificationDetails(
+      'crop_timer_weed_channel',
+      '잡초 확인',
+      channelDescription: '5성작을 위한 잡초 확인 시간에 알려드려요.',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+      autoCancel: true,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    try {
+      await _plugin.zonedSchedule(
+        id: notificationId,
+        title: '잡초 확인 시간이에요',
+        body: null,
+        scheduledDate: scheduledAt,
+        notificationDetails: details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: 'keepersnote://crop-timer?target=crop_timer',
+      );
+    } catch (e) {
+      debugPrint('잡초 exact 알림 예약 실패: $e');
+
+      await _plugin.zonedSchedule(
+        id: notificationId,
+        title: '잡초 확인 시간이에요',
+        body: '',
+        scheduledDate: scheduledAt,
+        notificationDetails: details,
+        androidScheduleMode: AndroidScheduleMode.alarmClock,
+        payload: 'keepersnote://crop-timer?target=crop_timer',
+      );
+    }
+  }
+
+  Future<void> cancelCropWeedNotifications({
+    required int timerId,
+  }) async {
+    await init();
+
+    for (int stage = 1; stage <= 4; stage++) {
+      await _plugin.cancel(
+        id: weedNotificationId(timerId, stage),
+      );
+    }
+  }
+
   Future<void> showCropHarvestDoneNotification({
     required int notificationId,
     required String cropName,
