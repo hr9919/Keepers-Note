@@ -187,6 +187,75 @@ String _parseSeasonTag(Map<String, dynamic> json) {
   );
 }
 
+String _compactSeasonSourceText(Iterable<String?> values) {
+  return values
+      .where((value) => value != null)
+      .map((value) => value!.trim())
+      .where((value) => value.isNotEmpty)
+      .join(' ')
+      .replaceAll(' ', '')
+      .replaceAll('_', '')
+      .replaceAll('-', '')
+      .replaceAll('/', '')
+      .toLowerCase();
+}
+
+String _inferPastSeasonLabelFromText(Iterable<String?> values) {
+  final compact = _compactSeasonSourceText(values);
+  if (compact.isEmpty) return '';
+
+  // 빙설 시즌: 얼음 결정/겨울/슈가파우더/무/얼음컵 계열
+  if (compact.contains('빙설') ||
+      compact.contains('winter') ||
+      compact.contains('frost') ||
+      compact.contains('frostspore') ||
+      compact.contains('whiteradish') ||
+      compact.contains('icedcup') ||
+      compact.contains('aurora') ||
+      compact.contains('얼음결정') ||
+      compact.contains('얼음컵') ||
+      compact.contains('슈가파우더') ||
+      compact.contains('살균달걀') ||
+      compact.contains('오로라') ||
+      compact.contains('무크림') ||
+      compact.contains('갈은무') ||
+      compact.contains('하얀무')) {
+    return '빙설 시즌';
+  }
+
+  // 꿈의 명암: 감독/스크립터/정장 비둘기/봄날/로메인/관람/팝콘 계열
+  if (compact.contains('꿈의명암') ||
+      compact.contains('dream') ||
+      compact.contains('director') ||
+      compact.contains('script') ||
+      compact.contains('suitdove') ||
+      compact.contains('springday') ||
+      compact.contains('springdag') ||
+      compact.contains('romaine') ||
+      compact.contains('celtuce') ||
+      compact.contains('salsa') ||
+      compact.contains('popcorn') ||
+      compact.contains('movie') ||
+      compact.contains('bucket') ||
+      compact.contains('명암') ||
+      compact.contains('감독') ||
+      compact.contains('스크립터') ||
+      compact.contains('봄날') ||
+      compact.contains('카라멜슈가') ||
+      compact.contains('로메인') ||
+      compact.contains('살사') ||
+      compact.contains('팝콘') ||
+      compact.contains('관람') ||
+      compact.contains('산우엉') ||
+      compact.contains('산겨자') ||
+      compact.contains('산마늘') ||
+      compact.contains('고사리')) {
+    return '꿈의 명암';
+  }
+
+  return '';
+}
+
 bool _hasEventTokenPrice(List<int> prices) {
   return prices.any((price) => price > 0);
 }
@@ -226,7 +295,8 @@ bool _isEventOrPastSeasonItem({
   Iterable<String?> textValues = const [],
 }) {
   return _hasEventTokenPrice(eventTokenPrices) ||
-      seasonTag.trim().isNotEmpty ||
+      _normalizeSeasonLabel(seasonTag).isNotEmpty ||
+      _inferPastSeasonLabelFromText(textValues).isNotEmpty ||
       _looksLikeEventOrPastSeasonText(textValues);
 }
 
@@ -600,6 +670,68 @@ String _ingredientFallbackAssetPath(String ingredientName) {
     '피시 앤 칩스': 'assets/images/cooking/fish-chips.webp',
     '커피': 'assets/images/cooking/coffee.webp',
 
+
+    // 지난 시즌 이벤트 완성 요리 재료
+    '짭짤한 팝콘통': 'assets/images/cooking/savory-popcorn-bucket.webp',
+    '캐러멜 팝콘통': 'assets/images/cooking/caramel-popcorn-bucket.webp',
+    '살사 소스 웨이브 감자칩': 'assets/images/cooking/salsa-wavy-potato-chips.webp',
+    '살사소스 웨이브 감자칩': 'assets/images/cooking/salsa-wavy-potato-chips.webp',
+    '달콤한 듀얼 팝콘통': 'assets/images/cooking/sweet-duo-bucket.webp',
+    '짭조름한 더블 버킷': 'assets/images/cooking/savory-double-combo-bucket.webp',
+    '로메인 타코': 'assets/images/cooking/romaine-lettuce-taco.webp',
+    '나물 로메인 타코': 'assets/images/cooking/wild-vegetable-celtuce-taco.webp',
+    '야생 고사리 로메인 타코': 'assets/images/cooking/wild-bracken-celtuce-taco.webp',
+    '산마늘 로메인 타코': 'assets/images/cooking/wild-garlic-mustard-celtuce-taco.webp',
+    '산우엉 로메인 타코': 'assets/images/cooking/wild-burdock-celtuce-taco.webp',
+    '산겨자 로메인 타코': 'assets/images/cooking/wild-mustard-greens-celtuce-taco.webp',
+    '봄날 과일 홍차': 'assets/images/cooking/springday-fruit-black-tea.webp',
+    '봄날 사과 홍차': 'assets/images/cooking/springday-apple-black-tea.webp',
+    '봄날 오렌지 홍차': 'assets/images/cooking/springday-mandarin-black-tea.webp',
+    '봄날 블루베리 홍차': 'assets/images/cooking/springday-blueberry-black-tea.webp',
+    '봄날 라즈베리 홍차': 'assets/images/cooking/springday-raspberry-black-tea.webp',
+    '봄날 딸기 홍차': 'assets/images/cooking/springday-strawberry-black-tea.webp',
+    '봄날 포도 홍차': 'assets/images/cooking/springday-grape-black-tea.webp',
+    '봄날 파인애플 홍차': 'assets/images/cooking/springday-pineapple-black-tea.webp',
+    '화려한 관람 세트': 'assets/images/cooking/colorful-movie-combo.webp',
+    '프리미엄 관람 세트': 'assets/images/cooking/supreme-movie-meal.webp',
+    '사과 팬케이크': 'assets/images/cooking/apple-frosted-pancake.webp',
+    '오렌지 팬케이크': 'assets/images/cooking/mandarin-frosted-pancake.webp',
+    '라즈베리 팬케이크': 'assets/images/cooking/raspberry-frosted-pancake.webp',
+    '블루베리 팬케이크': 'assets/images/cooking/blueberry-frosted-pancake.webp',
+    '오리지널 팬케이크': 'assets/images/cooking/original-frosted-pancake.webp',
+    '무 크림 수프': 'assets/images/cooking/creamy-white-radish-soup.webp',
+    '갈은 무와 스테이크': 'assets/images/cooking/steak-w-mashed-white-radish.webp',
+    '얼음컵 커피': 'assets/images/cooking/iced-cup-coffee.webp',
+    '얼음컵 라떼': 'assets/images/cooking/iced-cup-latte.webp',
+    '오로라 만찬': 'assets/images/cooking/aurora-banquet.webp',
+
+    '로메인': 'assets/images/crops/romaine-lettuce.webp',
+    '로메인 상추': 'assets/images/crops/romaine-lettuce.webp',
+
+    // 지난 시즌 / 꿈의 명암 채집 재료
+    '산마늘': 'assets/images/ingredients/tall-mustard.webp',
+    'Tall Mustard': 'assets/images/ingredients/tall-mustard.webp',
+
+    '산우엉': 'assets/images/ingredients/burdock.webp',
+    'Burdock': 'assets/images/ingredients/burdock.webp',
+
+    '야생 고사리': 'assets/images/ingredients/fiddlehead.webp',
+    '고사리': 'assets/images/ingredients/fiddlehead.webp',
+    'Fiddlehead': 'assets/images/ingredients/fiddlehead.webp',
+
+    '산겨자': 'assets/images/ingredients/mustard-greens.webp',
+    'Mustard Greens': 'assets/images/ingredients/mustard-greens.webp',
+    '나물': 'assets/images/icon_veg_any.png',
+    '아무 나물': 'assets/images/icon_veg_any.png',
+
+    // 지난 시즌 레시피의 범용 완성요리 재료
+    '아무 홍차': 'assets/images/ingredients/black-tea.png',
+    '아무 로메인 타코': 'assets/images/cooking/romaine-lettuce-taco.webp',
+    '커피/라떼': 'assets/images/cooking/iced-cup-coffee.webp',
+    '팬케이크': 'assets/images/cooking/original-frosted-pancake.webp',
+    '스테이크': 'assets/images/cooking/steak-w-mashed-white-radish.webp',
+    '수프': 'assets/images/cooking/creamy-white-radish-soup.webp',
+
     '잡초': 'assets/images/ingredients/weed.png',
 
     '부활절 달걀': 'assets/images/cooking/egg.webp',
@@ -688,6 +820,49 @@ String? _ingredientPreferredAssetPath(String ingredientName) {
     '말차가루': 'assets/images/ingredients/matcha-powder.png',
     '말차 파우더': 'assets/images/ingredients/matcha-powder.png',
 
+
+    // 지난 시즌 이벤트 완성 요리 재료
+    '짭짤한 팝콘통': 'assets/images/cooking/savory-popcorn-bucket.webp',
+    '캐러멜 팝콘통': 'assets/images/cooking/caramel-popcorn-bucket.webp',
+    '살사 소스 웨이브 감자칩': 'assets/images/cooking/salsa-wavy-potato-chips.webp',
+    '살사소스 웨이브 감자칩': 'assets/images/cooking/salsa-wavy-potato-chips.webp',
+    '달콤한 듀얼 팝콘통': 'assets/images/cooking/sweet-duo-bucket.webp',
+    '짭조름한 더블 버킷': 'assets/images/cooking/savory-double-combo-bucket.webp',
+    '로메인 타코': 'assets/images/cooking/romaine-lettuce-taco.webp',
+    '나물 로메인 타코': 'assets/images/cooking/wild-vegetable-celtuce-taco.webp',
+    '야생 고사리 로메인 타코': 'assets/images/cooking/wild-bracken-celtuce-taco.webp',
+    '산마늘 로메인 타코': 'assets/images/cooking/wild-garlic-mustard-celtuce-taco.webp',
+    '산우엉 로메인 타코': 'assets/images/cooking/wild-burdock-celtuce-taco.webp',
+    '산겨자 로메인 타코': 'assets/images/cooking/wild-mustard-greens-celtuce-taco.webp',
+    '봄날 과일 홍차': 'assets/images/cooking/springday-fruit-black-tea.webp',
+    '봄날 사과 홍차': 'assets/images/cooking/springday-apple-black-tea.webp',
+    '봄날 오렌지 홍차': 'assets/images/cooking/springday-mandarin-black-tea.webp',
+    '봄날 블루베리 홍차': 'assets/images/cooking/springday-blueberry-black-tea.webp',
+    '봄날 라즈베리 홍차': 'assets/images/cooking/springday-raspberry-black-tea.webp',
+    '봄날 딸기 홍차': 'assets/images/cooking/springday-strawberry-black-tea.webp',
+    '봄날 포도 홍차': 'assets/images/cooking/springday-grape-black-tea.webp',
+    '봄날 파인애플 홍차': 'assets/images/cooking/springday-pineapple-black-tea.webp',
+    '화려한 관람 세트': 'assets/images/cooking/colorful-movie-combo.webp',
+    '프리미엄 관람 세트': 'assets/images/cooking/supreme-movie-meal.webp',
+    '사과 팬케이크': 'assets/images/cooking/apple-frosted-pancake.webp',
+    '오렌지 팬케이크': 'assets/images/cooking/mandarin-frosted-pancake.webp',
+    '라즈베리 팬케이크': 'assets/images/cooking/raspberry-frosted-pancake.webp',
+    '블루베리 팬케이크': 'assets/images/cooking/blueberry-frosted-pancake.webp',
+    '오리지널 팬케이크': 'assets/images/cooking/original-frosted-pancake.webp',
+    '무 크림 수프': 'assets/images/cooking/creamy-white-radish-soup.webp',
+    '갈은 무와 스테이크': 'assets/images/cooking/steak-w-mashed-white-radish.webp',
+    '얼음컵 커피': 'assets/images/cooking/iced-cup-coffee.webp',
+    '얼음컵 라떼': 'assets/images/cooking/iced-cup-latte.webp',
+    '오로라 만찬': 'assets/images/cooking/aurora-banquet.webp',
+
+    // 지난 시즌 레시피의 범용 완성요리 재료
+    '아무 홍차': 'assets/images/ingredients/black-tea.png',
+    '아무 로메인 타코': 'assets/images/cooking/romaine-lettuce-taco.webp',
+    '커피/라떼': 'assets/images/cooking/iced-cup-coffee.webp',
+    '팬케이크': 'assets/images/cooking/original-frosted-pancake.webp',
+    '스테이크': 'assets/images/cooking/steak-w-mashed-white-radish.webp',
+    '수프': 'assets/images/cooking/creamy-white-radish-soup.webp',
+
     '잡초': 'assets/images/ingredients/weed.png',
 
     '부활절 달걀': 'assets/images/cooking/egg.webp',
@@ -695,6 +870,30 @@ String? _ingredientPreferredAssetPath(String ingredientName) {
     '부활절 초록 달걀': 'assets/images/cooking/green-egg.webp',
     '부활절 주황 달걀': 'assets/images/cooking/orange-egg.webp',
     '부활절 이스터에그 파티': 'assets/images/cooking/colorful-egg-feast.webp',
+
+    // 지난 시즌 / 꿈의 명암 채집 재료
+    '산마늘': 'assets/images/ingredients/tall-mustard.webp',
+    'Tall Mustard': 'assets/images/ingredients/tall-mustard.webp',
+
+    '산우엉': 'assets/images/ingredients/burdock.webp',
+    'Burdock': 'assets/images/ingredients/burdock.webp',
+
+    '야생 고사리': 'assets/images/ingredients/fiddlehead.webp',
+    '고사리': 'assets/images/ingredients/fiddlehead.webp',
+    'Fiddlehead': 'assets/images/ingredients/fiddlehead.webp',
+
+    '산겨자': 'assets/images/ingredients/mustard-greens.webp',
+    'Mustard Greens': 'assets/images/ingredients/mustard-greens.webp',
+    '나물': 'assets/images/icon_veg_any.png',
+    '아무 나물': 'assets/images/icon_veg_any.png',
+
+// 지난 시즌 / 꿈의 명암 특수 재료
+    '봄날 카라멜 슈가': 'assets/images/ingredients/springday-brown-sugar.webp',
+    '살사소스': 'assets/images/ingredients/salsa-sauce.webp',
+    '살사 소스': 'assets/images/ingredients/salsa-sauce.webp',
+    '로메인': 'assets/images/crops/romaine-lettuce.webp',
+    '로메인 상추': 'assets/images/crops/romaine-lettuce.webp',
+
 
     '레몬 버베나': 'assets/images/crops/lemon-verbena.webp',
     '버베나': 'assets/images/crops/lemon-verbena.webp',
@@ -2301,7 +2500,8 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     final isFavorite = _favoriteIds.contains(item.id);
     final isHighlighted = _highlightedId == item.id;
     final recipeImagePath = _resolveIngredientImagePath(item.image);
-    final bool showProgress = _shouldShowRecipeProgress(item);
+    final bool showMastery = _shouldShowRecipeProgress(item);
+    final bool showAchievementStars = !_isWeirdRecipe(item);
 
     Widget recipeImageWidget({
       double padding = 8,
@@ -2425,7 +2625,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                                         ],
                                       ),
                                     ),
-                                    if (showProgress) ...[
+                                    if (showMastery) ...[
                                       const SizedBox(width: 8),
                                       Padding(
                                         padding: const EdgeInsets.only(top: 8),
@@ -2463,7 +2663,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        if (showProgress)
+                        if (showAchievementStars)
                           Flexible(
                             flex: 5,
                             child: Align(
@@ -2511,7 +2711,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         !_isEventOrPastSeasonItem(
           eventTokenPrices: item.eventTokenPrices,
           seasonTag: item.seasonTag,
-          textValues: [item.id, item.nameKo, item.image, item.ingredients.join(' ')],
+          textValues: [item.id, item.nameKo, item.image, item.ingredients.join(' '), ...item.ingredients],
         );
   }
 
@@ -2680,7 +2880,11 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     final bool isLucky = _isLuckyShopItem(item.nameKo);
     final bool isShopItem = _isShopMaterial(item) && !isLucky;
-    final bool showProgress = _shouldShowMaterialProgress(item);
+
+    // 재료 카드는 달성 성급(5성)은 항상 표시하고,
+    // 명인 버튼만 일반 작물/일반 재료일 때 표시한다.
+    final bool showAchievementStars = true;
+    final bool showMastery = _shouldShowMaterialProgress(item);
 
     final String typeLabel = isLucky
         ? '행운상점 구매'
@@ -2798,7 +3002,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                                         ],
                                       ),
                                     ),
-                                    if (showProgress) ...[
+                                    if (showMastery) ...[
                                       const SizedBox(width: 8),
                                       Padding(
                                         padding: const EdgeInsets.only(top: 8),
@@ -2817,7 +3021,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        if (showProgress)
+                        if (showAchievementStars)
                           Flexible(
                             flex: 5,
                             child: Align(
@@ -2921,7 +3125,16 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       filtered = filtered
           .where((item) => _matchesAchievementStar('recipe:${item.id}'))
           .where((item) => _matchesMasteryDone('recipe:${item.id}'))
-          .where((item) => _matchesSelectedPastSeason(item.seasonTag))
+          .where((item) => _matchesSelectedPastSeason(
+        item.seasonTag,
+        textValues: [
+          item.id,
+          item.nameKo,
+          item.image,
+          item.ingredients.join(' '),
+          ...item.ingredients,
+        ],
+      ))
           .toList();
 
       switch (_selectedSort) {
@@ -3025,7 +3238,10 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     filtered = filtered
         .where((item) => _matchesAchievementStar('material:${item.id}'))
         .where((item) => _matchesMasteryDone('material:${item.id}'))
-        .where((item) => _matchesSelectedPastSeason(item.seasonTag))
+        .where((item) => _matchesSelectedPastSeason(
+      item.seasonTag,
+      textValues: [item.id, item.nameKo, item.image],
+    ))
         .toList();
 
     switch (_selectedSort) {
@@ -3672,8 +3888,14 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         (!done && _selectedMasteryCompletionFilters.contains('not_done'));
   }
 
-  bool _matchesSelectedPastSeason(String rawSeasonTag) {
-    final label = _normalizeSeasonLabel(rawSeasonTag);
+  bool _matchesSelectedPastSeason(
+      String rawSeasonTag, {
+        Iterable<String?> textValues = const [],
+      }) {
+    final explicitLabel = _normalizeSeasonLabel(rawSeasonTag);
+    final label = explicitLabel.isNotEmpty
+        ? explicitLabel
+        : _inferPastSeasonLabelFromText(textValues);
 
     // 기본값은 '제외': 지난 시즌 아이템은 목록에서 숨깁니다.
     if (_selectedPastSeasonFilters.isEmpty ||
@@ -3681,9 +3903,9 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       return label.isEmpty;
     }
 
-    // 전체: 현재 시즌 + 지난 시즌 아이템을 모두 보여줍니다.
+    // 전체: 현재 시즌을 제외하고 지난 시즌 아이템만 보여줍니다.
     if (_selectedPastSeasonFilters.contains('전체')) {
-      return true;
+      return label.isNotEmpty;
     }
 
     if (label.isEmpty) return false;
@@ -4329,9 +4551,22 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                                       : tempPastSeasonFilters.contains(season),
                                   onTap: () {
                                     setSheetState(() {
-                                      tempPastSeasonFilters
-                                        ..clear()
-                                        ..add(season);
+                                      if (season == '제외' || season == '전체') {
+                                        tempPastSeasonFilters
+                                          ..clear()
+                                          ..add(season);
+                                      } else {
+                                        tempPastSeasonFilters.remove('제외');
+                                        tempPastSeasonFilters.remove('전체');
+                                        if (tempPastSeasonFilters.contains(season)) {
+                                          tempPastSeasonFilters.remove(season);
+                                        } else {
+                                          tempPastSeasonFilters.add(season);
+                                        }
+                                        if (tempPastSeasonFilters.isEmpty) {
+                                          tempPastSeasonFilters.add('제외');
+                                        }
+                                      }
                                     });
                                   },
                                 );

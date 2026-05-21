@@ -39,6 +39,115 @@ String formatDdayLabel(DateTime endAt) {
   return 'D-$dday';
 }
 
+
+
+class HomeProgressMetric {
+  final int done;
+  final int total;
+  final double percent;
+
+  const HomeProgressMetric({
+    required this.done,
+    required this.total,
+    required this.percent,
+  });
+
+  factory HomeProgressMetric.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const HomeProgressMetric(done: 0, total: 0, percent: 0);
+    }
+
+    final dynamic rawPercent = json['percent'];
+
+    return HomeProgressMetric(
+      done: int.tryParse((json['done'] ?? '0').toString()) ?? 0,
+      total: int.tryParse((json['total'] ?? '0').toString()) ?? 0,
+      percent: rawPercent is num
+          ? rawPercent.toDouble()
+          : double.tryParse((rawPercent ?? '0').toString()) ?? 0,
+    );
+  }
+}
+
+class HomeProgressSummary {
+  final HomeProgressMetric? fishFiveStar;
+  final HomeProgressMetric? fishMastery;
+  final HomeProgressMetric? insectFiveStar;
+  final HomeProgressMetric? insectMastery;
+  final HomeProgressMetric? birdFiveStar;
+  final HomeProgressMetric? birdMastery;
+  final HomeProgressMetric? flowerFiveStar;
+  final HomeProgressMetric? flowerMastery;
+  final HomeProgressMetric? cropFiveStar;
+  final HomeProgressMetric? cropMastery;
+  final HomeProgressMetric? recipeFiveStar;
+  final HomeProgressMetric? recipeMastery;
+
+  const HomeProgressSummary({
+    required this.fishFiveStar,
+    required this.fishMastery,
+    required this.insectFiveStar,
+    required this.insectMastery,
+    required this.birdFiveStar,
+    required this.birdMastery,
+    required this.flowerFiveStar,
+    required this.flowerMastery,
+    required this.cropFiveStar,
+    required this.cropMastery,
+    required this.recipeFiveStar,
+    required this.recipeMastery,
+  });
+
+  factory HomeProgressSummary.fromJson(Map<String, dynamic> json) {
+    HomeProgressMetric metric(String key, {String? fallbackKey}) {
+      final primary = json[key];
+      if (primary is Map<String, dynamic>) {
+        return HomeProgressMetric.fromJson(primary);
+      }
+
+      final fallback = fallbackKey == null ? null : json[fallbackKey];
+      if (fallback is Map<String, dynamic>) {
+        return HomeProgressMetric.fromJson(fallback);
+      }
+
+      return const HomeProgressMetric(done: 0, total: 0, percent: 0);
+    }
+
+    return HomeProgressSummary(
+      fishFiveStar: metric('fishFiveStar', fallbackKey: 'fishingFiveStar'),
+      fishMastery: metric('fishMastery', fallbackKey: 'fishingMastery'),
+      insectFiveStar: metric('insectFiveStar'),
+      insectMastery: metric('insectMastery'),
+      birdFiveStar: metric('birdFiveStar', fallbackKey: 'birdwatchingFiveStar'),
+      birdMastery: metric('birdMastery', fallbackKey: 'birdwatchingMastery'),
+      flowerFiveStar: metric('flowerFiveStar'),
+      flowerMastery: metric('flowerMastery'),
+      cropFiveStar: metric('cropFiveStar'),
+      cropMastery: metric('cropMastery'),
+      recipeFiveStar: metric('recipeFiveStar', fallbackKey: 'cookingFiveStar'),
+      recipeMastery: metric('recipeMastery', fallbackKey: 'cookingMastery'),
+    );
+  }
+}
+
+class HomeProgressCategory {
+  final String title;
+  final IconData icon;
+  final Color accentColor;
+  final Color backgroundColor;
+  final HomeProgressMetric fiveStar;
+  final HomeProgressMetric mastery;
+
+  const HomeProgressCategory({
+    required this.title,
+    required this.icon,
+    required this.accentColor,
+    required this.backgroundColor,
+    required this.fiveStar,
+    required this.mastery,
+  });
+}
+
 class HomeScreen extends StatefulWidget {
   final VoidCallback? openDrawer;
   final VoidCallback? openEndDrawer;
@@ -316,6 +425,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   String _currentWeather = '불러오는 중';
   bool _isWeatherLoading = false;
+  bool _isCollectionProgressLoading = false;
+  HomeProgressSummary? _collectionProgressSummary;
 
   List<Map<String, String>> _hourlyWeather = [];
   List<Map<String, String>> _weeklyWeather = [];
@@ -700,6 +811,7 @@ class _HomeScreenState extends State<HomeScreen>
     _scheduleSixAMTimer();
     _initializeHomeWidgetSync();
     _loadGlobalSearchItems();
+    _loadCollectionProgressSummary();
     _scheduleNextWeatherRefresh();
     _searchController.addListener(_handleSearchChanged);
 
@@ -727,6 +839,11 @@ class _HomeScreenState extends State<HomeScreen>
     if (widget.resetSearchSignal != oldWidget.resetSearchSignal) {
       _clearSearchInput();
       _loadGlobalSearchItems();
+    }
+
+    if (widget.userId != oldWidget.userId) {
+      _userId = widget.userId;
+      _loadCollectionProgressSummary();
     }
 
     // 이벤트 리스트가 변경되었을 때만 실행
@@ -969,6 +1086,486 @@ class _HomeScreenState extends State<HomeScreen>
         _isWeatherLoading = false;
       });
     }
+  }
+
+
+  Future<void> _loadCollectionProgressSummary() async {
+    final String progressUserId = widget.userId.trim();
+
+    if (progressUserId.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _collectionProgressSummary = null;
+        _isCollectionProgressLoading = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isCollectionProgressLoading = true;
+      });
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$_baseUrl/api/collection/progress/summary?userId=${Uri.encodeComponent(progressUserId)}',
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is Map<String, dynamic>) {
+          setState(() {
+            _collectionProgressSummary = HomeProgressSummary.fromJson(decoded);
+          });
+        }
+      } else {
+        debugPrint('도감 진행률 로드 실패: ${response.statusCode} ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('도감 진행률 로드 오류: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isCollectionProgressLoading = false;
+      });
+    }
+  }
+
+  Widget _buildCollectionProgressCard() {
+    final summary = _collectionProgressSummary;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(11, 11, 11, 11),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.94),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xFFFFE2DB),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: const Color(0xFFFF8E7C).withOpacity(0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: _isCollectionProgressLoading && summary == null
+          ? const SizedBox(
+        height: 132,
+        child: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFF8E7C),
+            strokeWidth: 2.4,
+          ),
+        ),
+      )
+          : summary == null
+          ? _buildCollectionProgressEmptyState()
+          : Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: _buildProgressCategoryRows(summary),
+          ),
+          if (_isCollectionProgressLoading)
+            const Positioned(
+              right: 0,
+              top: 0,
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFFFF8E7C),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildProgressCategoryRows(HomeProgressSummary summary) {
+    const emptyMetric = HomeProgressMetric(done: 0, total: 0, percent: 0);
+    HomeProgressMetric safeMetric(HomeProgressMetric? metric) => metric ?? emptyMetric;
+
+    final categories = <HomeProgressCategory>[
+      HomeProgressCategory(
+        title: '낚시',
+        icon: Icons.set_meal_rounded,
+        fiveStar: safeMetric(summary.fishFiveStar),
+        mastery: safeMetric(summary.fishMastery),
+        accentColor: const Color(0xFF4A90E2),
+        backgroundColor: const Color(0xFFEFF7FF),
+      ),
+      HomeProgressCategory(
+        title: '곤충',
+        icon: Icons.bug_report_rounded,
+        fiveStar: safeMetric(summary.insectFiveStar),
+        mastery: safeMetric(summary.insectMastery),
+        accentColor: const Color(0xFF22A06B),
+        backgroundColor: const Color(0xFFEFFCF6),
+      ),
+      HomeProgressCategory(
+        title: '새 관찰',
+        icon: Icons.flutter_dash_rounded,
+        fiveStar: safeMetric(summary.birdFiveStar),
+        mastery: safeMetric(summary.birdMastery),
+        accentColor: const Color(0xFFFFA63D),
+        backgroundColor: const Color(0xFFFFF7E8),
+      ),
+      HomeProgressCategory(
+        title: '꽃',
+        icon: Icons.local_florist_rounded,
+        fiveStar: safeMetric(summary.flowerFiveStar),
+        mastery: safeMetric(summary.flowerMastery),
+        accentColor: const Color(0xFFFF74A6),
+        backgroundColor: const Color(0xFFFFF0F6),
+      ),
+      HomeProgressCategory(
+        title: '작물',
+        icon: Icons.spa_rounded,
+        fiveStar: safeMetric(summary.cropFiveStar),
+        mastery: safeMetric(summary.cropMastery),
+        accentColor: const Color(0xFF7CB342),
+        backgroundColor: const Color(0xFFF1F8E9),
+      ),
+      HomeProgressCategory(
+        title: '요리',
+        icon: Icons.restaurant_rounded,
+        fiveStar: safeMetric(summary.recipeFiveStar),
+        mastery: safeMetric(summary.recipeMastery),
+        accentColor: const Color(0xFFFF8E7C),
+        backgroundColor: const Color(0xFFFFF1EC),
+      ),
+    ];
+
+    return [
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final double spacing = 7;
+          final double itemWidth = (constraints.maxWidth - (spacing * 2)) / 3;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: categories
+                .map(
+                  (category) => SizedBox(
+                width: itemWidth,
+                child: _buildProgressMiniCard(category),
+              ),
+            )
+                .toList(),
+          );
+        },
+      ),
+    ];
+  }
+
+  void _openProgressCategory(HomeProgressCategory category) {
+    final String title = category.title.trim();
+
+    GlobalSearchItem? item;
+
+    switch (title) {
+      case '낚시':
+        item = GlobalSearchItem(
+          id: 'progress_fish',
+          title: '',
+          subtitle: '낚시',
+          iconPath: '',
+          screen: SearchTargetScreen.gathering,
+          gatheringTab: GatheringTabType.fish,
+          keyword: '',
+        );
+        break;
+      case '곤충':
+        item = GlobalSearchItem(
+          id: 'progress_insect',
+          title: '',
+          subtitle: '곤충',
+          iconPath: '',
+          screen: SearchTargetScreen.gathering,
+          gatheringTab: GatheringTabType.insect,
+          keyword: '',
+        );
+        break;
+      case '새 관찰':
+        item = GlobalSearchItem(
+          id: 'progress_bird',
+          title: '',
+          subtitle: '새 관찰',
+          iconPath: '',
+          screen: SearchTargetScreen.gathering,
+          gatheringTab: GatheringTabType.bird,
+          keyword: '',
+        );
+        break;
+      case '꽃':
+        item = GlobalSearchItem(
+          id: 'progress_flower',
+          title: '',
+          subtitle: '꽃',
+          iconPath: '',
+          screen: SearchTargetScreen.gathering,
+          gatheringTab: GatheringTabType.plant,
+          keyword: '',
+        );
+        break;
+      case '작물':
+        item = GlobalSearchItem(
+          id: 'progress_crop',
+          title: '',
+          subtitle: '작물',
+          iconPath: '',
+          screen: SearchTargetScreen.cooking,
+          cookingTab: CookingTabType.material,
+          keyword: '',
+        );
+        break;
+      case '요리':
+        item = GlobalSearchItem(
+          id: 'progress_recipe',
+          title: '',
+          subtitle: '요리',
+          iconPath: '',
+          screen: SearchTargetScreen.cooking,
+          cookingTab: CookingTabType.recipe,
+          keyword: '',
+        );
+        break;
+    }
+
+    if (item == null) return;
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    widget.onSearchItemSelected?.call(item);
+  }
+
+  Widget _buildProgressMiniCard(HomeProgressCategory category) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openProgressCategory(category),
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(7, 7, 7, 7),
+          decoration: BoxDecoration(
+            color: category.backgroundColor.withOpacity(0.78),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: category.accentColor.withOpacity(0.14),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 23,
+                    height: 23,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(
+                        color: category.accentColor.withOpacity(0.12),
+                      ),
+                    ),
+                    child: Icon(
+                      category.icon,
+                      size: 13.5,
+                      color: category.accentColor,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      category.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 10.4,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF334155),
+                        height: 1.0,
+                        letterSpacing: -0.25,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 7),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildCompactCircularMetric(
+                      label: '5성',
+                      icon: Icons.star_rounded,
+                      metric: category.fiveStar,
+                      color: const Color(0xFFFFB84D),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: _buildCompactCircularMetric(
+                      label: '명인',
+                      icon: Icons.workspace_premium_rounded,
+                      metric: category.mastery,
+                      color: const Color(0xFFB26BFF),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactCircularMetric({
+    required String label,
+    required IconData icon,
+    required HomeProgressMetric metric,
+    required Color color,
+  }) {
+    final double progress = metric.total <= 0
+        ? 0
+        : (metric.done / metric.total).clamp(0.0, 1.0);
+    final bool isIntegerPercent = metric.percent == metric.percent.roundToDouble();
+    final String percentLabel = '${metric.percent.toStringAsFixed(isIntegerPercent ? 0 : 1)}%';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.58),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 9.5, color: color),
+              const SizedBox(width: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 8.2,
+                  fontWeight: FontWeight.w900,
+                  color: color,
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: 30,
+            height: 30,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 30,
+                  height: 30,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 3.2,
+                    backgroundColor: color.withOpacity(0.12),
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                    strokeCap: StrokeCap.round,
+                  ),
+                ),
+                Text(
+                  percentLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 7.2,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF334155),
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            '${metric.done}/${metric.total}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 7.4,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF64748B),
+              height: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCollectionProgressEmptyState() {
+    return SizedBox(
+      height: 132,
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1EC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFFFFDDD4),
+              ),
+            ),
+            child: const Icon(
+              Icons.insights_rounded,
+              color: Color(0xFFFF8E7C),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              '도감 진행률을 불러오지 못했어요.\n아래로 당겨 새로고침해보세요.',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF7A8A9A),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadGlobalSearchItems() async {
@@ -1606,7 +2203,7 @@ class _HomeScreenState extends State<HomeScreen>
                       const Text(
                         '보고 싶은 자원과 캐릭터만 골라서 볼 수 있어요.',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF7A8A9A),
                         ),
@@ -2232,6 +2829,7 @@ class _HomeScreenState extends State<HomeScreen>
                 displacement: 26,
                 onRefresh: () async {
                   await _loadWeather();
+                  await _loadCollectionProgressSummary();
                   await widget.onRefresh?.call();
                   await _loadMapPreviewResources();
                 },
@@ -2248,24 +2846,18 @@ class _HomeScreenState extends State<HomeScreen>
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _buildSectionTitle('진행중 이벤트'),
-                      ),
-                      _buildEventSection(context),
-                      const SizedBox(height: 14),
-
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
+                              flex: 7,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   _buildSectionTitle('오늘의 할 일'),
-                                  const SizedBox(height: 6),
+                                  const SizedBox(height: 2),
                                   SizedBox(
-                                    height: 266,
+                                    height: 264,
                                     child: _buildTodoSummaryCard(),
                                   ),
                                 ],
@@ -2273,14 +2865,22 @@ class _HomeScreenState extends State<HomeScreen>
                             ),
                             const SizedBox(width: 12),
                             Expanded(
+                              flex: 7,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildSectionTitle('날씨'),
-                                  const SizedBox(height: 6),
+                                  _buildSectionTitle('이벤트'),
+                                  const SizedBox(height: 2),
                                   SizedBox(
-                                    height: 266,
-                                    child: _buildWeatherCard(_currentWeather),
+                                    height: 116,
+                                    child: _buildCompactEventCard(context),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  _buildSectionTitle('날씨'),
+                                  const SizedBox(height: 2),
+                                  SizedBox(
+                                    height: 116,
+                                    child: _buildCompactWeatherCard(_currentWeather),
                                   ),
                                 ],
                               ),
@@ -2289,7 +2889,19 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
+
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _buildSectionTitle('도감 진행률'),
+                      ),
+                      const SizedBox(height: 2),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _buildCollectionProgressCard(),
+                      ),
+
+                      const SizedBox(height: 6),
 
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -3633,6 +4245,395 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildCompactEventCard(BuildContext context) {
+    final events = _activeEvents;
+
+    if (events.isEmpty) {
+      return GestureDetector(
+        onTap: () => widget.openEventScreen?.call(),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.94),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: const Color(0xFFFFE2DB),
+              width: 1,
+            ),
+            boxShadow: _kCommonShadow,
+          ),
+          child: const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                '진행 중인\n이벤트가 없어요',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 12.5,
+                  height: 1.28,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: Material(
+        color: Colors.transparent,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            PageView.builder(
+              controller: _eventPageController,
+              itemCount: 10000,
+              onPageChanged: (index) {
+                if (!mounted) return;
+                setState(() => _currentEventIndex = index % events.length);
+              },
+              itemBuilder: (context, index) {
+                final event = events[index % events.length];
+                final imageUrl = _resolveEventImageUrl(event.imageUrl);
+
+                return GestureDetector(
+                  onTap: () async => await _openEventLink(event.linkUrl, event.id),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      imageUrl.isEmpty
+                          ? Container(
+                        color: const Color(0xFFFFF4F1),
+                        child: const Icon(
+                          Icons.image_not_supported_outlined,
+                          color: Color(0xFFCBD5E1),
+                        ),
+                      )
+                          : Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: const Color(0xFFFFF4F1),
+                            child: const Icon(
+                              Icons.image_not_supported_outlined,
+                              color: Color(0xFFCBD5E1),
+                            ),
+                          );
+                        },
+                      ),
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.10),
+                                Colors.black.withOpacity(0.06),
+                                Colors.black.withOpacity(0.62),
+                              ],
+                              stops: const [0.0, 0.45, 1.0],
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (events.length > 1)
+                        Positioned(
+                          top: 9,
+                          left: 9,
+                          child: _buildCompactEventPageIndicator(events.length),
+                        ),
+                      Positioned(
+                        top: 9,
+                        right: 9,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.40),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            formatDdayLabel(event.endAt),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              height: 1.0,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 11,
+                        right: 11,
+                        bottom: 10,
+                        child: Text(
+                          event.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            height: 1.14,
+                            shadows: [
+                              Shadow(
+                                color: Color(0x66000000),
+                                blurRadius: 6,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              right: 8,
+              bottom: 8,
+              child: GestureDetector(
+                onTap: () => widget.openEventScreen?.call(),
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.86),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.10),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.grid_view_rounded,
+                    size: 14,
+                    color: Color(0xFFFF8E7C),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildCompactEventPageIndicator(int count) {
+    return Container(
+      height: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.24),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.20),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(count, (index) {
+          final selected = index == _currentEventIndex;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            width: selected ? 13 : 5,
+            height: 5,
+            decoration: BoxDecoration(
+              color: selected
+                  ? Colors.white
+                  : Colors.white.withOpacity(0.48),
+              borderRadius: BorderRadius.circular(99),
+              boxShadow: selected
+                  ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.16),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ]
+                  : null,
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildCompactWeatherCard(String weather) {
+    final subColor = _getWeatherSubTextColor(weather);
+    final textColor = _getWeatherTextColor(weather);
+    final hourly = _hourlyWeather.isEmpty
+        ? <Map<String, String>>[
+      {'time': '06시', 'weather': weather},
+      {'time': '12시', 'weather': weather},
+      {'time': '18시', 'weather': weather},
+    ]
+        : _hourlyWeather.map((e) {
+      return {
+        'time': _formatHourlyWeatherLabel((e['time'] ?? '').trim()),
+        'weather': _normalizeWeatherLabel((e['weather'] ?? '').trim()),
+      };
+    }).toList();
+
+    const double radius = 20;
+    const double capsuleRadius = 12;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _handleWeatherCardTap,
+        borderRadius: BorderRadius.circular(radius),
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 110),
+          curve: Curves.easeOutCubic,
+          scale: _isWeatherCardPressed ? 0.985 : 1.0,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
+            decoration: _buildWeatherBackground(weather),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: 0.34,
+                        child: _buildAnimatedWeatherBackground(weather),
+                      ),
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: Center(
+                              child: _buildWeatherIcon(weather, size: 25),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  weather,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: textColor,
+                                    height: 1.0,
+                                    letterSpacing: -0.25,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  _getWeatherDescription(weather),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: subColor.withOpacity(0.88),
+                                    height: 1.0,
+                                    letterSpacing: -0.15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 17,
+                            color: subColor.withOpacity(0.75),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          itemCount: hourly.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 5),
+                          itemBuilder: (context, index) {
+                            final item = hourly[index];
+                            final itemWeather = item['weather'] ?? weather;
+
+                            return Container(
+                              width: 40,
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.24),
+                                borderRadius: BorderRadius.circular(capsuleRadius),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.18),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.035),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    item['time'] ?? '',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 8.2,
+                                      fontWeight: FontWeight.w900,
+                                      color: subColor.withOpacity(0.82),
+                                      height: 1.0,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  _buildWeatherIcon(itemWeather, size: 12.5),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildWeatherCard(String weather) {
     final subColor = _getWeatherSubTextColor(weather);
     final textColor = _getWeatherTextColor(weather);
@@ -4280,7 +5281,7 @@ class _HomeScreenState extends State<HomeScreen>
           duration: const Duration(milliseconds: 120),
           width: double.infinity,
           height: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          padding: const EdgeInsets.fromLTRB(11, 10, 9, 10),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.95),
             borderRadius: BorderRadius.circular(24),
@@ -4293,7 +5294,7 @@ class _HomeScreenState extends State<HomeScreen>
               '오늘의 할 일을 등록해보세요! 🌿',
               style: TextStyle(
                 color: Color(0xFF94A3B8),
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -4312,7 +5313,7 @@ class _HomeScreenState extends State<HomeScreen>
 
                 return Padding(
                   padding: EdgeInsets.only(
-                    bottom: index == visibleItems.length - 1 ? 0 : 6,
+                    bottom: index == visibleItems.length - 1 ? 0 : 5,
                   ),
                   child: _buildTodoSummaryRow(
                     index: index,
@@ -4327,8 +5328,8 @@ class _HomeScreenState extends State<HomeScreen>
                   if (extraCount > 0)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
+                        horizontal: 10,
+                        vertical: 6,
                       ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFF4F1),
@@ -4345,8 +5346,8 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   const Spacer(),
                   Container(
-                    width: 30,
-                    height: 30,
+                    width: 27,
+                    height: 27,
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       shape: BoxShape.circle,
@@ -4356,7 +5357,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     child: const Icon(
                       Icons.chevron_right_rounded,
-                      size: 18,
+                      size: 16,
                       color: Color(0xFFCBD5E1),
                     ),
                   ),
@@ -4375,9 +5376,9 @@ class _HomeScreenState extends State<HomeScreen>
     required bool isDone,
   }) {
     const TextStyle todoTextStyle = TextStyle(
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: FontWeight.w500,
-      height: 1.25,
+      height: 1.2,
       color: Color(0xFF1E293B),
     );
 
@@ -4387,7 +5388,7 @@ class _HomeScreenState extends State<HomeScreen>
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         splashColor: splashColor,
         highlightColor: highlightColor,
         onTap: () {
@@ -4399,13 +5400,13 @@ class _HomeScreenState extends State<HomeScreen>
           });
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 3),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 26,
-                height: 26,
+                width: 22,
+                height: 22,
                 decoration: BoxDecoration(
                   color: isDone
                       ? const Color(0xFFFF8E7C)
@@ -4415,13 +5416,13 @@ class _HomeScreenState extends State<HomeScreen>
                     color: isDone
                         ? const Color(0xFFFF8E7C)
                         : const Color(0xFFD9E2EC),
-                    width: 1.3,
+                    width: 1.15,
                   ),
                 ),
                 child: isDone
                     ? const Icon(
                   Icons.check_rounded,
-                  size: 15,
+                  size: 13,
                   color: Colors.white,
                 )
                     : null,
@@ -4446,8 +5447,8 @@ class _HomeScreenState extends State<HomeScreen>
                           softWrap: false,
                           strutStyle: const StrutStyle(
                             forceStrutHeight: true,
-                            fontSize: 14,
-                            height: 1.25,
+                            fontSize: 13,
+                            height: 1.2,
                           ),
                           style: todoTextStyle.copyWith(
                             color: isDone
@@ -5990,7 +6991,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildSectionTitle(String title) {
     // 함수 내부의 Padding을 최소화하여 재사용성을 높였습니다.
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10), // 위아래 간격만 유지
+      padding: const EdgeInsets.symmetric(vertical: 4), // 섹션 제목-카드 간격 축소
       child: Row(
         children: [
           // 얇고 깔끔한 포인트 캡슐

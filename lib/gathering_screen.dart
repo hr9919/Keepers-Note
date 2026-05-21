@@ -188,6 +188,75 @@ String _parseSeasonTag(Map<String, dynamic> json) {
   );
 }
 
+String _compactSeasonSourceText(Iterable<String?> values) {
+  return values
+      .where((value) => value != null)
+      .map((value) => value!.trim())
+      .where((value) => value.isNotEmpty)
+      .join(' ')
+      .replaceAll(' ', '')
+      .replaceAll('_', '')
+      .replaceAll('-', '')
+      .replaceAll('/', '')
+      .toLowerCase();
+}
+
+String _inferPastSeasonLabelFromText(Iterable<String?> values) {
+  final compact = _compactSeasonSourceText(values);
+  if (compact.isEmpty) return '';
+
+  // 빙설 시즌: 얼음 결정/겨울/슈가파우더/무/얼음컵 계열
+  if (compact.contains('빙설') ||
+      compact.contains('winter') ||
+      compact.contains('frost') ||
+      compact.contains('frostspore') ||
+      compact.contains('whiteradish') ||
+      compact.contains('icedcup') ||
+      compact.contains('aurora') ||
+      compact.contains('얼음결정') ||
+      compact.contains('얼음컵') ||
+      compact.contains('슈가파우더') ||
+      compact.contains('살균달걀') ||
+      compact.contains('오로라') ||
+      compact.contains('무크림') ||
+      compact.contains('갈은무') ||
+      compact.contains('하얀무')) {
+    return '빙설 시즌';
+  }
+
+  // 꿈의 명암: 감독/스크립터/정장 비둘기/봄날/로메인/관람/팝콘 계열
+  if (compact.contains('꿈의명암') ||
+      compact.contains('dream') ||
+      compact.contains('director') ||
+      compact.contains('script') ||
+      compact.contains('suitdove') ||
+      compact.contains('springday') ||
+      compact.contains('springdag') ||
+      compact.contains('romaine') ||
+      compact.contains('celtuce') ||
+      compact.contains('salsa') ||
+      compact.contains('popcorn') ||
+      compact.contains('movie') ||
+      compact.contains('bucket') ||
+      compact.contains('명암') ||
+      compact.contains('감독') ||
+      compact.contains('스크립터') ||
+      compact.contains('봄날') ||
+      compact.contains('카라멜슈가') ||
+      compact.contains('로메인') ||
+      compact.contains('살사') ||
+      compact.contains('팝콘') ||
+      compact.contains('관람') ||
+      compact.contains('산우엉') ||
+      compact.contains('산겨자') ||
+      compact.contains('산마늘') ||
+      compact.contains('고사리')) {
+    return '꿈의 명암';
+  }
+
+  return '';
+}
+
 bool _hasEventTokenPrice(List<int> prices) {
   return prices.any((price) => price > 0);
 }
@@ -225,7 +294,8 @@ bool _isEventOrPastSeasonItem({
   Iterable<String?> textValues = const [],
 }) {
   return _hasEventTokenPrice(eventTokenPrices) ||
-      seasonTag.trim().isNotEmpty ||
+      _normalizeSeasonLabel(seasonTag).isNotEmpty ||
+      _inferPastSeasonLabelFromText(textValues).isNotEmpty ||
       _looksLikeEventOrPastSeasonText(textValues);
 }
 
@@ -2475,8 +2545,14 @@ class _GatheringScreenState extends State<GatheringScreen>
     return labels.any(_selectedWeatherFilters.contains);
   }
 
-  bool _matchesSelectedPastSeason(String rawSeasonTag) {
-    final label = _normalizeSeasonLabel(rawSeasonTag);
+  bool _matchesSelectedPastSeason(
+      String rawSeasonTag, {
+        Iterable<String?> textValues = const [],
+      }) {
+    final explicitLabel = _normalizeSeasonLabel(rawSeasonTag);
+    final label = explicitLabel.isNotEmpty
+        ? explicitLabel
+        : _inferPastSeasonLabelFromText(textValues);
 
     // 기본값은 '제외': 지난 시즌 아이템은 목록에서 숨깁니다.
     if (_selectedPastSeasonFilters.isEmpty ||
@@ -2484,9 +2560,9 @@ class _GatheringScreenState extends State<GatheringScreen>
       return label.isEmpty;
     }
 
-    // 전체: 현재 시즌 + 지난 시즌 아이템을 모두 보여줍니다.
+    // 전체: 현재 시즌을 제외하고 지난 시즌 아이템만 보여줍니다.
     if (_selectedPastSeasonFilters.contains('전체')) {
-      return true;
+      return label.isNotEmpty;
     }
 
     if (label.isEmpty) return false;
@@ -3072,7 +3148,10 @@ class _GatheringScreenState extends State<GatheringScreen>
         .where((item) => _matchesMasteryDone('fish:${item.id}'))
         .where(_matchesSelectedShadowSize)
         .where((item) => _matchesSelectedWeather(item.weather))
-        .where((item) => _matchesSelectedPastSeason(item.seasonTag))
+        .where((item) => _matchesSelectedPastSeason(
+      item.seasonTag,
+      textValues: [item.id, item.name, item.nameKo, item.image, item.location, item.weather],
+    ))
         .toList();
     _sortFish(filteredFish);
 
@@ -3099,7 +3178,10 @@ class _GatheringScreenState extends State<GatheringScreen>
         .where((item) => _matchesAchievementStar('bird:${item.id}'))
         .where((item) => _matchesMasteryDone('bird:${item.id}'))
         .where((item) => _matchesSelectedWeather(item.weather))
-        .where((item) => _matchesSelectedPastSeason(item.seasonTag))
+        .where((item) => _matchesSelectedPastSeason(
+      item.seasonTag,
+      textValues: [item.id, item.name, item.nameKo, item.image, item.location, item.weather],
+    ))
         .toList();
     _sortBirds(filteredBirds);
 
@@ -3126,7 +3208,10 @@ class _GatheringScreenState extends State<GatheringScreen>
         .where((item) => _matchesAchievementStar('insect:${item.id}'))
         .where((item) => _matchesMasteryDone('insect:${item.id}'))
         .where((item) => _matchesSelectedWeather(item.weather))
-        .where((item) => _matchesSelectedPastSeason(item.seasonTag))
+        .where((item) => _matchesSelectedPastSeason(
+      item.seasonTag,
+      textValues: [item.id, item.name, item.nameKo, item.image, item.location, item.weather],
+    ))
         .toList();
     _sortInsects(filteredInsects);
 
@@ -3153,7 +3238,10 @@ class _GatheringScreenState extends State<GatheringScreen>
         .where((item) => _matchesAchievementStar('plant:${item.id}'))
         .where((item) => _matchesMasteryDone('plant:${item.id}'))
         .where((item) => _matchesSelectedWeather(item.weather))
-        .where((item) => _matchesSelectedPastSeason(item.seasonTag))
+        .where((item) => _matchesSelectedPastSeason(
+      item.seasonTag,
+      textValues: [item.id, item.name, item.nameKo, item.image, item.location, item.weather, item.growthTime],
+    ))
         .toList();
     _sortPlants(filteredPlants);
 
@@ -3884,9 +3972,22 @@ class _GatheringScreenState extends State<GatheringScreen>
                                       : tempPastSeasonFilters.contains(season),
                                   onTap: () {
                                     setSheetState(() {
-                                      tempPastSeasonFilters
-                                        ..clear()
-                                        ..add(season);
+                                      if (season == '제외' || season == '전체') {
+                                        tempPastSeasonFilters
+                                          ..clear()
+                                          ..add(season);
+                                      } else {
+                                        tempPastSeasonFilters.remove('제외');
+                                        tempPastSeasonFilters.remove('전체');
+                                        if (tempPastSeasonFilters.contains(season)) {
+                                          tempPastSeasonFilters.remove(season);
+                                        } else {
+                                          tempPastSeasonFilters.add(season);
+                                        }
+                                        if (tempPastSeasonFilters.isEmpty) {
+                                          tempPastSeasonFilters.add('제외');
+                                        }
+                                      }
                                     });
                                   },
                                 );
