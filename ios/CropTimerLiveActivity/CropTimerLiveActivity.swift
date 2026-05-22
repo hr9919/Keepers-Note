@@ -154,7 +154,12 @@ struct CropTimerLockScreenView: View {
     let harvestAt: Date
 
     private var cropAssetName: String {
-        switch cropId {
+        let normalizedCropId = cropId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+
+        switch normalizedCropId {
         case "tomato":
             return "crop_tomato"
         case "potato":
@@ -175,10 +180,17 @@ struct CropTimerLockScreenView: View {
             return "crop_grape"
         case "eggplant":
             return "crop_eggplant"
-        case "tea-tree":
+
+        // 찻잎 / 차나무
+        // Flutter/Widget 데이터가 tea-tree, tea_tree, tea, tea-leaf 등으로 들어와도 같은 이미지 사용
+        case "tea-tree", "tea", "tea-leaf", "tea-leaves", "teatree":
             return "crop_tea_tree"
-        case "cocoa-tree":
+
+        // 코코아 / 카카오
+        // Flutter/Widget 데이터가 cocoa-tree, cocoa_tree, cocoa, cacao 등으로 들어와도 같은 이미지 사용
+        case "cocoa-tree", "cocoa", "cacao", "cocoa-bean", "cocoa-beans", "cocoatree":
             return "crop_cocoa_tree"
+
         default:
             return "crop_tomato"
         }

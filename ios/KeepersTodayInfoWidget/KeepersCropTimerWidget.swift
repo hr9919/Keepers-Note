@@ -34,12 +34,14 @@ struct QuickCrop: Identifiable, Hashable {
 private let quickCrops: [QuickCrop] = [
     QuickCrop(id: "tomato", name: "토마토", minutes: 15, imageName: "ic_crop_tomato"),
     QuickCrop(id: "pineapple", name: "파인애플", minutes: 30, imageName: "ic_crop_pineapple"),
+    QuickCrop(id: "tea-tree", name: "찻잎", minutes: 45, imageName: "ic_crop_tea_tree"),
     QuickCrop(id: "potato", name: "감자", minutes: 60, imageName: "ic_crop_potato"),
     QuickCrop(id: "carrot", name: "당근", minutes: 120, imageName: "ic_crop_carrot"),
     QuickCrop(id: "wheat", name: "밀", minutes: 240, imageName: "ic_crop_wheat"),
+    QuickCrop(id: "cocoa-tree", name: "카카오", minutes: 300, imageName: "ic_crop_cocoa_tree"),
     QuickCrop(id: "strawberry", name: "딸기", minutes: 360, imageName: "ic_crop_strawberry"),
     QuickCrop(id: "eggplant", name: "가지", minutes: 420, imageName: "ic_crop_eggplant"),
-    QuickCrop(id: "lettuce", name: "양상추", minutes: 480, imageName: "ic_crop_lettuce"),
+    QuickCrop(id: "lettuce", name: "상추", minutes: 480, imageName: "ic_crop_lettuce"),
     QuickCrop(id: "grape", name: "포도", minutes: 600, imageName: "ic_crop_grape"),
     QuickCrop(id: "corn", name: "옥수수", minutes: 720, imageName: "ic_crop_corn")
 ]
@@ -391,26 +393,11 @@ struct KeepersCropTimerWidgetEntryView: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Color(hex: "#7C8796"))
             }
-
-            Spacer()
-
-            Link(destination: URL(string: "keepersnote://crop-timer?target=crop_timer")!) {
-                Text("전체")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color(hex: "#475569"))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(Color.white.opacity(0.58))
-                    .clipShape(Capsule())
-            }
         }
     }
 
     private var quickStartGrid: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("빠른 시작")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color(hex: "#7C8796"))
 
             LazyVGrid(
                 columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5),

@@ -2325,6 +2325,8 @@ class _GatheringScreenState extends State<GatheringScreen>
           masteryDoneKey: hideMastery ? null : 'fish:${fish.id}',
           achievementStarKey: 'fish:${fish.id}',
           masteryDoneLabel: '낚시 명인 달성',
+          occurrenceInfoColumnCount: 4,
+          occurrenceInfoChildAspectRatio: 1.02,
           timeText: _formatDetailAvailableTime(fish.availableTime),
           locationText: fish.location.trim().isEmpty ? '-' : fish.location.trim(),
           weatherText: _formatDetailWeather(fish.weather),
@@ -2367,7 +2369,7 @@ class _GatheringScreenState extends State<GatheringScreen>
         builder: (_) => GatheringSimpleDetailPage(
           title: _displayBirdName(bird),
           categoryLabel: '새',
-          levelLabel: '촬영 ${bird.level}레벨',
+          levelLabel: '새 관찰 ${bird.level}레벨',
           image: bird.image,
           fallbackIcon: Icons.flutter_dash_rounded,
           prices: bird.prices,
@@ -4129,8 +4131,79 @@ class _GatheringScreenState extends State<GatheringScreen>
     );
   }
 
+  Map<String, Color> _selectedFilterChipColors(String label) {
+    if (label == '이벤트') {
+      return {
+        'bg': const Color(0xFFFFF7D6),
+        'border': const Color(0xFFFFE6A3),
+        'text': const Color(0xFFB7791F),
+        'shadow': const Color(0xFFFFC94D),
+      };
+    }
+
+    final String locationLabel;
+    switch (label) {
+      case '강 물고기':
+        locationLabel = '강';
+        break;
+      case '호수 물고기':
+        locationLabel = '호수';
+        break;
+      case '바다 물고기':
+      case '바다/해변':
+      case '바다':
+        locationLabel = '바다';
+        break;
+      case '주거지':
+        locationLabel = '주거지';
+        break;
+      case '집 앞':
+        locationLabel = '집 앞';
+        break;
+      case '특수':
+        return {
+          'bg': const Color(0xFFF5F5F7),
+          'border': const Color(0xFFE1E4E8),
+          'text': const Color(0xFF6B7280),
+          'shadow': const Color(0xFF94A3B8),
+        };
+      case '전체':
+        return {
+          'bg': const Color(0xFFFFF1EC),
+          'border': const Color(0xFFFFDDD4),
+          'text': const Color(0xFFFF8E7C),
+          'shadow': const Color(0xFFFF8E7C),
+        };
+      default:
+        locationLabel = label;
+        break;
+    }
+
+    final colors = _locationChipColors(locationLabel);
+    return {
+      'bg': colors['bg']!,
+      'border': colors['border']!,
+      'text': colors['text']!,
+      'shadow': colors['text']!,
+    };
+  }
+
   Widget _buildFilterChip(String label) {
     final bool isSelected = _selectedFilter == label;
+    final selectedColors = _selectedFilterChipColors(label);
+
+    final Color bgColor = isSelected
+        ? selectedColors['bg']!
+        : Colors.white.withOpacity(0.76);
+    final Color borderColor = isSelected
+        ? selectedColors['border']!
+        : const Color(0xFFE9EEF4);
+    final Color textColor = isSelected
+        ? selectedColors['text']!
+        : const Color(0xFF667085);
+    final Color shadowColor = isSelected
+        ? selectedColors['shadow']!.withOpacity(0.10)
+        : Colors.black.withOpacity(0.015);
 
     return Material(
       color: Colors.transparent,
@@ -4149,28 +4222,16 @@ class _GatheringScreenState extends State<GatheringScreen>
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 15),
           decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFFFFF1EC)
-                : Colors.white.withOpacity(0.76),
+            color: bgColor,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: isSelected
-                  ? const Color(0xFFFFDDD4)
-                  : const Color(0xFFE9EEF4),
+              color: borderColor,
               width: 1,
             ),
-            boxShadow: isSelected
-                ? [
+            boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF8E7C).withOpacity(0.08),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ]
-                : [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.015),
-                blurRadius: 5,
+                color: shadowColor,
+                blurRadius: isSelected ? 8 : 5,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -4181,9 +4242,7 @@ class _GatheringScreenState extends State<GatheringScreen>
               style: TextStyle(
                 fontSize: 12.8,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected
-                    ? const Color(0xFFFF8E7C)
-                    : const Color(0xFF667085),
+                color: textColor,
                 letterSpacing: -0.1,
               ),
             ),
@@ -6369,6 +6428,8 @@ class GatheringSimpleDetailPage extends StatelessWidget {
   final String? masteryDoneKey;
   final String? achievementStarKey;
   final String masteryDoneLabel;
+  final int occurrenceInfoColumnCount;
+  final double occurrenceInfoChildAspectRatio;
 
   const GatheringSimpleDetailPage({
     super.key,
@@ -6387,6 +6448,8 @@ class GatheringSimpleDetailPage extends StatelessWidget {
     this.masteryDoneKey,
     this.achievementStarKey,
     this.masteryDoneLabel = '명인 달성',
+    this.occurrenceInfoColumnCount = 3,
+    this.occurrenceInfoChildAspectRatio = 1.35,
   });
 
   Color _masteryStageIconColor(String label) {
@@ -6481,6 +6544,7 @@ class GatheringSimpleDetailPage extends StatelessWidget {
 
   Widget _infoTile(String label, String value) {
     final display = value.trim().isEmpty ? '-' : value.trim();
+    final bool forceSingleValueLine = label == '그림자 크기';
 
     return Container(
       constraints: const BoxConstraints(minHeight: 76),
@@ -6525,7 +6589,7 @@ class GatheringSimpleDetailPage extends StatelessWidget {
           const SizedBox(height: 1),
           Text(
             display,
-            maxLines: 2,
+            maxLines: forceSingleValueLine ? 1 : 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
@@ -6631,10 +6695,8 @@ class GatheringSimpleDetailPage extends StatelessWidget {
       {'label': '출현 시간', 'value': timeText},
       {'label': '날씨', 'value': weatherText},
       {'label': '출현 장소', 'value': locationText},
-      if (appearanceInfo.length == 1) appearanceInfo.first,
+      ...appearanceInfo,
     ];
-    final blockAppearanceInfo =
-    appearanceInfo.length == 1 ? const <Map<String, String>>[] : appearanceInfo;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBFA),
@@ -6748,41 +6810,21 @@ class GatheringSimpleDetailPage extends StatelessWidget {
               const SizedBox(height: 20),
               _sectionTitle('출현 정보'),
               const SizedBox(height: 10),
-              SizedBox(
-                height: 76,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (int index = 0; index < occurrenceInfo.length; index++) ...[
-                      if (index > 0) const SizedBox(width: 7),
-                      Expanded(
-                        child: _infoTile(
-                          occurrenceInfo[index]['label'] ?? '-',
-                          occurrenceInfo[index]['value'] ?? '-',
-                        ),
-                      ),
-                    ],
-                  ],
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: occurrenceInfo.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: occurrenceInfoColumnCount,
+                  crossAxisSpacing: 7,
+                  mainAxisSpacing: 7,
+                  childAspectRatio: occurrenceInfoChildAspectRatio,
                 ),
+                itemBuilder: (context, index) {
+                  final info = occurrenceInfo[index];
+                  return _infoTile(info['label'] ?? '-', info['value'] ?? '-');
+                },
               ),
-              if (blockAppearanceInfo.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: blockAppearanceInfo.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 7,
-                    mainAxisSpacing: 7,
-                    childAspectRatio: 2.35,
-                  ),
-                  itemBuilder: (context, index) {
-                    final info = blockAppearanceInfo[index];
-                    return _infoTile(info['label'] ?? '-', info['value'] ?? '-');
-                  },
-                ),
-              ],
               if (extraInfo.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 _sectionTitle('명인 달성 기준'),

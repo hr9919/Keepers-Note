@@ -1917,10 +1917,12 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    _selectedFilter == '마시모 구매'
+                    _selectedFilter == '이벤트'
+                        ? '이벤트 재료는 준비중이에요'
+                        : _selectedFilter == '마시모 구매'
                         ? '마시모 구매 재료는 준비중이에요'
-                        : _selectedFilter == '행운상점 구매'
-                        ? '행운상점 재료는 준비중이에요'
+                        : _selectedFilter == '도리스 구매'
+                        ? '도리스 구매 재료는 준비중이에요'
                         : '표시할 재료가 없어요',
                     style: const TextStyle(
                       fontSize: 16,
@@ -1930,10 +1932,12 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _selectedFilter == '마시모 구매'
+                    _selectedFilter == '이벤트'
+                        ? '이벤트 재료 데이터가 추가되면 여기에서 볼 수 있어요.'
+                        : _selectedFilter == '마시모 구매'
                         ? '마시모 구매 재료 데이터가 추가되면 여기에서 볼 수 있어요.'
-                        : _selectedFilter == '행운상점 구매'
-                        ? '행운상점 재료 데이터가 추가되면 여기에서 볼 수 있어요.'
+                        : _selectedFilter == '도리스 구매'
+                        ? '도리스 구매 재료 데이터가 추가되면 여기에서 볼 수 있어요.'
                         : '검색어나 필터를 다시 확인해보세요.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
@@ -2878,16 +2882,19 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     final isFavorite = _favoriteIds.contains(item.id);
     final isHighlighted = _highlightedId == item.id;
 
-    final bool isLucky = _isLuckyShopItem(item.nameKo);
-    final bool isShopItem = _isShopMaterial(item) && !isLucky;
+    final bool isEventMaterial = _isEventMaterial(item);
+    final bool isLucky = _isLuckyShopItem(item.nameKo) && !isEventMaterial;
+    final bool isShopItem = _isShopMaterial(item) && !isLucky && !isEventMaterial;
+    final bool isEventShopItem = isEventMaterial && !item.isCultivable;
 
-    // 재료 카드는 달성 성급(5성)은 항상 표시하고,
-    // 명인 버튼만 일반 작물/일반 재료일 때 표시한다.
-    final bool showAchievementStars = true;
+    // 상점 구매 재료는 별 표시 없음. 작물 재료만 5성 표시.
+    final bool showAchievementStars = item.isCultivable;
     final bool showMastery = _shouldShowMaterialProgress(item);
 
-    final String typeLabel = isLucky
-        ? '행운상점 구매'
+    final String typeLabel = isEventMaterial
+        ? '이벤트'
+        : isLucky
+        ? '도리스 구매'
         : (isShopItem ? '마시모 구매' : '작물');
 
     final int purchasePrice = _shopPurchasePrice(item.prices);
@@ -2998,7 +3005,11 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                                         runSpacing: 4,
                                         children: [
                                           if (item.isCultivable) if (item.isCultivable) _buildSmallTag('Lv.${item.level}'),
-                                          _buildSmallTag(typeLabel, isEvent: isLucky || isShopItem),
+                                          _buildSmallTag(
+                                            typeLabel,
+                                            isEvent: isEventMaterial,
+                                            isLuckyShop: isLucky,
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -3040,7 +3051,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                           flex: 7,
                           child: Align(
                             alignment: Alignment.centerRight,
-                            child: isShopItem || isLucky
+                            child: isShopItem || isLucky || isEventShopItem
                                 ? _buildPurchasePriceButton(purchasePrice)
                                 : _buildPriceButton(
                               item.prices,
@@ -3211,21 +3222,27 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
       }).toList();
     }
 
-    if (_selectedFilter == '작물') {
+    if (_selectedFilter == '이벤트') {
+      filtered = filtered.where(_isEventMaterial).toList();
+
+    } else if (_selectedFilter == '작물') {
       filtered = filtered.where((item) =>
       item.isCultivable &&
-          !_isLuckyShopItem(item.nameKo)
+          !_isLuckyShopItem(item.nameKo) &&
+          !_isEventMaterial(item)
       ).toList();
 
     } else if (_selectedFilter == '마시모 구매') {
       filtered = filtered.where((item) =>
       !item.isCultivable &&
-          !_isLuckyShopItem(item.nameKo)
+          !_isLuckyShopItem(item.nameKo) &&
+          !_isEventMaterial(item)
       ).toList();
 
-    } else if (_selectedFilter == '행운상점 구매') {
+    } else if (_selectedFilter == '도리스 구매') {
       filtered = filtered.where((item) =>
-          _isLuckyShopItem(item.nameKo)
+      _isLuckyShopItem(item.nameKo) &&
+          !_isEventMaterial(item)
       ).toList();
     }
 
@@ -3238,7 +3255,9 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     filtered = filtered
         .where((item) => _matchesAchievementStar('material:${item.id}'))
         .where((item) => _matchesMasteryDone('material:${item.id}'))
-        .where((item) => _matchesSelectedPastSeason(
+        .where((item) => _selectedFilter == '이벤트'
+        ? true
+        : _matchesSelectedPastSeason(
       item.seasonTag,
       textValues: [item.id, item.nameKo, item.image],
     ))
@@ -3383,25 +3402,39 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
     final bool isHiddenActive = rawText.contains('있음');
 
-    // 1. 행운상점 (보라)
-    if (isLuckyShop) {
+    // 이벤트 재료: 노란색 캡슐
+    if (rawText == '이벤트' || isEvent) {
+      bg = const Color(0xFFFFF7D6);
+      border = const Color(0xFFFFE6A3);
+      textColor = const Color(0xFFB7791F);
+    }
+
+    // 도리스 구매 / 행운상점: 연보라색 캡슐
+    else if (rawText == '도리스 구매' || isLuckyShop) {
       bg = const Color(0xFFF3E8FF);
       border = const Color(0xFFD8B4FE);
       textColor = const Color(0xFF7E22CE);
     }
 
-    // ⭐ 2. 작물 (초록)
+    // 마시모 구매: 주황색 캡슐
+    else if (rawText == '마시모 구매') {
+      bg = const Color(0xFFFFF3E8);
+      border = const Color(0xFFFFDDB8);
+      textColor = const Color(0xFFD97706);
+    }
+
+    // 작물: 초록색 캡슐
     else if (rawText == '작물') {
       bg = const Color(0xFFE8F5E9);
       border = const Color(0xFFC8E6C9);
       textColor = const Color(0xFF2E7D32);
     }
 
-    // 3. 이벤트 / 히든
-    else if (isHiddenActive || isEvent) {
-      bg = const Color(0xFFFFEDE1);
-      border = const Color(0xFFFFCCBC);
-      textColor = const Color(0xFFD84315);
+    // 히든 등 기타 강조 캡슐: 연보라색
+    else if (isHiddenActive) {
+      bg = const Color(0xFFF3E8FF);
+      border = const Color(0xFFD8B4FE);
+      textColor = const Color(0xFF7E22CE);
     }
 
     // 4. 레벨칩 (기존 유지)
@@ -3473,6 +3506,43 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
         ),
       ),
     );
+  }
+
+  bool _isEventMaterial(CookingMaterialItem item) {
+    final id = item.id.trim().toLowerCase();
+    final normalizedName = item.nameKo.replaceAll(' ', '').toLowerCase();
+    final image = (item.image ?? '').trim().toLowerCase();
+
+    const eventMaterialIds = {
+      'lemon-verbena',
+      'lemon_verbena',
+      'verbena',
+      'brick-meat-patty',
+      'brick_meat_patty',
+      'brick-patty',
+      'brick_patty',
+      'brick-ice',
+      'brick_ice',
+      'condensed-milk',
+      'condensed_milk',
+    };
+
+    if (eventMaterialIds.contains(id)) return true;
+    if (_hasEventTokenPrice(item.eventTokenPrices)) return true;
+
+    return normalizedName.contains('레몬버베나') ||
+        normalizedName.contains('버베나') ||
+        normalizedName.contains('브릭패티') ||
+        normalizedName.contains('브릭얼음') ||
+        normalizedName.contains('연유') ||
+        id.contains('lemon') ||
+        id.contains('verbena') ||
+        id.contains('brick') ||
+        id.contains('condensed') ||
+        image.contains('lemon') ||
+        image.contains('verbena') ||
+        image.contains('brick') ||
+        image.contains('condensed');
   }
 
   bool _isShopMaterial(CookingMaterialItem item) => !item.isCultivable;
@@ -4182,7 +4252,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
 
   List<String> _currentFilters() => _tabController.index == 0
       ? const ['전체', '일반 레시피', '히든 레시피', '이벤트 레시피']
-      : const ['전체', '작물', '마시모 구매', '행운상점 구매'];
+      : const ['전체', '이벤트', '작물', '마시모 구매', '도리스 구매'];
 
   void _onSortSelected(String sort) { setState(() => _selectedSort = sort); _applyFilters(); }
 
@@ -4721,8 +4791,89 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
     );
   }
 
+  Map<String, Color> _selectedFilterChipColors(String label) {
+    final raw = label.trim();
+
+    // 선택 전에는 모든 필터칩이 기본 색을 쓰고,
+    // 선택된 필터칩만 실제 카드 캡슐과 맞는 색으로 강조한다.
+    if (_tabController.index == 0) {
+      if (raw == '일반 레시피') {
+        return {
+          'bg': const Color(0xFFEAF4FF),
+          'border': const Color(0xFFD1E2FF),
+          'text': const Color(0xFF4F7ECF),
+          'shadow': const Color(0xFF4F7ECF),
+        };
+      }
+      if (raw == '히든 레시피') {
+        return {
+          'bg': const Color(0xFFF3E8FF),
+          'border': const Color(0xFFD8B4FE),
+          'text': const Color(0xFF7E22CE),
+          'shadow': const Color(0xFF7E22CE),
+        };
+      }
+      if (raw == '이벤트 레시피') {
+        return {
+          'bg': const Color(0xFFFFF7D6),
+          'border': const Color(0xFFFFE6A3),
+          'text': const Color(0xFFB7791F),
+          'shadow': const Color(0xFFB7791F),
+        };
+      }
+    }
+
+    if (_tabController.index == 1) {
+      if (raw == '이벤트') {
+        return {
+          'bg': const Color(0xFFFFF7D6),
+          'border': const Color(0xFFFFE6A3),
+          'text': const Color(0xFFB7791F),
+          'shadow': const Color(0xFFB7791F),
+        };
+      }
+      if (raw == '마시모 구매') {
+        return {
+          'bg': const Color(0xFFFFF3E8),
+          'border': const Color(0xFFFFDDB8),
+          'text': const Color(0xFFD97706),
+          'shadow': const Color(0xFFD97706),
+        };
+      }
+      if (raw == '도리스 구매') {
+        return {
+          'bg': const Color(0xFFF3E8FF),
+          'border': const Color(0xFFD8B4FE),
+          'text': const Color(0xFF7E22CE),
+          'shadow': const Color(0xFF7E22CE),
+        };
+      }
+      if (raw == '작물') {
+        return {
+          'bg': const Color(0xFFE8F5E9),
+          'border': const Color(0xFFC8E6C9),
+          'text': const Color(0xFF2E7D32),
+          'shadow': const Color(0xFF2E7D32),
+        };
+      }
+    }
+
+    return {
+      'bg': const Color(0xFFFFF1EC),
+      'border': const Color(0xFFFFDDD4),
+      'text': const Color(0xFFFF8E7C),
+      'shadow': const Color(0xFFFF8E7C),
+    };
+  }
+
   Widget _buildFilterChip(String label) {
     final bool isSelected = _selectedFilter == label;
+    final selectedColors = _selectedFilterChipColors(label);
+
+    final Color selectedBg = selectedColors['bg']!;
+    final Color selectedBorder = selectedColors['border']!;
+    final Color selectedText = selectedColors['text']!;
+    final Color selectedShadow = selectedColors['shadow']!;
 
     return Material(
       color: Colors.transparent,
@@ -4742,19 +4893,19 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
           padding: const EdgeInsets.symmetric(horizontal: 15),
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFFFFF1EC)
+                ? selectedBg
                 : Colors.white.withOpacity(0.76),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFFFFDDD4)
+                  ? selectedBorder
                   : const Color(0xFFE9EEF4),
               width: 1,
             ),
             boxShadow: isSelected
                 ? [
               BoxShadow(
-                color: const Color(0xFFFF8E7C).withOpacity(0.08),
+                color: selectedShadow.withOpacity(0.10),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -4774,7 +4925,7 @@ class _CookingScreenState extends State<CookingScreen> with SingleTickerProvider
                 fontSize: 12.8,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 color: isSelected
-                    ? const Color(0xFFFF8E7C)
+                    ? selectedText
                     : const Color(0xFF667085),
                 letterSpacing: -0.1,
               ),
@@ -5798,10 +5949,13 @@ class CookingMaterialDetailPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    _buildDetailAchievementStars(
-                      itemKey: 'material:${material.id}',
-                    ),
-                    const SizedBox(height: 14),
+                    if (material.isCultivable) ...[
+                      _buildDetailAchievementStars(
+                        itemKey: 'material:${material.id}',
+                      ),
+                      const SizedBox(height: 14),
+                    ] else
+                      const SizedBox(height: 14),
                     Text(
                       material.nameKo,
                       style: const TextStyle(
